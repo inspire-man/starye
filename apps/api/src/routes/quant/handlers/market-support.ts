@@ -1,9 +1,9 @@
 import type { Database } from '@starye/db'
 import type { QuantDecisionAssistantMarketInput } from '../../../domain/quant/decision-assistant'
 import type { AppEnv } from '../../../types'
-import { createQuantAkshareBridge, createQuantAkshareCashflowProvider, createQuantAkshareFinancialProvider } from '../../../domain/quant/akshare-bridge'
+import { createQuantAkshareBridge, createQuantAkshareCashflowProvider, createQuantAkshareFinancialProvider, createQuantAkshareRepurchaseProvider } from '../../../domain/quant/akshare-bridge'
 import { QuantError } from '../../../domain/quant/errors'
-import { createEastmoneyCapitalStructureProvider, createEastmoneyCashflowProvider, createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyMarketQuoteProvider, createEastmoneyRepurchaseProvider, createQuantCashflowProviderChain, createQuantDividendProviderChain, createQuantFinancialProviderChain, createTushareCashflowProvider, createTushareDividendProvider, createTushareFinancialProvider, mapQuantProviderError, resolveQuantProviderName } from '../../../domain/quant/provider'
+import { createEastmoneyCapitalStructureProvider, createEastmoneyCashflowProvider, createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyMarketQuoteProvider, createEastmoneyRepurchaseProvider, createQuantCashflowProviderChain, createQuantDividendProviderChain, createQuantFinancialProviderChain, createQuantRepurchaseProviderChain, createTushareCashflowProvider, createTushareDividendProvider, createTushareFinancialProvider, mapQuantProviderError, resolveQuantProviderName } from '../../../domain/quant/provider'
 import { getLatestQuantDailyBar } from '../../../domain/quant/repository'
 import { eastmoneyProviderOptions, tushareProviderOptions } from '../route-context'
 
@@ -122,8 +122,9 @@ export function capitalStructureProvider(env?: AppEnv['Bindings']) {
 
 export function repurchaseProvider(env?: AppEnv['Bindings']) {
   const baseUrl = env?.EASTMONEY_REPURCHASE_BASE_URL?.trim()
-  return createEastmoneyRepurchaseProvider({
+  const eastmoney = createEastmoneyRepurchaseProvider({
     ...eastmoneyProviderOptions(env),
     ...(baseUrl ? { repurchaseBaseUrl: baseUrl } : {}),
   })
+  return createQuantRepurchaseProviderChain(eastmoney, createQuantAkshareRepurchaseProvider(akshareBridge(env)))
 }

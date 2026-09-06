@@ -1,4 +1,4 @@
-import type { QuantCashflowProvider, QuantCashflowReport, QuantFinancialQualityProvider, QuantFinancialQualitySnapshot, QuantInterestBearingDebtComponents, QuantInterestExpenseSourceField } from './provider'
+import type { QuantCashflowProvider, QuantCashflowReport, QuantFinancialQualityProvider, QuantFinancialQualitySnapshot, QuantInterestBearingDebtComponents, QuantInterestExpenseSourceField, QuantRepurchaseProvider, QuantRepurchaseReport } from './provider'
 import type { QuantResearchEvidence, QuantResearchSource } from './research-report'
 import { QuantError } from './errors'
 
@@ -33,6 +33,8 @@ export interface QuantAkshareBridgeResult {
   readonly financials: readonly Record<string, unknown>[]
   /** Optional for responses produced by the pre-expansion v1 bridge. */
   readonly cashflows?: readonly Record<string, unknown>[]
+  /** Optional for responses produced before the AkShare repurchase expansion. */
+  readonly repurchases?: readonly Record<string, unknown>[]
   readonly evidence: readonly QuantAkshareBridgeEvidence[]
   readonly errors: readonly { readonly code: string, readonly message: string, readonly source?: string | null }[]
 }
@@ -46,7 +48,7 @@ export interface QuantAkshareBridgeOptions {
 
 export interface QuantAkshareBridgeClient {
   readonly isConfigured: boolean
-  readonly fetchEvidence: (input: { readonly tsCode: string, readonly startDate?: string, readonly endDate?: string }) => Promise<QuantAkshareBridgeResult>
+  readonly fetchEvidence: (input: { readonly tsCode: string, readonly startDate?: string, readonly endDate?: string, readonly includeFinancials?: boolean }) => Promise<QuantAkshareBridgeResult>
 }
 
 export class QuantAkshareBridgeError extends Error {
@@ -175,6 +177,7 @@ function parseBridgeResponse(payload: unknown, requestedTsCode: string): QuantAk
     dailyBars: normalizeRows(record?.daily_bars ?? record?.dailyBars),
     financials: normalizeRows(record?.financials),
     cashflows: normalizeRows(record?.cashflows),
+    repurchases: normalizeRows(record?.repurchases),
     evidence,
     errors,
   }
@@ -201,7 +204,7 @@ export function createQuantAkshareBridge(options: QuantAkshareBridgeOptions = {}
   const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? Math.min(options.timeoutMs!, 30_000) : 12_000
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
 
-  async function fetchEvidence(input: { readonly tsCode: string, readonly startDate?: string, readonly endDate?: string }): Promise<QuantAkshareBridgeResult> {
+  async function fetchEvidence(input: { readonly tsCode: string, readonly startDate?: string, readonly endDate?: string, readonly includeFinancials?: boolean }): Promise<QuantAkshareBridgeResult> {
     if (!baseUrl || !token)
       throw new QuantAkshareBridgeError('CONFIGURATION', 'AkShare bridge is not configured', 503)
     const tsCode = input.tsCode.trim().toUpperCase()
@@ -213,7 +216,7 @@ export function createQuantAkshareBridge(options: QuantAkshareBridgeOptions = {}
       response = await fetchImpl(url, {
         method: 'POST',
         headers: { 'accept': 'application/json', 'content-type': 'application/json', 'authorization': `Bearer ${token}` },
-        body: JSON.stringify({ ts_code: tsCode, start_date: input.startDate, end_date: input.endDate, include_financials: true }),
+        body: JSON.stringify({ ts_code: tsCode, start_date: input.startDate, end_date: input.endDate, include_financials: input.includeFinancials ?? true }),
         signal: controller.signal,
       })
     }
@@ -414,8 +417,45 @@ function normalizeBridgeCashflowReport(result: QuantAkshareBridgeResult, record:
   }
 }
 
+function normalizeBridgeRepurchaseReport(result: QuantAkshareBridgeResult, record: Record<string, unknown>): QuantRepurchaseReport | null {
+  const returnedCode = bridgeString(record, 'ts_code', 'tsCode', 'SECURITY_CODE', 'security_code')
+  if (!returnedCode || returnedCode.trim().toUpperCase().split('.')[0] !== result.tsCode.split('.')[0])
+    throw new QuantAkshareBridgeError('INVALID_RESPONSE', 'AkShare repurchase report code is missing or mismatched', 502)
+  const hasUsableField = [
+    ['announcement_date', 'announcementDate'],
+    ['start_date', 'startDate'],
+    ['end_date', 'endDate'],
+    ['finish_date', 'finishDate'],
+    ['progress'],
+    ['planned_amount_lower', 'plannedAmountLower'],
+    ['planned_amount_upper', 'plannedAmountUpper'],
+    ['repurchase_amount', 'repurchaseAmount'],
+    ['repurchase_shares', 'repurchaseShares'],
+  ].some(keys => keys.some(key => record[key] !== null && record[key] !== undefined && record[key] !== ''))
+  if (!hasUsableField)
+    return null
+  return {
+    tsCode: result.tsCode,
+    repurchaseCode: bridgeString(record, 'repurchase_code', 'repurchaseCode'),
+    announcementDate: bridgeDate(record, 'announcement_date', 'announcementDate'),
+    startDate: bridgeDate(record, 'start_date', 'startDate'),
+    endDate: bridgeDate(record, 'end_date', 'endDate'),
+    finishDate: bridgeDate(record, 'finish_date', 'finishDate'),
+    progress: bridgeString(record, 'progress'),
+    plannedAmountLower: bridgeNumber(record, 'planned_amount_lower', 'plannedAmountLower'),
+    plannedAmountUpper: bridgeNumber(record, 'planned_amount_upper', 'plannedAmountUpper'),
+    repurchaseAmount: bridgeNumber(record, 'repurchase_amount', 'repurchaseAmount'),
+    repurchaseShares: bridgeNumber(record, 'repurchase_shares', 'repurchaseShares'),
+    provider: 'akshare',
+  }
+}
+
 function bridgeLimit(value: number | undefined, fallback: number): number {
   return Number.isInteger(value) ? Math.min(8, Math.max(1, value!)) : fallback
+}
+
+function repurchaseLimit(value: number | undefined): number {
+  return Number.isInteger(value) ? Math.min(20, Math.max(1, value!)) : 12
 }
 
 function bridgeDataUnavailable(kind: string): QuantAkshareBridgeError {
@@ -471,6 +511,32 @@ export function createQuantAkshareCashflowProvider(bridge: QuantAkshareBridgeCli
     name: 'akshare',
     isConfigured: bridge.isConfigured,
     fetchCashflowHistory,
+  }
+}
+
+export function createQuantAkshareRepurchaseProvider(bridge: QuantAkshareBridgeClient): QuantRepurchaseProvider {
+  async function fetchRepurchaseHistory(request: { readonly tsCode: string, readonly limit?: number }): Promise<readonly QuantRepurchaseReport[]> {
+    if (!bridge.isConfigured)
+      throw new QuantAkshareBridgeError('CONFIGURATION', 'AkShare bridge is not configured', 503)
+    const result = await bridge.fetchEvidence({ tsCode: request.tsCode, includeFinancials: false })
+    const reports = (result.repurchases ?? [])
+      .map(record => normalizeBridgeRepurchaseReport(result, record))
+      .filter((report): report is QuantRepurchaseReport => report !== null)
+    const repurchaseErrors = result.errors.filter(error => error.code.startsWith('AKSHARE_REPURCHASE_'))
+    if (!reports.length && repurchaseErrors.length)
+      throw bridgeDataUnavailable('repurchase')
+    return [...new Map(reports.map(report => [
+      report.repurchaseCode ?? `${report.announcementDate ?? ''}:${report.startDate ?? ''}:${report.plannedAmountLower ?? ''}:${report.plannedAmountUpper ?? ''}`,
+      report,
+    ])).values()]
+      .sort((left, right) => `${right.announcementDate ?? ''}:${right.startDate ?? ''}`.localeCompare(`${left.announcementDate ?? ''}:${left.startDate ?? ''}`))
+      .slice(0, repurchaseLimit(request.limit))
+  }
+
+  return {
+    name: 'akshare',
+    isConfigured: bridge.isConfigured,
+    fetchRepurchaseHistory,
   }
 }
 

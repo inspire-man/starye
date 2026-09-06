@@ -922,8 +922,10 @@ export interface QuantShareholderRepurchaseRecord {
 export interface QuantShareholderRepurchaseEvidence {
   formulaVersion: string
   status: QuantShareholderRepurchaseStatus
-  provider: QuantProviderName | null
+  provider: QuantSourceName | null
   providerErrorCode: string | null
+  fallbackUsed: boolean
+  fallbackReason: string | null
   observedAt: string
   latestAnnouncementDate: string | null
   latestProgress: string | null

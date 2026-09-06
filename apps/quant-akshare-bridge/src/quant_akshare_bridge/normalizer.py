@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Iterable, Mapping
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .contracts import BridgeEvidence, BridgeError
@@ -89,6 +89,13 @@ def _number(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
+def _text(value: Any) -> str | None:
+    if value is None or (isinstance(value, float) and not math.isfinite(value)):
+        return None
+    text = str(value).strip()
+    return text if text and text.lower() not in {"nan", "nat", "<na>"} else None
+
+
 def _optional_date(
     value: Any,
     field: str,
@@ -101,6 +108,25 @@ def _optional_date(
     except ValueError:
         errors.append(BridgeError(error_code, f"{field} is invalid; the report row was retained", source))
         return None
+
+
+def _repurchase_date(
+    value: Any,
+    field: str,
+    errors: list[BridgeError],
+    source: str,
+) -> str | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        numeric = float(value)
+        if not math.isfinite(numeric):
+            return None
+        try:
+            return datetime.fromtimestamp(numeric / 1000, tz=timezone.utc).strftime("%Y%m%d")
+        except (OverflowError, OSError, ValueError):
+            pass
+    return _optional_date(value, field, errors, "AKSHARE_REPURCHASE_DATE_INVALID", source)
 
 
 DEBT_COMPONENT_ALIASES = {
@@ -354,6 +380,106 @@ def normalize_cashflow_rows(
     deduplicated = {row["report_date"]: row for row in result}
     ordered = sorted(deduplicated.values(), key=lambda item: item["report_date"], reverse=True)
     return ordered[:max(1, min(limit, 12))], errors
+
+
+def normalize_repurchase_rows(
+    ts_code: str,
+    raw: Any,
+    limit: int = 12,
+    source: str = "stock_repurchase_em",
+) -> tuple[list[dict[str, Any]], list[BridgeError]]:
+    normalized_code = normalize_ts_code(ts_code)
+    errors: list[BridgeError] = []
+    result: list[dict[str, Any]] = []
+    requested_code = normalized_code.split(".", 1)[0]
+    for row in _rows(raw):
+        returned_code = _row_code(_field(row, "股票代码", "SECURITY_CODE", "security_code", "ts_code", "tsCode", "代码", "code"))
+        if returned_code != requested_code:
+            continue
+        announcement_date = _repurchase_date(
+            _field(row, "最新公告日期", "公告日期", "NOTICE_DATE", "notice_date", "UPD", "announcement_date"),
+            "announcement_date",
+            errors,
+            source,
+        )
+        start_date = _repurchase_date(
+            _field(row, "回购起始时间", "回购开始时间", "REPURSTARTDATE", "start_date", "startDate"),
+            "start_date",
+            errors,
+            source,
+        )
+        end_date = _repurchase_date(
+            _field(row, "回购结束时间", "回购终止时间", "REPURENDDATE", "end_date", "endDate"),
+            "end_date",
+            errors,
+            source,
+        )
+        finish_date = _repurchase_date(
+            _field(row, "完成日期", "实施完成日期", "FINISHDATE", "finish_date", "finishDate"),
+            "finish_date",
+            errors,
+            source,
+        )
+        progress = _field(row, "实施进度", "回购实施进度", "REPURPROGRESS", "progress")
+        progress_text = _text(progress)
+        planned_amount_lower = _number(_field(
+            row,
+            "计划回购金额区间-下限",
+            "计划回购金额下限",
+            "REPURAMOUNTLOWER",
+            "planned_amount_lower",
+        ))
+        planned_amount_upper = _number(_field(
+            row,
+            "计划回购金额区间-上限",
+            "计划回购金额上限",
+            "REPURAMOUNTLIMIT",
+            "planned_amount_upper",
+        ))
+        repurchase_amount = _number(_field(row, "已回购金额", "REPURAMOUNT", "repurchase_amount", "repurchaseAmount"))
+        repurchase_shares = _number(_field(row, "已回购股份数量", "已回购股份数", "REPURNUM", "repurchase_shares", "repurchaseShares"))
+        if not any(value is not None for value in (
+            announcement_date,
+            start_date,
+            end_date,
+            finish_date,
+            progress_text,
+            planned_amount_lower,
+            planned_amount_upper,
+            repurchase_amount,
+            repurchase_shares,
+        )):
+            errors.append(BridgeError("AKSHARE_REPURCHASE_ROW_INVALID", "repurchase row has no usable fields", source))
+            continue
+        identity = [
+            announcement_date or "",
+            start_date or "",
+            str(planned_amount_lower) if planned_amount_lower is not None else "",
+            str(planned_amount_upper) if planned_amount_upper is not None else "",
+        ]
+        result.append({
+            "ts_code": normalized_code,
+            "repurchase_code": f"akshare:{':'.join(identity)}" if any(identity) else None,
+            "announcement_date": announcement_date,
+            "start_date": start_date,
+            "end_date": end_date,
+            "finish_date": finish_date,
+            "progress": progress_text,
+            "planned_amount_lower": planned_amount_lower,
+            "planned_amount_upper": planned_amount_upper,
+            "repurchase_amount": repurchase_amount,
+            "repurchase_shares": repurchase_shares,
+        })
+    deduplicated = {
+        row["repurchase_code"] or f"{row['announcement_date']}:{row['start_date']}:{row['planned_amount_lower']}:{row['planned_amount_upper']}": row
+        for row in result
+    }
+    ordered = sorted(
+        deduplicated.values(),
+        key=lambda item: f"{item['announcement_date'] or ''}:{item['start_date'] or ''}",
+        reverse=True,
+    )
+    return ordered[:max(1, min(limit, 20))], errors
 
 
 def build_evidence(

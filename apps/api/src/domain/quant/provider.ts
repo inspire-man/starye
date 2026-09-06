@@ -221,6 +221,9 @@ export interface QuantRepurchaseReport {
   readonly plannedAmountUpper: number | null
   readonly repurchaseAmount: number | null
   readonly repurchaseShares: number | null
+  readonly provider?: QuantSourceName
+  readonly fallbackUsed?: boolean
+  readonly fallbackReason?: string | null
 }
 
 export interface QuantRepurchaseRequest {
@@ -229,7 +232,7 @@ export interface QuantRepurchaseRequest {
 }
 
 export interface QuantRepurchaseProvider {
-  readonly name: QuantProviderName
+  readonly name: QuantSourceName
   readonly isConfigured: boolean
   fetchRepurchaseHistory: (request: QuantRepurchaseRequest) => Promise<readonly QuantRepurchaseReport[]>
 }
@@ -816,6 +819,61 @@ export function createQuantCashflowProviderChain(primary: QuantCashflowProvider,
     name: primary.name,
     isConfigured: primary.isConfigured || Boolean(fallback?.isConfigured),
     fetchCashflowHistory,
+  }
+}
+
+export function createQuantRepurchaseProviderChain(primary: QuantRepurchaseProvider, fallback?: QuantRepurchaseProvider): QuantRepurchaseProvider {
+  function markFallback(reports: readonly QuantRepurchaseReport[], reason: string): readonly QuantRepurchaseReport[] {
+    return reports.map(report => ({
+      ...report,
+      provider: report.provider ?? fallback?.name ?? primary.name,
+      fallbackUsed: true,
+      fallbackReason: reason,
+    }))
+  }
+
+  async function fetchRepurchaseHistory(request: QuantRepurchaseRequest): Promise<readonly QuantRepurchaseReport[]> {
+    let primaryError: unknown = null
+    let primaryReports: readonly QuantRepurchaseReport[] | null = null
+    if (primary.isConfigured) {
+      try {
+        primaryReports = await primary.fetchRepurchaseHistory(request)
+      }
+      catch (error) {
+        primaryError = error
+      }
+    }
+    else {
+      primaryError = new TushareProviderError('TOKEN_MISSING', `${primary.name} repurchase provider is not configured`, 'repurchase')
+    }
+
+    if (primaryReports && primaryReports.length > 0)
+      return primaryReports
+
+    if (!fallback?.isConfigured) {
+      if (primaryError)
+        throw primaryError
+      return primaryReports ?? []
+    }
+
+    try {
+      const fallbackReports = await fallback.fetchRepurchaseHistory(request)
+      if (!fallbackReports.length) {
+        if (primaryError)
+          throw primaryError
+        return []
+      }
+      return markFallback(fallbackReports, primaryError ? mapQuantProviderError(primaryError).code : 'QUANT_PROVIDER_EMPTY')
+    }
+    catch (fallbackError) {
+      throw primaryError ?? fallbackError
+    }
+  }
+
+  return {
+    name: primary.name,
+    isConfigured: primary.isConfigured || Boolean(fallback?.isConfigured),
+    fetchRepurchaseHistory,
   }
 }
 
@@ -2371,6 +2429,17 @@ export function resolveQuantProviderName(env: unknown): QuantProviderName | null
 }
 
 export function mapQuantProviderError(error: unknown): QuantError {
+  if (error && typeof error === 'object' && (error as { readonly name?: unknown }).name === 'QuantAkshareBridgeError') {
+    const code = (error as { readonly code?: unknown }).code
+    if (code === 'CONFIGURATION')
+      return new QuantError('QUANT_PROVIDER_CONFIGURATION', 'AkShare provider is not configured', 503)
+    if (code === 'TIMEOUT')
+      return new QuantError('QUANT_PROVIDER_TIMEOUT', 'AkShare bridge request timed out', 504)
+    if (code === 'INVALID_RESPONSE')
+      return new QuantError('QUANT_PROVIDER_INVALID_RESPONSE', 'AkShare bridge response is invalid', 502)
+    return new QuantError('QUANT_PROVIDER_UPSTREAM', 'AkShare provider failed', 502)
+  }
+
   if (error instanceof TushareProviderError) {
     switch (error.code) {
       case 'TOKEN_MISSING':

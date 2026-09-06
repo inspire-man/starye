@@ -1,7 +1,7 @@
 import unittest
 
 from quant_akshare_bridge.contracts import BridgeRequest
-from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_financial_rows, normalize_identity_rows, normalize_ts_code, validate_date_range
+from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ts_code, validate_date_range
 
 
 class NormalizerTest(unittest.TestCase):
@@ -47,6 +47,73 @@ class NormalizerTest(unittest.TestCase):
         validate_date_range("20160101", "20260101")
         with self.assertRaisesRegex(ValueError, "10 years"):
             validate_date_range("20150101", "20260826")
+
+    def test_normalizes_repurchase_rows_and_filters_the_full_market_table(self) -> None:
+        rows, errors = normalize_repurchase_rows("601899.SH", [
+            {
+                "股票代码": "601899",
+                "计划回购金额区间-下限": 1500000000,
+                "计划回购金额区间-上限": 2500000000,
+                "回购起始时间": 1786665600000,
+                "实施进度": "完成实施",
+                "已回购股份数量": 77474592,
+                "已回购金额": 2499754839.55,
+                "最新公告日期": 1787011200000,
+            },
+            {
+                "股票代码": "000001",
+                "计划回购金额区间-下限": 10,
+            },
+        ])
+
+        self.assertEqual(errors, [])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["ts_code"], "601899.SH")
+        self.assertEqual(rows[0]["announcement_date"], "20260818")
+        self.assertEqual(rows[0]["start_date"], "20260814")
+        self.assertEqual(rows[0]["repurchase_amount"], 2499754839.55)
+        self.assertEqual(rows[0]["repurchase_shares"], 77474592.0)
+        self.assertTrue(rows[0]["repurchase_code"].startswith("akshare:20260818:20260814:"))
+
+    def test_keeps_null_amounts_for_pending_repurchase_rows_and_returns_empty_for_no_match(self) -> None:
+        rows, errors = normalize_repurchase_rows("000001.SZ", [{
+            "股票代码": "601899",
+            "计划回购金额区间-下限": 600000000,
+            "计划回购金额区间-上限": 1000000000,
+            "回购起始时间": "2026-04-07",
+            "实施进度": "董事会预案",
+            "已回购股份数量": None,
+            "已回购金额": None,
+        }])
+
+        self.assertEqual(rows, [])
+        self.assertEqual(errors, [])
+
+        rows, errors = normalize_repurchase_rows("601899.SH", [{
+            "股票代码": "601899",
+            "计划回购金额区间-下限": 600000000,
+            "计划回购金额区间-上限": 1000000000,
+            "回购起始时间": "2026-04-07",
+            "实施进度": "董事会预案",
+            "已回购股份数量": None,
+            "已回购金额": None,
+        }])
+        self.assertEqual(errors, [])
+        self.assertEqual(rows[0]["repurchase_amount"], None)
+        self.assertEqual(rows[0]["repurchase_shares"], None)
+
+    def test_retains_repurchase_rows_with_invalid_optional_dates_as_classified_errors(self) -> None:
+        rows, errors = normalize_repurchase_rows("601899.SH", [{
+            "股票代码": "601899",
+            "最新公告日期": "not-a-date",
+            "计划回购金额区间-下限": 100,
+            "计划回购金额区间-上限": 200,
+            "实施进度": "实施中",
+        }])
+
+        self.assertEqual(len(rows), 1)
+        self.assertIsNone(rows[0]["announcement_date"])
+        self.assertEqual(errors[0].code, "AKSHARE_REPURCHASE_DATE_INVALID")
 
     def test_normalizes_financial_aliases_and_bounds_rows(self) -> None:
         rows, errors = normalize_financial_rows("601899.SH", [

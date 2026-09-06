@@ -526,6 +526,8 @@ describe('quant research report', () => {
           status: 'ready',
           provider: 'eastmoney',
           providerErrorCode: null,
+          fallbackUsed: false,
+          fallbackReason: null,
           observedAt: '2026-08-26T00:00:00.000Z',
           latestAnnouncementDate: '2026-04-15',
           latestProgress: '006',

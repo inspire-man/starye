@@ -117,6 +117,10 @@ function repurchaseProgressLabel(progress: string | null): string {
   }[progress ?? ''] || progress || '实施状态待补'
 }
 
+function repurchaseProviderLabel(provider: string | null): string {
+  return provider === 'akshare' ? 'AkShare' : provider === 'eastmoney' ? 'Eastmoney' : provider === 'tushare' ? 'Tushare' : 'Quant'
+}
+
 function formatRepurchaseRange(lower: number | null, upper: number | null): string {
   const lowerText = formatFinancialAmount(lower)
   const upperText = formatFinancialAmount(upper)
@@ -403,7 +407,8 @@ function formatRepurchaseRange(lower: number | null, upper: number | null): stri
           </div>
         </div>
         <div class="shareholder-return-provenance">
-          <strong>{{ selectedShareholderReturn.repurchaseEvidence.provider ? `${selectedShareholderReturn.repurchaseEvidence.provider} 回购计划` : '回购计划来源待补' }}</strong>
+          <strong>{{ selectedShareholderReturn.repurchaseEvidence.provider ? `${repurchaseProviderLabel(selectedShareholderReturn.repurchaseEvidence.provider)} 回购计划` : '回购计划来源待补' }}</strong>
+          <small v-if="selectedShareholderReturn.repurchaseEvidence.fallbackUsed && selectedShareholderReturn.repurchaseEvidence.fallbackReason">已从主源回退：{{ selectedShareholderReturn.repurchaseEvidence.fallbackReason }}</small>
           <small v-if="selectedShareholderReturn.repurchaseEvidence.providerErrorCode">来源错误：{{ selectedShareholderReturn.repurchaseEvidence.providerErrorCode }}</small>
         </div>
         <div v-if="selectedShareholderReturn.repurchaseEvidence.missingFields.length" class="value-quality-notes value-quality-notes-muted">
