@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 from .contracts import BridgeError, BridgeRequest, BridgeResponse, BridgeSource, observed_now
-from .normalizer import FORMULA_VERSION, _merge_debt_components, akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ths_cashflow_rows, normalize_ts_code, validate_date_range
+from .normalizer import FORMULA_VERSION, _merge_debt_components, akshare_symbol, build_evidence, normalize_capital_structure_rows, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ths_cashflow_rows, normalize_ts_code, validate_date_range
 
 
 def akshare_available() -> bool:
@@ -353,6 +353,22 @@ def _collect_dividends(api: Any, ts_code: str) -> tuple[list[dict[str, Any]], li
         return [], [BridgeError("AKSHARE_DIVIDEND_ENDPOINT_FAILED", "AkShare dividend endpoint failed", endpoint)], [endpoint]
 
 
+def _collect_capital_structures(api: Any, ts_code: str, start_date: str, end_date: str) -> tuple[list[dict[str, Any]], list[BridgeError], list[str]]:
+    endpoint = "stock_share_change_cninfo"
+    method = getattr(api, endpoint, None)
+    if not callable(method):
+        return [], [BridgeError("AKSHARE_CAPITAL_ENDPOINT_UNAVAILABLE", "AkShare capital structure endpoint is unavailable", endpoint)], []
+    try:
+        rows, row_errors = normalize_capital_structure_rows(
+            ts_code,
+            method(symbol=akshare_symbol(ts_code), start_date=start_date, end_date=end_date),
+            source=endpoint,
+        )
+        return rows, row_errors, [endpoint]
+    except Exception:
+        return [], [BridgeError("AKSHARE_CAPITAL_ENDPOINT_FAILED", "AkShare capital structure endpoint failed", endpoint)], [endpoint]
+
+
 def collect_evidence(request: BridgeRequest, client: Any | None = None) -> BridgeResponse:
     ts_code = normalize_ts_code(request.ts_code)
     start_date = normalize_date(request.start_date, "start_date")
@@ -365,6 +381,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
     daily_bars: list[dict[str, Any]] = []
     financials: list[dict[str, Any]] = []
     cashflows: list[dict[str, Any]] = []
+    capital_structures: list[dict[str, Any]] = []
     repurchases: list[dict[str, Any]] = []
     dividends: list[dict[str, Any]] = []
     identity: dict[str, Any] = {}
@@ -372,17 +389,21 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
     identity_endpoints: list[str] = []
     financial_endpoints: list[str] = []
     cashflow_endpoints: list[str] = []
+    capital_endpoints: list[str] = []
     repurchase_endpoints: list[str] = []
     dividend_endpoints: list[str] = []
 
     from datetime import date, timedelta
 
     end_date = end_date or date.today().strftime("%Y%m%d")
-    start_date = start_date or (date.today() - timedelta(days=365 * 5)).strftime("%Y%m%d")
+    daily_start_date = start_date or (date.today() - timedelta(days=365 * 5)).strftime("%Y%m%d")
+    daily_end_date = end_date or date.today().strftime("%Y%m%d")
+    capital_start_date = start_date or (date.today() - timedelta(days=365 * 10)).strftime("%Y%m%d")
+    capital_end_date = end_date or date.today().strftime("%Y%m%d")
     daily_candidates = [
-        ("stock_zh_a_hist", lambda method: method(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="")),
-        ("stock_zh_a_hist_tx", lambda method: method(symbol=_tx_symbol(ts_code), start_date=start_date, end_date=end_date, adjust="")),
-        ("stock_zh_a_daily", lambda method: method(symbol=_sina_symbol(ts_code), start_date=start_date, end_date=end_date, adjust="")),
+        ("stock_zh_a_hist", lambda method: method(symbol=symbol, period="daily", start_date=daily_start_date, end_date=daily_end_date, adjust="")),
+        ("stock_zh_a_hist_tx", lambda method: method(symbol=_tx_symbol(ts_code), start_date=daily_start_date, end_date=daily_end_date, adjust="")),
+        ("stock_zh_a_daily", lambda method: method(symbol=_sina_symbol(ts_code), start_date=daily_start_date, end_date=daily_end_date, adjust="")),
     ]
     for endpoint, invoke in daily_candidates:
         method = getattr(api, endpoint, None)
@@ -435,8 +456,12 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
     dividends, dividend_errors, dividend_endpoints = _collect_dividends(api, ts_code)
     errors.extend(dividend_errors)
 
+    if request.include_capital_structures:
+        capital_structures, capital_errors, capital_endpoints = _collect_capital_structures(api, ts_code, capital_start_date, capital_end_date)
+        errors.extend(capital_errors)
+
     evidence = build_evidence(ts_code, observed_at, daily_bars, financials, cashflows)
-    has_data = bool(daily_bars or identity or financials or cashflows)
+    has_data = bool(daily_bars or identity or financials or cashflows or capital_structures)
     status = "ready" if has_data and not _has_unresolved_gaps(request, daily_bars, identity, financials, cashflows, errors) else "partial" if has_data else "unavailable"
     return BridgeResponse(
         ts_code=ts_code,
@@ -449,6 +474,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
                 *identity_endpoints,
                 *financial_endpoints,
                 *cashflow_endpoints,
+                *capital_endpoints,
                 *repurchase_endpoints,
                 *dividend_endpoints,
             ])),
@@ -458,6 +484,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
         daily_bars=daily_bars,
         financials=financials,
         cashflows=cashflows,
+        capital_structures=capital_structures,
         repurchases=repurchases,
         dividends=dividends,
         evidence=evidence,

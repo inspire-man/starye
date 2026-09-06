@@ -48,6 +48,7 @@ class BridgeRequest:
     start_date: str | None = None
     end_date: str | None = None
     include_financials: bool = True
+    include_capital_structures: bool = True
 
 
 @dataclass
@@ -63,6 +64,7 @@ class BridgeResponse:
     daily_bars: list[dict[str, Any]] = field(default_factory=list)
     financials: list[dict[str, Any]] = field(default_factory=list)
     cashflows: list[dict[str, Any]] = field(default_factory=list)
+    capital_structures: list[dict[str, Any]] = field(default_factory=list)
     repurchases: list[dict[str, Any]] = field(default_factory=list)
     dividends: list[dict[str, Any]] = field(default_factory=list)
     evidence: list[BridgeEvidence] = field(default_factory=list)

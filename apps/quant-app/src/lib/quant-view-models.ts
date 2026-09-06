@@ -889,7 +889,7 @@ export interface QuantShareholderCapitalChange {
 export interface QuantShareholderCapitalEvidence {
   formulaVersion: string
   status: QuantShareholderCapitalStatus
-  provider: QuantProviderName | null
+  provider: QuantSourceName | null
   providerErrorCode: string | null
   observedAt: string
   latestReportDate: string | null

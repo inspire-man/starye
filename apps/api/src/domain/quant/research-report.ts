@@ -207,10 +207,10 @@ function shareholderCashflowSource(item: QuantShareholderReturnItem | null): { r
 }
 
 function shareholderCapitalSource(item: QuantShareholderReturnItem | null): { readonly id: string, readonly name: string } {
-  const provider = item?.capitalStructureEvidence?.provider === 'tushare' ? 'Tushare' : item?.capitalStructureEvidence?.provider === 'eastmoney' ? 'Eastmoney' : 'Quant'
+  const provider = item?.capitalStructureEvidence?.provider === 'tushare' ? 'Tushare' : item?.capitalStructureEvidence?.provider === 'akshare' ? 'AkShare' : item?.capitalStructureEvidence?.provider === 'eastmoney' ? 'Eastmoney' : 'Quant'
   const unavailable = item?.capitalStructureEvidence?.providerErrorCode ? `，来源不可用：${item.capitalStructureEvidence.providerErrorCode}` : ''
   return {
-    id: item?.capitalStructureEvidence?.provider === 'eastmoney' ? 'eastmoney-capital-structure' : 'quant-capital-structure-provider',
+    id: item?.capitalStructureEvidence?.provider === 'akshare' ? 'akshare-capital-structure' : item?.capitalStructureEvidence?.provider === 'eastmoney' ? 'eastmoney-capital-structure' : 'quant-capital-structure-provider',
     name: `${provider} 股本结构${unavailable}`,
   }
 }

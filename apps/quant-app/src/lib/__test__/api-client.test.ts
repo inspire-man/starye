@@ -470,7 +470,7 @@ describe('quantApi', () => {
           capital_structure_evidence: {
             formula_version: 'shareholder-capital-v1',
             status: 'ready',
-            provider: 'eastmoney',
+            provider: 'akshare',
             provider_error_code: null,
             observed_at: '2026-08-25T00:00:00.000Z',
             latest_report_date: '2026-03-31',
@@ -545,6 +545,7 @@ describe('quantApi', () => {
         }),
         capitalStructureEvidence: expect.objectContaining({
           status: 'ready',
+          provider: 'akshare',
           sharesOutstandingChange: 100,
           repurchaseSharesRetired: 50,
           changes: expect.arrayContaining([expect.objectContaining({ changeReason: '回购', sharesOutstandingChange: -50 })]),
