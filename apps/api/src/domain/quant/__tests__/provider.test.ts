@@ -787,6 +787,27 @@ describe('quant daily providers', () => {
     }])
   })
 
+  it('fills a missing Eastmoney cashflow net profit from the same-period income statement', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString())
+      if (url.pathname.endsWith('/xjllbDateAjaxNew'))
+        return new Response(JSON.stringify({ data: [{ REPORT_DATE: '2026-03-31 00:00:00' }] }), { status: 200 })
+      if (url.pathname.endsWith('/lrbAjaxNew'))
+        return new Response(JSON.stringify({ data: [{ SECURITY_CODE: '601899', REPORT_DATE: '2026-03-31 00:00:00', NETPROFIT: 25165728674 }] }), { status: 200 })
+      if (url.pathname.endsWith('/zcfzbAjaxNew'))
+        return new Response(JSON.stringify({ data: [] }), { status: 200 })
+      return new Response(JSON.stringify({ data: [{ SECURITY_CODE: '601899', REPORT_DATE: '2026-03-31 00:00:00', NETCASH_OPERATE: 27831931440, CONSTRUCT_LONG_ASSET: 5833660754, NETPROFIT: null }] }), { status: 200 })
+    })
+    const provider = createEastmoneyCashflowProvider({ fetchImpl })
+
+    await expect(provider.fetchCashflowHistory({ tsCode: '601899.SH', limit: 1 })).resolves.toMatchObject([{
+      reportDate: '2026-03-31',
+      operatingCashflow: 27831931440,
+      capitalExpenditure: 5833660754,
+      netProfit: 25165728674,
+    }])
+  })
+
   it('returns an empty cashflow history when Eastmoney has no report dates', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }))
     const provider = createEastmoneyCashflowProvider({ fetchImpl })

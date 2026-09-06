@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 from .contracts import BridgeError, BridgeRequest, BridgeResponse, BridgeSource, observed_now
-from .normalizer import FORMULA_VERSION, _merge_debt_components, akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ts_code, validate_date_range
+from .normalizer import FORMULA_VERSION, _merge_debt_components, akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ths_cashflow_rows, normalize_ts_code, validate_date_range
 
 
 def akshare_available() -> bool:
@@ -45,6 +45,7 @@ FINANCIAL_PROFIT_FIELDS = (
     "interest_expense",
     "interest_expense_source_field",
 )
+FINANCIAL_CASHFLOW_FIELDS = ("cashflow_net_profit",)
 FINANCIAL_BALANCE_FIELDS = ("total_liability", "interest_bearing_debt")
 FINANCIAL_METADATA_FIELDS = ("notice_date", "report_type", "report_date_name", "industry")
 FINANCIAL_COMPONENT_FIELDS = ("interest_bearing_debt_components",)
@@ -69,7 +70,7 @@ def _merge_financial_rows(
         if existing is None:
             merged_by_date[row["report_date"]] = dict(row)
             continue
-        for field in (*FINANCIAL_PROFIT_FIELDS, *FINANCIAL_BALANCE_FIELDS, *FINANCIAL_METADATA_FIELDS):
+        for field in (*FINANCIAL_PROFIT_FIELDS, *FINANCIAL_CASHFLOW_FIELDS, *FINANCIAL_BALANCE_FIELDS, *FINANCIAL_METADATA_FIELDS):
             if existing.get(field) is None and row.get(field) is not None:
                 existing[field] = row[field]
         existing[FINANCIAL_COMPONENT_FIELDS[0]] = _merge_debt_components(
@@ -223,6 +224,8 @@ def _enrich_cashflow_rows(cashflows: list[dict[str, Any]], financials: list[dict
             result.append(cashflow)
             continue
         merged = dict(cashflow)
+        if merged.get("net_profit") is None and financial.get("cashflow_net_profit") is not None:
+            merged["net_profit"] = financial["cashflow_net_profit"]
         for field in ("interest_expense", "interest_expense_source_field", "interest_bearing_debt"):
             if merged.get(field) is None and financial.get(field) is not None:
                 merged[field] = financial[field]
@@ -286,6 +289,7 @@ def _collect_cashflows(api: Any, ts_code: str, observed_at: str, financials: lis
         ("stock_cash_flow_sheet_by_quarterly_em", lambda method: method(symbol=_market_symbol(ts_code))),
         ("stock_cash_flow_sheet_by_yearly_em", lambda method: method(symbol=_market_symbol(ts_code))),
         ("stock_financial_report_sina", lambda method: method(stock=_sina_symbol(ts_code), symbol="现金流量表")),
+        ("stock_financial_cash_new_ths", lambda method: method(symbol=akshare_symbol(ts_code))),
     ]
     for endpoint, invoke in candidates:
         method = getattr(api, endpoint, None)
@@ -294,7 +298,8 @@ def _collect_cashflows(api: Any, ts_code: str, observed_at: str, financials: lis
         attempted.append(endpoint)
         try:
             raw = invoke(method)
-            rows, row_errors = normalize_cashflow_rows(ts_code, raw, observed_at, source=endpoint)
+            normalize = normalize_ths_cashflow_rows if endpoint == "stock_financial_cash_new_ths" else normalize_cashflow_rows
+            rows, row_errors = normalize(ts_code, raw, observed_at, source=endpoint)
             errors.extend(row_errors)
             if rows:
                 cashflows = _merge_cashflow_rows(cashflows, _enrich_cashflow_rows(rows, financials))

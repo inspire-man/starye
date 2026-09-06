@@ -29,6 +29,7 @@ class FakeAkShare:
             "TOTAL_OPERATE_INCOME": 1000,
             "TOTAL_OPERATE_INCOME_YOY": 12,
             "PARENT_NETPROFIT": 200,
+            "NETPROFIT": 220,
             "PARENT_NETPROFIT_YOY": 20,
             "DEDUCT_PARENT_NETPROFIT": 180,
             "DEDUCT_PARENT_NETPROFIT_YOY": 18,
@@ -65,6 +66,7 @@ class AdapterTest(unittest.TestCase):
         self.assertIn("akshare-roe", {item["key"] for item in payload["evidence"]})
         self.assertIn("akshare-return20", {item["key"] for item in payload["evidence"]})
         self.assertEqual(payload["cashflows"][0]["operating_cashflow"], 1000.0)
+        self.assertEqual(payload["cashflows"][0]["net_profit"], 200.0)
         self.assertEqual(payload["cashflows"][0]["interest_expense"], 25.0)
         self.assertEqual(payload["cashflows"][0]["interest_expense_source_field"], "FE_INTEREST_EXPENSE")
         self.assertEqual(payload["cashflows"][0]["interest_bearing_debt"], 1000.0)
@@ -72,6 +74,7 @@ class AdapterTest(unittest.TestCase):
         self.assertIn("stock_cash_flow_sheet_by_report_em", payload["source"]["endpoints"])
         self.assertEqual(payload["financials"][0]["revenue"], 1000.0)
         self.assertEqual(payload["financials"][0]["net_profit"], 200.0)
+        self.assertEqual(payload["financials"][0]["cashflow_net_profit"], 220.0)
         self.assertEqual(payload["financials"][0]["total_liability"], 500.0)
         self.assertIn("stock_profit_sheet_by_report_em", payload["source"]["endpoints"])
         self.assertIn("stock_balance_sheet_by_report_em", payload["source"]["endpoints"])
@@ -236,6 +239,54 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(result.status, "ready")
         self.assertEqual(result.cashflows[0]["capital_expenditure"], 300.0)
         self.assertIn("stock_financial_report_sina", result.source.endpoints)
+
+    def test_enriches_cashflow_net_profit_from_same_period_financials(self) -> None:
+        class MissingCashflowNetProfitAkShare(FakeAkShare):
+            def stock_cash_flow_sheet_by_report_em(self, **_kwargs):
+                return [{
+                    "报告期": "2026-06-30",
+                    "经营活动产生的现金流量净额": 1000,
+                    "购建固定资产、无形资产和其他长期资产支付的现金": 300,
+                }]
+
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH"), MissingCashflowNetProfitAkShare())
+
+        self.assertEqual(result.cashflows[0]["net_profit"], 220.0)
+        self.assertEqual(result.cashflows[0]["operating_cashflow"], 1000.0)
+
+    def test_uses_ths_cashflow_endpoint_after_standard_sources_fail(self) -> None:
+        class ThsCashflowAkShare(FakeAkShare):
+            def stock_cash_flow_sheet_by_report_em(self, **_kwargs):
+                raise RuntimeError("report endpoint")
+
+            def stock_cash_flow_sheet_by_quarterly_em(self, **_kwargs):
+                raise RuntimeError("quarterly endpoint")
+
+            def stock_cash_flow_sheet_by_yearly_em(self, **_kwargs):
+                raise RuntimeError("yearly endpoint")
+
+            def stock_financial_report_sina(self, **_kwargs):
+                raise RuntimeError("sina endpoint")
+
+            def stock_financial_cash_new_ths(self, **_kwargs):
+                return [
+                    {"report_date": "2026-06-30", "metric_name": "act_cash_flow_net", "value": 1000, "single": 600},
+                    {"report_date": "2026-06-30", "metric_name": "pay_fixed_assets_etc_cash", "value": 300, "single": 180},
+                    {"report_date": "2026-06-30", "metric_name": "cash_net_profit", "value": 200, "single": ""},
+                    {"report_date": "2025-12-31", "metric_name": "act_cash_flow_net", "value": 900, "single": ""},
+                    {"report_date": "2025-12-31", "metric_name": "pay_fixed_assets_etc_cash", "value": 250, "single": ""},
+                    {"report_date": "2025-12-31", "metric_name": "cash_net_profit", "value": 180, "single": ""},
+                ]
+
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH"), ThsCashflowAkShare())
+
+        self.assertEqual(result.status, "ready")
+        self.assertEqual(len(result.cashflows), 2)
+        self.assertEqual(result.cashflows[0]["operating_cashflow"], 1000.0)
+        self.assertEqual(result.cashflows[0]["capital_expenditure"], 300.0)
+        self.assertEqual(result.cashflows[0]["net_profit"], 200.0)
+        self.assertIn("stock_financial_cash_new_ths", result.source.endpoints)
+        self.assertTrue(any(error.code == "AKSHARE_CASHFLOW_ENDPOINT_FAILED" and error.source == "stock_cash_flow_sheet_by_report_em" for error in result.errors))
 
     def test_skips_statement_endpoints_when_financial_targets_are_complete(self) -> None:
         class CompleteFinancialAkShare(FakeAkShare):

@@ -2026,6 +2026,8 @@ function normalizeEastmoneyCashflowReport(
 
   const interestExpense = normalizeEastmoneyInterestExpense(incomeRecord)
   const interestBearingDebtComponents = normalizeEastmoneyInterestBearingDebtComponents(balanceRecord)
+  const netProfit = eastmoneyQuoteNumber(record.NETPROFIT, 'netProfit')
+    ?? eastmoneyQuoteNumber(incomeRecord?.NETPROFIT, 'netProfit')
   return {
     tsCode,
     provider: 'eastmoney',
@@ -2035,7 +2037,7 @@ function normalizeEastmoneyCashflowReport(
     noticeDate: normalizeFinancialDate(record.NOTICE_DATE, 'cashflow notice date', false),
     operatingCashflow: eastmoneyQuoteNumber(record.NETCASH_OPERATE, 'operatingCashflow'),
     capitalExpenditure: eastmoneyQuoteNumber(record.CONSTRUCT_LONG_ASSET, 'capitalExpenditure'),
-    netProfit: eastmoneyQuoteNumber(record.NETPROFIT, 'netProfit'),
+    netProfit,
     cashDividendsPaid: eastmoneyQuoteNumber(record.ASSIGN_DIVIDEND_PORFIT, 'cashDividendsPaid'),
     interestExpense: interestExpense.value,
     interestExpenseSourceField: interestExpense.sourceField,
