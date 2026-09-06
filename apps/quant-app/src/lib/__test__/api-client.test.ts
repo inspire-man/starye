@@ -644,6 +644,7 @@ describe('quantApi', () => {
             supplemental_provider: 'akshare',
             operating_cashflow: 300,
             capital_expenditure: 80,
+            cash_dividends_paid: 15826134692,
           },
         }],
       },
@@ -657,7 +658,7 @@ describe('quantApi', () => {
       revenue: 1000,
     })
     await expect(quantApi.getShareholderReturns()).resolves.toMatchObject({
-      items: [{ cashflowEvidence: { provider: 'akshare', supplementalProvider: 'akshare', operatingCashflow: 300, capitalExpenditure: 80 } }],
+      items: [{ cashflowEvidence: { provider: 'akshare', supplementalProvider: 'akshare', operatingCashflow: 300, capitalExpenditure: 80, cashDividendsPaid: 15826134692 } }],
     })
   })
 

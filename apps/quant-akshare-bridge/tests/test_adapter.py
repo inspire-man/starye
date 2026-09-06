@@ -118,6 +118,21 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(result.dividends[0]["cash_div"], 0.42)
         self.assertIn("stock_history_dividend_detail", result.source.endpoints)
 
+    def test_collects_cash_dividends_paid_from_the_cashflow_statement(self) -> None:
+        class CashDividendAkShare(FakeAkShare):
+            def stock_cash_flow_sheet_by_report_em(self, **_kwargs):
+                return [{
+                    "报告期": "2026-06-30",
+                    "经营活动产生的现金流量净额": 1000,
+                    "购建固定资产、无形资产和其他长期资产支付的现金": 300,
+                    "净利润": 200,
+                    "ASSIGN_DIVIDEND_PORFIT": 15826134692,
+                }]
+
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH"), CashDividendAkShare())
+
+        self.assertEqual(result.cashflows[0]["cash_dividends_paid"], 15826134692.0)
+
     def test_keeps_empty_dividend_history_without_endpoint_failure(self) -> None:
         class EmptyDividendAkShare(FakeAkShare):
             def stock_history_dividend_detail(self, **_kwargs):

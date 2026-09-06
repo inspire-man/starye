@@ -409,7 +409,7 @@ function normalizeBridgeCashflowReport(result: QuantAkshareBridgeResult, record:
     operatingCashflow: bridgeNumber(record, 'operating_cashflow', 'operatingCashflow', 'n_cashflow_act'),
     capitalExpenditure: bridgeNumber(record, 'capital_expenditure', 'capitalExpenditure', 'c_pay_acq_const_fiolta'),
     netProfit: bridgeNumber(record, 'net_profit', 'netProfit', '净利润'),
-    cashDividendsPaid: null,
+    cashDividendsPaid: bridgeNumber(record, 'cash_dividends_paid', 'cashDividendsPaid', 'ASSIGN_DIVIDEND_PORFIT', '分配股利、利润或偿付利息支付的现金'),
     interestExpense: interestExpense.value,
     interestExpenseSourceField: interestExpense.sourceField,
     interestExpenseProviderErrorCode: null,

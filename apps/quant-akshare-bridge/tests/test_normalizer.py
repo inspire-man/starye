@@ -307,6 +307,29 @@ class NormalizerTest(unittest.TestCase):
         self.assertEqual(rows[0]["net_profit"], 200.0)
         self.assertIsNone(rows[0]["cash_dividends_paid"])
 
+    def test_normalizes_cashflow_dividends_paid_without_deriving_the_value(self) -> None:
+        rows, errors = normalize_cashflow_rows("601899.SH", [{
+            "报告期": "2026-06-30",
+            "经营活动产生的现金流量净额": 1000,
+            "购建固定资产、无形资产和其他长期资产支付的现金": 300,
+            "净利润": 200,
+            "ASSIGN_DIVIDEND_PORFIT": 15826134692,
+        }], "2026-09-07T00:00:00Z")
+
+        self.assertEqual(errors, [])
+        self.assertEqual(rows[0]["cash_dividends_paid"], 15826134692.0)
+
+        rows, errors = normalize_cashflow_rows("601899.SH", [{
+            "报告期": "2026-06-30",
+            "经营活动产生的现金流量净额": 1000,
+            "购建固定资产、无形资产和其他长期资产支付的现金": 300,
+            "净利润": 200,
+            "ASSIGN_DIVIDEND_PORFIT": "NaN",
+        }], "2026-09-07T00:00:00Z")
+
+        self.assertEqual(errors, [])
+        self.assertIsNone(rows[0]["cash_dividends_paid"])
+
     def test_keeps_valid_financial_rows_when_one_row_has_an_invalid_date(self) -> None:
         rows, errors = normalize_financial_rows("601899.SH", [
             {"日期": "2026-02-30", "净资产收益率(%)": "12.5"},

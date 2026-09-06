@@ -382,7 +382,7 @@ def normalize_cashflow_rows(
             "operating_cashflow": _number(_field(row, "经营活动产生的现金流量净额", "经营活动现金流量净额", "经营活动产生的现金流量净额(元)", "n_cashflow_act", "NETCASH_OPERATE", "operating_cashflow")),
             "capital_expenditure": _number(_field(row, "购建固定资产、无形资产和其他长期资产支付的现金", "购建固定资产、无形资产和其他长期资产所支付的现金", "购建长期资产支出", "c_pay_acq_const_fiolta", "CONSTRUCT_LONG_ASSET", "capital_expenditure")),
             "net_profit": _number(_field(row, "净利润", "NETPROFIT", "net_profit")),
-            "cash_dividends_paid": None,
+            "cash_dividends_paid": _number(_field(row, "分配股利、利润或偿付利息支付的现金", "分配股利、利润或偿付利息支付的现金(元)", "ASSIGN_DIVIDEND_PORFIT", "assign_dividend_porfit", "cash_dividends_paid")),
             "interest_expense": interest_expense,
             "interest_expense_source_field": interest_expense_source_field,
             "interest_bearing_debt": _debt_total(interest_bearing_debt_components, row),
