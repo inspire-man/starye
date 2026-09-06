@@ -121,6 +121,44 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(result.dividends[0]["cash_div"], 0.42)
         self.assertIn("stock_history_dividend_detail", result.source.endpoints)
 
+    def test_collects_cninfo_company_capital_events_without_leaking_other_stocks(self) -> None:
+        class CapitalAkShare(FakeAkShare):
+            def stock_share_change_cninfo(self, **kwargs):
+                self.capital_kwargs = kwargs
+                return [
+                    {"证券代码": "601899", "变动日期": "2025-12-18", "总股本": 2658973.314, "变动原因": "回购"},
+                    {"证券代码": "000001", "变动日期": "2025-12-18", "总股本": 10, "变动原因": "其他"},
+                ]
+
+        client = CapitalAkShare()
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH"), client)
+
+        self.assertEqual(result.capital_structures, [{
+            "ts_code": "601899.SH",
+            "report_date": "20251218",
+            "total_shares": 26589733140.0,
+            "change_reason": "回购",
+        }])
+        self.assertEqual(client.capital_kwargs["symbol"], "601899")
+        self.assertRegex(client.capital_kwargs["start_date"], r"^\d{8}$")
+        self.assertIn("stock_share_change_cninfo", result.source.endpoints)
+
+    def test_counts_capital_structure_as_available_bridge_data(self) -> None:
+        class CapitalOnlyAkShare:
+            def stock_share_change_cninfo(self, **_kwargs):
+                return [{
+                    "证券代码": "601899",
+                    "变动日期": "2025-12-18",
+                    "总股本": 2658973.314,
+                    "变动原因": "回购",
+                }]
+
+        result = collect_evidence(BridgeRequest(ts_code="601899.SH", include_financials=False), CapitalOnlyAkShare())
+
+        self.assertEqual(result.status, "partial")
+        self.assertEqual(len(result.capital_structures), 1)
+        self.assertNotEqual(result.status, "unavailable")
+
     def test_collects_cash_dividends_paid_from_the_cashflow_statement(self) -> None:
         class CashDividendAkShare(FakeAkShare):
             def stock_cash_flow_sheet_by_report_em(self, **_kwargs):

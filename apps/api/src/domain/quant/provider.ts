@@ -196,6 +196,7 @@ export interface QuantCapitalStructureReport {
   readonly reportDate: string
   readonly totalShares: number | null
   readonly changeReason: string | null
+  readonly provider?: QuantSourceName
 }
 
 export interface QuantCapitalStructureRequest {
@@ -204,7 +205,7 @@ export interface QuantCapitalStructureRequest {
 }
 
 export interface QuantCapitalStructureProvider {
-  readonly name: QuantProviderName
+  readonly name: QuantSourceName
   readonly isConfigured: boolean
   fetchCapitalStructureHistory: (request: QuantCapitalStructureRequest) => Promise<readonly QuantCapitalStructureReport[]>
 }
@@ -2362,6 +2363,59 @@ export function createEastmoneyCapitalStructureProvider(options: EastmoneyProvid
   return {
     name: 'eastmoney',
     isConfigured: true,
+    fetchCapitalStructureHistory,
+  }
+}
+
+export function createQuantCapitalStructureProviderChain(primary: QuantCapitalStructureProvider, fallback?: QuantCapitalStructureProvider): QuantCapitalStructureProvider {
+  function markFallback(reports: readonly QuantCapitalStructureReport[]): readonly QuantCapitalStructureReport[] {
+    return reports.map(report => ({
+      ...report,
+      provider: report.provider ?? fallback?.name ?? primary.name,
+    }))
+  }
+
+  async function fetchCapitalStructureHistory(request: QuantCapitalStructureRequest): Promise<readonly QuantCapitalStructureReport[]> {
+    let primaryError: unknown = null
+    let primaryReports: readonly QuantCapitalStructureReport[] | null = null
+    if (primary.isConfigured) {
+      try {
+        primaryReports = await primary.fetchCapitalStructureHistory(request)
+      }
+      catch (error) {
+        primaryError = error
+      }
+    }
+    else {
+      primaryError = new TushareProviderError('TOKEN_MISSING', `${primary.name} capital structure provider is not configured`, 'capital structure')
+    }
+
+    if (primaryReports && primaryReports.length > 0)
+      return primaryReports
+
+    if (!fallback?.isConfigured) {
+      if (primaryError)
+        throw primaryError
+      return primaryReports ?? []
+    }
+
+    try {
+      const fallbackReports = await fallback.fetchCapitalStructureHistory(request)
+      if (!fallbackReports.length) {
+        if (primaryError)
+          throw primaryError
+        return []
+      }
+      return markFallback(fallbackReports)
+    }
+    catch (fallbackError) {
+      throw primaryError ?? fallbackError
+    }
+  }
+
+  return {
+    name: primary.name,
+    isConfigured: primary.isConfigured || Boolean(fallback?.isConfigured),
     fetchCapitalStructureHistory,
   }
 }

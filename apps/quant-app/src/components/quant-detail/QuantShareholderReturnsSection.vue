@@ -121,6 +121,10 @@ function repurchaseProviderLabel(provider: string | null): string {
   return provider === 'akshare' ? 'AkShare' : provider === 'eastmoney' ? 'Eastmoney' : provider === 'tushare' ? 'Tushare' : 'Quant'
 }
 
+function capitalProviderLabel(provider: string | null): string {
+  return provider === 'akshare' ? 'AkShare' : provider === 'eastmoney' ? 'Eastmoney' : provider === 'tushare' ? 'Tushare' : 'Quant'
+}
+
 function formatRepurchaseRange(lower: number | null, upper: number | null): string {
   const lowerText = formatFinancialAmount(lower)
   const upperText = formatFinancialAmount(upper)
@@ -354,7 +358,7 @@ function formatRepurchaseRange(lower: number | null, upper: number | null): stri
           </div>
         </div>
         <div class="shareholder-return-provenance">
-          <strong>{{ selectedShareholderReturn.capitalStructureEvidence.provider ? `${selectedShareholderReturn.capitalStructureEvidence.provider} 股本结构` : '股本结构来源待补' }}</strong>
+          <strong>{{ selectedShareholderReturn.capitalStructureEvidence.provider ? `${capitalProviderLabel(selectedShareholderReturn.capitalStructureEvidence.provider)} 股本结构` : '股本结构来源待补' }}</strong>
           <small v-if="selectedShareholderReturn.capitalStructureEvidence.providerErrorCode">来源错误：{{ selectedShareholderReturn.capitalStructureEvidence.providerErrorCode }}</small>
         </div>
         <div v-if="selectedShareholderReturn.capitalStructureEvidence.missingFields.length" class="value-quality-notes value-quality-notes-muted">

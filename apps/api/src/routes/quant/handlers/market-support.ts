@@ -1,9 +1,9 @@
 import type { Database } from '@starye/db'
 import type { QuantDecisionAssistantMarketInput } from '../../../domain/quant/decision-assistant'
 import type { AppEnv } from '../../../types'
-import { createQuantAkshareBridge, createQuantAkshareCashflowProvider, createQuantAkshareDividendProvider, createQuantAkshareFinancialProvider, createQuantAkshareRepurchaseProvider } from '../../../domain/quant/akshare-bridge'
+import { createQuantAkshareBridge, createQuantAkshareCapitalStructureProvider, createQuantAkshareCashflowProvider, createQuantAkshareDividendProvider, createQuantAkshareFinancialProvider, createQuantAkshareRepurchaseProvider } from '../../../domain/quant/akshare-bridge'
 import { QuantError } from '../../../domain/quant/errors'
-import { createEastmoneyCapitalStructureProvider, createEastmoneyCashflowProvider, createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyMarketQuoteProvider, createEastmoneyRepurchaseProvider, createQuantCashflowProviderChain, createQuantDividendProviderChain, createQuantFinancialProviderChain, createQuantRepurchaseProviderChain, createTushareCashflowProvider, createTushareDividendProvider, createTushareFinancialProvider, mapQuantProviderError, resolveQuantProviderName } from '../../../domain/quant/provider'
+import { createEastmoneyCapitalStructureProvider, createEastmoneyCashflowProvider, createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyMarketQuoteProvider, createEastmoneyRepurchaseProvider, createQuantCapitalStructureProviderChain, createQuantCashflowProviderChain, createQuantDividendProviderChain, createQuantFinancialProviderChain, createQuantRepurchaseProviderChain, createTushareCashflowProvider, createTushareDividendProvider, createTushareFinancialProvider, mapQuantProviderError, resolveQuantProviderName } from '../../../domain/quant/provider'
 import { getLatestQuantDailyBar } from '../../../domain/quant/repository'
 import { eastmoneyProviderOptions, tushareProviderOptions } from '../route-context'
 
@@ -118,7 +118,10 @@ export function financialProvider(env?: AppEnv['Bindings']) {
 }
 
 export function capitalStructureProvider(env?: AppEnv['Bindings']) {
-  return createEastmoneyCapitalStructureProvider(eastmoneyProviderOptions(env))
+  return createQuantCapitalStructureProviderChain(
+    createEastmoneyCapitalStructureProvider(eastmoneyProviderOptions(env)),
+    createQuantAkshareCapitalStructureProvider(akshareBridge(env)),
+  )
 }
 
 export function repurchaseProvider(env?: AppEnv['Bindings']) {

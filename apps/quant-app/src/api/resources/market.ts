@@ -406,7 +406,7 @@ function parseShareholderCapitalEvidence(value: unknown): QuantShareholderCapita
   return {
     formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'shareholder-capital-v1',
     status,
-    provider: provider === 'tushare' || provider === 'eastmoney' ? provider : null,
+    provider: provider === 'tushare' || provider === 'eastmoney' || provider === 'akshare' ? provider : null,
     providerErrorCode: readString(value, 'providerErrorCode', 'provider_error_code'),
     observedAt: readString(value, 'observedAt', 'observed_at') || '',
     latestReportDate: readString(value, 'latestReportDate', 'latest_report_date'),

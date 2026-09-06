@@ -1,7 +1,7 @@
 import type { QuantResearchReport } from '../research-report'
 import { describe, expect, it, vi } from 'vitest'
-import { createQuantAkshareBridge, createQuantAkshareCashflowProvider, createQuantAkshareDividendProvider, createQuantAkshareFinancialProvider, createQuantAkshareRepurchaseProvider, QuantAkshareBridgeError } from '../akshare-bridge'
-import { createQuantCashflowProviderChain, createQuantFinancialProviderChain } from '../provider'
+import { createQuantAkshareBridge, createQuantAkshareCapitalStructureProvider, createQuantAkshareCashflowProvider, createQuantAkshareDividendProvider, createQuantAkshareFinancialProvider, createQuantAkshareRepurchaseProvider, QuantAkshareBridgeError } from '../akshare-bridge'
+import { createQuantCapitalStructureProviderChain, createQuantCashflowProviderChain, createQuantFinancialProviderChain } from '../provider'
 
 const reportEvidence: QuantResearchReport = {
   reportVersion: 'research-report-v2',
@@ -186,6 +186,50 @@ describe('akShare bridge client', () => {
       fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify(payload()), { status: 200 })),
     })
     await expect(createQuantAkshareRepurchaseProvider(legacyBridge).fetchRepurchaseHistory({ tsCode: '601899.SH' })).resolves.toEqual([])
+  })
+
+  it('maps optional AkShare company capital rows and keeps legacy bridge payloads valid', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload({
+      capital_structures: [{
+        ts_code: '601899.SH',
+        report_date: '20251218',
+        total_shares: 26589733140,
+        change_reason: '回购',
+      }],
+    })), { status: 200 }))
+    const bridge = createQuantAkshareBridge({ baseUrl: 'https://bridge.example.test', token: 'secret-token', fetchImpl })
+
+    await expect(createQuantAkshareCapitalStructureProvider(bridge).fetchCapitalStructureHistory({ tsCode: '601899.SH' })).resolves.toEqual([{
+      tsCode: '601899.SH',
+      reportDate: '2025-12-18',
+      totalShares: 26589733140,
+      changeReason: '回购',
+      provider: 'akshare',
+    }])
+
+    const legacyBridge = createQuantAkshareBridge({
+      baseUrl: 'https://bridge.example.test',
+      token: 'secret-token',
+      fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify(payload()), { status: 200 })),
+    })
+    await expect(createQuantAkshareCapitalStructureProvider(legacyBridge).fetchCapitalStructureHistory({ tsCode: '601899.SH' })).resolves.toEqual([])
+  })
+
+  it('falls back from an empty Eastmoney capital history to AkShare with actual provenance', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload({
+      capital_structures: [{ ts_code: '601899.SH', report_date: '20251218', total_shares: 26589733140, change_reason: '回购' }],
+    })), { status: 200 }))
+    const bridge = createQuantAkshareBridge({ baseUrl: 'https://bridge.example.test', token: 'secret-token', fetchImpl })
+    const primary = {
+      name: 'eastmoney' as const,
+      isConfigured: true,
+      fetchCapitalStructureHistory: vi.fn().mockResolvedValue([]),
+    }
+
+    await expect(createQuantCapitalStructureProviderChain(primary, createQuantAkshareCapitalStructureProvider(bridge)).fetchCapitalStructureHistory({ tsCode: '601899.SH' })).resolves.toMatchObject([{
+      reportDate: '2025-12-18',
+      provider: 'akshare',
+    }])
   })
 
   it('surfaces a repurchase endpoint error instead of treating it as an empty history', async () => {

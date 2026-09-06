@@ -1,4 +1,4 @@
-import type { QuantCashflowProvider, QuantCashflowReport, QuantDividendFetchResult, QuantDividendProvider, QuantDividendRecord, QuantFinancialQualityProvider, QuantFinancialQualitySnapshot, QuantInterestBearingDebtComponents, QuantInterestExpenseSourceField, QuantRepurchaseProvider, QuantRepurchaseReport } from './provider'
+import type { QuantCapitalStructureProvider, QuantCapitalStructureReport, QuantCashflowProvider, QuantCashflowReport, QuantDividendFetchResult, QuantDividendProvider, QuantDividendRecord, QuantFinancialQualityProvider, QuantFinancialQualitySnapshot, QuantInterestBearingDebtComponents, QuantInterestExpenseSourceField, QuantRepurchaseProvider, QuantRepurchaseReport } from './provider'
 import type { QuantResearchEvidence, QuantResearchSource } from './research-report'
 import { QuantError } from './errors'
 
@@ -37,6 +37,8 @@ export interface QuantAkshareBridgeResult {
   readonly repurchases?: readonly Record<string, unknown>[]
   /** Optional for responses produced before the AkShare dividend expansion. */
   readonly dividends?: readonly Record<string, unknown>[]
+  /** Optional for responses produced before the AkShare capital structure expansion. */
+  readonly capitalStructures?: readonly Record<string, unknown>[]
   readonly evidence: readonly QuantAkshareBridgeEvidence[]
   readonly errors: readonly { readonly code: string, readonly message: string, readonly source?: string | null }[]
 }
@@ -50,7 +52,7 @@ export interface QuantAkshareBridgeOptions {
 
 export interface QuantAkshareBridgeClient {
   readonly isConfigured: boolean
-  readonly fetchEvidence: (input: { readonly tsCode: string, readonly startDate?: string, readonly endDate?: string, readonly includeFinancials?: boolean }) => Promise<QuantAkshareBridgeResult>
+  readonly fetchEvidence: (input: { readonly tsCode: string, readonly startDate?: string, readonly endDate?: string, readonly includeFinancials?: boolean, readonly includeCapitalStructures?: boolean }) => Promise<QuantAkshareBridgeResult>
 }
 
 export class QuantAkshareBridgeError extends Error {
@@ -181,6 +183,7 @@ function parseBridgeResponse(payload: unknown, requestedTsCode: string): QuantAk
     cashflows: normalizeRows(record?.cashflows),
     repurchases: normalizeRows(record?.repurchases),
     dividends: normalizeRows(record?.dividends),
+    capitalStructures: normalizeRows(record?.capital_structures ?? record?.capitalStructures),
     evidence,
     errors,
   }
@@ -207,7 +210,7 @@ export function createQuantAkshareBridge(options: QuantAkshareBridgeOptions = {}
   const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? Math.min(options.timeoutMs!, 30_000) : 12_000
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
 
-  async function fetchEvidence(input: { readonly tsCode: string, readonly startDate?: string, readonly endDate?: string, readonly includeFinancials?: boolean }): Promise<QuantAkshareBridgeResult> {
+  async function fetchEvidence(input: { readonly tsCode: string, readonly startDate?: string, readonly endDate?: string, readonly includeFinancials?: boolean, readonly includeCapitalStructures?: boolean }): Promise<QuantAkshareBridgeResult> {
     if (!baseUrl || !token)
       throw new QuantAkshareBridgeError('CONFIGURATION', 'AkShare bridge is not configured', 503)
     const tsCode = input.tsCode.trim().toUpperCase()
@@ -219,7 +222,7 @@ export function createQuantAkshareBridge(options: QuantAkshareBridgeOptions = {}
       response = await fetchImpl(url, {
         method: 'POST',
         headers: { 'accept': 'application/json', 'content-type': 'application/json', 'authorization': `Bearer ${token}` },
-        body: JSON.stringify({ ts_code: tsCode, start_date: input.startDate, end_date: input.endDate, include_financials: input.includeFinancials ?? true }),
+        body: JSON.stringify({ ts_code: tsCode, start_date: input.startDate, end_date: input.endDate, include_financials: input.includeFinancials ?? true, include_capital_structures: input.includeCapitalStructures ?? true }),
         signal: controller.signal,
       })
     }
@@ -453,6 +456,21 @@ function normalizeBridgeRepurchaseReport(result: QuantAkshareBridgeResult, recor
   }
 }
 
+function normalizeBridgeCapitalStructureReport(result: QuantAkshareBridgeResult, record: Record<string, unknown>): QuantCapitalStructureReport | null {
+  if (!bridgeReportCode(record, result.tsCode))
+    throw new QuantAkshareBridgeError('INVALID_RESPONSE', 'AkShare capital structure code is missing or mismatched', 502)
+  const reportDate = bridgeDate(record, 'report_date', 'reportDate', 'REPORT_DATE', '变动日期')
+  if (!reportDate)
+    return null
+  return {
+    tsCode: result.tsCode,
+    reportDate,
+    totalShares: bridgeNumber(record, 'total_shares', 'totalShares', 'TOTAL_SHARES', '总股本'),
+    changeReason: bridgeString(record, 'change_reason', 'changeReason', 'CHANGE_REASON', '变动原因'),
+    provider: 'akshare',
+  }
+}
+
 function normalizeBridgeDividendReport(result: QuantAkshareBridgeResult, record: Record<string, unknown>): QuantDividendRecord | null {
   const returnedCode = bridgeString(record, 'ts_code', 'tsCode', 'SECURITY_CODE', 'security_code')
   if (!returnedCode || returnedCode.trim().toUpperCase().split('.')[0] !== result.tsCode.split('.')[0])
@@ -544,7 +562,7 @@ export function createQuantAkshareRepurchaseProvider(bridge: QuantAkshareBridgeC
   async function fetchRepurchaseHistory(request: { readonly tsCode: string, readonly limit?: number }): Promise<readonly QuantRepurchaseReport[]> {
     if (!bridge.isConfigured)
       throw new QuantAkshareBridgeError('CONFIGURATION', 'AkShare bridge is not configured', 503)
-    const result = await bridge.fetchEvidence({ tsCode: request.tsCode, includeFinancials: false })
+    const result = await bridge.fetchEvidence({ tsCode: request.tsCode, includeFinancials: false, includeCapitalStructures: false })
     const reports = (result.repurchases ?? [])
       .map(record => normalizeBridgeRepurchaseReport(result, record))
       .filter((report): report is QuantRepurchaseReport => report !== null)
@@ -566,11 +584,35 @@ export function createQuantAkshareRepurchaseProvider(bridge: QuantAkshareBridgeC
   }
 }
 
+export function createQuantAkshareCapitalStructureProvider(bridge: QuantAkshareBridgeClient): QuantCapitalStructureProvider {
+  async function fetchCapitalStructureHistory(request: { readonly tsCode: string, readonly limit?: number }): Promise<readonly QuantCapitalStructureReport[]> {
+    if (!bridge.isConfigured)
+      throw new QuantAkshareBridgeError('CONFIGURATION', 'AkShare bridge is not configured', 503)
+    const result = await bridge.fetchEvidence({ tsCode: request.tsCode, includeFinancials: false, includeCapitalStructures: true })
+    const reports = (result.capitalStructures ?? [])
+      .map(record => normalizeBridgeCapitalStructureReport(result, record))
+      .filter((report): report is QuantCapitalStructureReport => report !== null)
+    const capitalErrors = result.errors.filter(error => error.code.startsWith('AKSHARE_CAPITAL_'))
+    if (!reports.length && capitalErrors.length)
+      throw bridgeDataUnavailable('capital structure')
+    const limit = Number.isInteger(request.limit) ? Math.min(20, Math.max(1, request.limit!)) : 12
+    return [...new Map(reports.map(report => [`${report.reportDate}:${report.totalShares ?? ''}:${report.changeReason ?? ''}`, report] as const)).values()]
+      .sort((left, right) => right.reportDate.localeCompare(left.reportDate))
+      .slice(0, limit)
+  }
+
+  return {
+    name: 'akshare',
+    isConfigured: bridge.isConfigured,
+    fetchCapitalStructureHistory,
+  }
+}
+
 export function createQuantAkshareDividendProvider(bridge: QuantAkshareBridgeClient): QuantDividendProvider {
   async function fetchDividends(request: { readonly tsCode: string }): Promise<QuantDividendFetchResult> {
     if (!bridge.isConfigured)
       throw new QuantAkshareBridgeError('CONFIGURATION', 'AkShare bridge is not configured', 503)
-    const result = await bridge.fetchEvidence({ tsCode: request.tsCode, includeFinancials: false })
+    const result = await bridge.fetchEvidence({ tsCode: request.tsCode, includeFinancials: false, includeCapitalStructures: false })
     const reports = (result.dividends ?? [])
       .map(record => normalizeBridgeDividendReport(result, record))
       .filter((report): report is QuantDividendRecord => report !== null)

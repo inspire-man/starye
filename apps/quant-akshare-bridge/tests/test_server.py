@@ -61,10 +61,15 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(payload["ts_code"], "601899.SH")
         self.assertEqual(payload["status"], "partial")
         self.assertEqual(payload["identity"], {"name": "紫金矿业"})
-        collect.assert_called_once_with(BridgeRequest(ts_code="601899.SH", start_date=None, end_date=None, include_financials=True))
+        collect.assert_called_once_with(BridgeRequest(ts_code="601899.SH", start_date=None, end_date=None, include_financials=True, include_capital_structures=True))
 
     def test_rejects_non_boolean_financial_switch(self) -> None:
         status, payload = self.request("POST", "/v1/evidence", {"ts_code": "601899.SH", "include_financials": "false"})
+        self.assertEqual(status, 400)
+        self.assertEqual(payload["errors"][0]["code"], "BRIDGE_INVALID_INPUT")
+
+    def test_rejects_non_boolean_capital_structure_switch(self) -> None:
+        status, payload = self.request("POST", "/v1/evidence", {"ts_code": "601899.SH", "include_capital_structures": "false"})
         self.assertEqual(status, 400)
         self.assertEqual(payload["errors"][0]["code"], "BRIDGE_INVALID_INPUT")
 

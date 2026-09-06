@@ -1,5 +1,5 @@
 import type { Database } from '@starye/db'
-import type { QuantCapitalStructureProvider, QuantCapitalStructureReport, QuantCashflowProvider, QuantCashflowReport, QuantDividendProvider, QuantDividendRecord, QuantInterestBearingDebtComponents, QuantInterestExpenseSourceField, QuantProviderName, QuantRepurchaseProvider, QuantRepurchaseReport, QuantSourceName } from './provider'
+import type { QuantCapitalStructureProvider, QuantCapitalStructureReport, QuantCashflowProvider, QuantCashflowReport, QuantDividendProvider, QuantDividendRecord, QuantInterestBearingDebtComponents, QuantInterestExpenseSourceField, QuantRepurchaseProvider, QuantRepurchaseReport, QuantSourceName } from './provider'
 import type { DailyBar } from './types'
 import { mapQuantProviderError, QuantDividendProviderChainError } from './provider'
 import { getQuantWatchlistItem, listQuantDailyBars, listQuantWatchlist } from './repository'
@@ -109,7 +109,7 @@ export interface QuantShareholderCapitalChange {
 export interface QuantShareholderCapitalEvidence {
   readonly formulaVersion: typeof QUANT_SHAREHOLDER_CAPITAL_FORMULA_VERSION
   readonly status: QuantShareholderCapitalStatus
-  readonly provider: QuantProviderName | null
+  readonly provider: QuantSourceName | null
   readonly providerErrorCode: string | null
   readonly observedAt: string
   readonly latestReportDate: string | null
@@ -209,7 +209,7 @@ export interface ShareholderReturnInput {
   readonly cashflowFallbackReason?: string | null
   readonly cashflowSupplementalProvider?: QuantSourceName
   readonly capitalStructureReports?: readonly QuantCapitalStructureReport[]
-  readonly capitalStructureProvider?: QuantProviderName | null
+  readonly capitalStructureProvider?: QuantSourceName | null
   readonly capitalStructureErrorCode?: string | null
   readonly repurchaseReports?: readonly QuantRepurchaseReport[]
   readonly repurchaseProvider?: QuantSourceName | null
@@ -801,17 +801,17 @@ async function readShareholderReturnInput(
       ? capitalStructureProvider.fetchCapitalStructureHistory({ tsCode: item.tsCode, limit: 12 })
           .then(capitalStructureReports => ({
             capitalStructureReports,
-            capitalStructureProvider: capitalStructureProvider.name as QuantProviderName | null,
+            capitalStructureProvider: capitalStructureReports[0]?.provider ?? capitalStructureProvider.name,
             capitalStructureErrorCode: null as string | null,
           }))
           .catch(error => ({
             capitalStructureReports: [] as readonly QuantCapitalStructureReport[],
-            capitalStructureProvider: capitalStructureProvider.name as QuantProviderName | null,
+            capitalStructureProvider: capitalStructureProvider.name as QuantSourceName,
             capitalStructureErrorCode: mapQuantProviderError(error).code,
           }))
       : Promise.resolve({
           capitalStructureReports: [] as readonly QuantCapitalStructureReport[],
-          capitalStructureProvider: null as QuantProviderName | null,
+          capitalStructureProvider: null as QuantSourceName | null,
           capitalStructureErrorCode: 'QUANT_PROVIDER_CONFIGURATION',
         })
     : Promise.resolve(null)

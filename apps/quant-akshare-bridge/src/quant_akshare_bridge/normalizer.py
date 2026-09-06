@@ -444,6 +444,50 @@ def normalize_ths_cashflow_rows(
     return normalized_rows, [*errors, *normalize_errors]
 
 
+def normalize_capital_structure_rows(
+    ts_code: str,
+    raw: Any,
+    limit: int = 20,
+    source: str = "stock_share_change_cninfo",
+) -> tuple[list[dict[str, Any]], list[BridgeError]]:
+    normalized_code = normalize_ts_code(ts_code)
+    errors: list[BridgeError] = []
+    result: list[dict[str, Any]] = []
+    for row in _rows(raw):
+        returned_code = _field(row, "证券代码", "SECCODE", "SECURITY_CODE", "security_code", "ts_code")
+        if returned_code is not None and _row_code(returned_code) != normalized_code.split(".", 1)[0]:
+            errors.append(BridgeError("AKSHARE_CAPITAL_ROW_MISMATCHED", "capital structure row code does not match the requested stock", source))
+            continue
+        try:
+            report_date = normalize_date(_field(row, "变动日期", "VARYDATE", "REPORT_DATE", "report_date"), "capital structure report date")
+        except ValueError:
+            errors.append(BridgeError("AKSHARE_CAPITAL_ROW_INVALID", "capital structure row has an invalid date", source))
+            continue
+        if not report_date:
+            errors.append(BridgeError("AKSHARE_CAPITAL_ROW_INVALID", "capital structure row has no report date", source))
+            continue
+        raw_total_shares = _number(_field(row, "总股本", "F003N", "TOTAL_SHARES", "total_shares"))
+        total_shares = round(raw_total_shares * 10_000, 0) if raw_total_shares is not None else None
+        if total_shares is not None and not math.isfinite(total_shares):
+            total_shares = None
+        change_reason = _text(_field(row, "变动原因", "F002V", "CHANGE_REASON", "change_reason"))
+        if total_shares is None and change_reason is None:
+            errors.append(BridgeError("AKSHARE_CAPITAL_ROW_INVALID", "capital structure row has no usable fields", source))
+            continue
+        result.append({
+            "ts_code": normalized_code,
+            "report_date": report_date,
+            "total_shares": total_shares,
+            "change_reason": change_reason,
+        })
+    deduplicated = {
+        f"{row['report_date']}:{row['total_shares']}:{row['change_reason']}": row
+        for row in result
+    }
+    ordered = sorted(deduplicated.values(), key=lambda item: item["report_date"], reverse=True)
+    return ordered[:max(1, min(limit, 20))], errors
+
+
 def normalize_repurchase_rows(
     ts_code: str,
     raw: Any,

@@ -1,7 +1,7 @@
 import unittest
 
 from quant_akshare_bridge.contracts import BridgeRequest
-from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ths_cashflow_rows, normalize_ts_code, validate_date_range
+from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_capital_structure_rows, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ths_cashflow_rows, normalize_ts_code, validate_date_range
 
 
 class NormalizerTest(unittest.TestCase):
@@ -354,6 +354,22 @@ class NormalizerTest(unittest.TestCase):
 
         self.assertEqual(rows, [])
         self.assertEqual(errors[0].code, "AKSHARE_CASHFLOW_ROW_INVALID")
+
+    def test_normalizes_cninfo_company_capital_rows_and_filters_other_stocks(self) -> None:
+        rows, errors = normalize_capital_structure_rows("601899.SH", [
+            {"证券代码": "601899", "变动日期": "2025-12-18", "总股本": 2658973.314, "变动原因": "回购"},
+            {"证券代码": "000001", "变动日期": "2025-12-18", "总股本": 10, "变动原因": "其他"},
+            {"证券代码": "601899", "变动日期": "2025-12-19", "总股本": "NaN", "变动原因": ""},
+        ])
+
+        self.assertEqual(rows, [{
+            "ts_code": "601899.SH",
+            "report_date": "20251218",
+            "total_shares": 26589733140.0,
+            "change_reason": "回购",
+        }])
+        self.assertEqual(errors[0].code, "AKSHARE_CAPITAL_ROW_MISMATCHED")
+        self.assertEqual(errors[1].code, "AKSHARE_CAPITAL_ROW_INVALID")
 
     def test_keeps_valid_financial_rows_when_one_row_has_an_invalid_date(self) -> None:
         rows, errors = normalize_financial_rows("601899.SH", [
