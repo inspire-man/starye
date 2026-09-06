@@ -1,5 +1,5 @@
 import type { Database } from '@starye/db'
-import type { QuantCapitalStructureProvider, QuantCapitalStructureReport, QuantCashflowProvider, QuantCashflowReport, QuantDividendProvider, QuantDividendRecord, QuantInterestBearingDebtComponents, QuantInterestExpenseSourceField, QuantProviderName, QuantRepurchaseProvider, QuantRepurchaseReport } from './provider'
+import type { QuantCapitalStructureProvider, QuantCapitalStructureReport, QuantCashflowProvider, QuantCashflowReport, QuantDividendProvider, QuantDividendRecord, QuantInterestBearingDebtComponents, QuantInterestExpenseSourceField, QuantProviderName, QuantRepurchaseProvider, QuantRepurchaseReport, QuantSourceName } from './provider'
 import type { DailyBar } from './types'
 import { mapQuantProviderError, QuantDividendProviderChainError } from './provider'
 import { getQuantWatchlistItem, listQuantDailyBars, listQuantWatchlist } from './repository'
@@ -62,11 +62,11 @@ export interface QuantShareholderCashflowHistorySummary {
 export interface QuantShareholderCashflowEvidence {
   readonly formulaVersion: typeof QUANT_SHAREHOLDER_CASHFLOW_FORMULA_VERSION
   readonly status: QuantShareholderCashflowStatus
-  readonly provider: QuantProviderName | null
+  readonly provider: QuantSourceName | null
   readonly providerErrorCode: string | null
   readonly fallbackUsed?: boolean
   readonly fallbackReason?: string | null
-  readonly supplementalProvider?: QuantProviderName
+  readonly supplementalProvider?: QuantSourceName
   readonly observedAt: string
   readonly reportDate: string | null
   readonly reportType: string | null
@@ -201,11 +201,11 @@ export interface ShareholderReturnInput {
   readonly fallbackUsed?: boolean
   readonly fallbackReason?: string | null
   readonly cashflowReports?: readonly QuantCashflowReport[]
-  readonly cashflowProvider?: QuantProviderName | null
+  readonly cashflowProvider?: QuantSourceName | null
   readonly cashflowErrorCode?: string | null
   readonly cashflowFallbackUsed?: boolean
   readonly cashflowFallbackReason?: string | null
-  readonly cashflowSupplementalProvider?: QuantProviderName
+  readonly cashflowSupplementalProvider?: QuantSourceName
   readonly capitalStructureReports?: readonly QuantCapitalStructureReport[]
   readonly capitalStructureProvider?: QuantProviderName | null
   readonly capitalStructureErrorCode?: string | null
@@ -770,18 +770,18 @@ async function readShareholderReturnInput(
           }))
           .catch(error => ({
             cashflowReports: [] as readonly QuantCashflowReport[],
-            cashflowProvider: null as QuantProviderName | null,
+            cashflowProvider: null as QuantSourceName | null,
             cashflowFallbackUsed: false,
             cashflowFallbackReason: null as string | null,
-            cashflowSupplementalProvider: undefined as QuantProviderName | undefined,
+            cashflowSupplementalProvider: undefined as QuantSourceName | undefined,
             cashflowErrorCode: mapQuantProviderError(error).code,
           }))
       : Promise.resolve({
           cashflowReports: [] as readonly QuantCashflowReport[],
-          cashflowProvider: null as QuantProviderName | null,
+          cashflowProvider: null as QuantSourceName | null,
           cashflowFallbackUsed: false,
           cashflowFallbackReason: null as string | null,
-          cashflowSupplementalProvider: undefined as QuantProviderName | undefined,
+          cashflowSupplementalProvider: undefined as QuantSourceName | undefined,
           cashflowErrorCode: 'QUANT_PROVIDER_CONFIGURATION',
         })
     : Promise.resolve(null)

@@ -181,6 +181,58 @@ describe('quant market route contract', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it('uses configured AkShare bridge rows to supplement an Eastmoney financial report', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = new URL(String(input))
+      if (url.origin === 'https://bridge.fixture.test') {
+        return new Response(JSON.stringify({
+          schema_version: 'quant-akshare-v1',
+          provider: 'akshare',
+          request_id: 'bridge-request-1',
+          ts_code: '601899.SH',
+          observed_at: '2026-09-06T00:00:00.000Z',
+          status: 'partial',
+          source: { adapter: 'akshare-adapter-v1', endpoints: ['stock_financial_analysis_indicator'], formula_version: 'akshare-adapter-v1' },
+          identity: { name: '紫金矿业' },
+          daily_bars: [],
+          financials: [{ ts_code: '601899.SH', report_date: '20260630', gross_margin: 28, roe: 16 }],
+          cashflows: [],
+          evidence: [],
+          errors: [{ code: 'AKSHARE_CASHFLOW_UNAVAILABLE', message: 'AkShare cashflow data is unavailable', source: 'cashflow' }],
+        }), { status: 200 })
+      }
+      return new Response(JSON.stringify({
+        data: [{
+          SECURITY_CODE: '601899',
+          REPORT_DATE: '2026-06-30 00:00:00',
+          ROEJQ: null,
+          XSMLL: null,
+        }],
+      }), { status: 200 })
+    })
+
+    const response = await createQuantRouteTestApp({ user: { role: 'admin' } }).request('/api/quant/financial/601899.SH', {}, {
+      EASTMONEY_BASE_URL: 'https://eastmoney.fixture.test',
+      QUANT_AKSHARE_BRIDGE_URL: 'https://bridge.fixture.test',
+      QUANT_AKSHARE_BRIDGE_TOKEN: 'bridge-token',
+    } as AppEnv['Bindings'])
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        provider: 'eastmoney',
+        supplementalProvider: 'akshare',
+        supplementUsed: true,
+        grossMargin: 28,
+        roe: 16,
+      },
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const bridgeCall = fetchMock.mock.calls.find(call => String(call[0]).startsWith('https://bridge.fixture.test/'))
+    expect((bridgeCall?.[1] as RequestInit | undefined)?.headers).toMatchObject({ authorization: 'Bearer bridge-token' })
+  })
+
   it('returns recent financial history in report-date order', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
       data: [

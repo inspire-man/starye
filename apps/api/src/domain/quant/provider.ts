@@ -4,6 +4,7 @@ import { QuantError } from './errors'
 
 export const QUANT_PROVIDER_NAMES = ['tushare', 'eastmoney'] as const
 export type QuantProviderName = typeof QUANT_PROVIDER_NAMES[number]
+export type QuantSourceName = QuantProviderName | 'akshare'
 
 export const TUSHARE_API_NAMES = ['daily'] as const
 export type TushareApiName = typeof TUSHARE_API_NAMES[number]
@@ -153,10 +154,10 @@ export interface QuantCashflowReport {
   readonly interestBearingDebt: number | null
   readonly interestBearingDebtComponents: QuantInterestBearingDebtComponents
   readonly interestBearingDebtProviderErrorCode: string | null
-  readonly provider?: QuantProviderName
+  readonly provider?: QuantSourceName
   readonly fallbackUsed?: boolean
   readonly fallbackReason?: string | null
-  readonly supplementalProvider?: QuantProviderName
+  readonly supplementalProvider?: QuantSourceName
   readonly supplementUsed?: boolean
 }
 
@@ -166,7 +167,7 @@ export interface QuantCashflowRequest {
 }
 
 export interface QuantCashflowProvider {
-  readonly name: QuantProviderName
+  readonly name: QuantSourceName
   readonly isConfigured: boolean
   fetchCashflowHistory: (request: QuantCashflowRequest) => Promise<readonly QuantCashflowReport[]>
 }
@@ -719,7 +720,6 @@ function mergeCashflowReports(
   const primaryDates = new Set(primaryReports.map(report => report.reportDate))
   const additional = supplementReports
     .filter(report => !primaryDates.has(report.reportDate))
-    .map(report => ({ ...report, supplementalProvider: report.provider ?? 'eastmoney', supplementUsed: true }))
   return [...merged, ...additional]
     .sort((left, right) => right.reportDate.localeCompare(left.reportDate))
     .slice(0, limit)
@@ -967,11 +967,11 @@ export interface QuantFinancialQualitySnapshot {
   readonly totalLiability: number | null
   readonly roic: number | null
   /** Present when a fallback provider supplied the report. */
-  readonly provider?: QuantProviderName
+  readonly provider?: QuantSourceName
   readonly fallbackUsed?: boolean
   readonly fallbackReason?: string | null
   /** Present when the primary report was supplemented field-by-field. */
-  readonly supplementalProvider?: QuantProviderName
+  readonly supplementalProvider?: QuantSourceName
   readonly supplementUsed?: boolean
   /** Present when Eastmoney exposes a sector-specific financial statement profile. */
   readonly industry?: QuantFinancialIndustry
@@ -996,7 +996,7 @@ export interface QuantFinancialQualityRequest {
 }
 
 export interface QuantFinancialQualityProvider {
-  readonly name: QuantProviderName
+  readonly name: QuantSourceName
   readonly isConfigured: boolean
   fetchFinancialQuality: (request: QuantFinancialQualityRequest) => Promise<QuantFinancialQualitySnapshot>
   fetchFinancialQualityHistory: (request: QuantFinancialQualityRequest) => Promise<readonly QuantFinancialQualitySnapshot[]>
@@ -1093,7 +1093,6 @@ function mergeFinancialReports(
   const primaryDates = new Set(primaryReports.map(report => report.reportDate))
   const additional = supplementReports
     .filter(report => !primaryDates.has(report.reportDate))
-    .map(report => ({ ...report, supplementalProvider: report.provider ?? 'eastmoney', supplementUsed: true }))
   return [...merged, ...additional]
     .sort((left, right) => right.reportDate.localeCompare(left.reportDate))
     .slice(0, limit)

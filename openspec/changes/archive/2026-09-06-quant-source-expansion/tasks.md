@@ -1,0 +1,8 @@
+- [x] 1.1 修正因子数据健康的覆盖状态计算；完成标准：价值质量 `partial` 但适用 evidence 全部有值时显示字段完整，阈值 `fail` 只保留风险，缺失/不可用仍保留补齐动作。
+- [x] 1.2 补充数据健康与详情推荐测试；完成标准：覆盖 16 / 16 字段、行业不适用、有限失败值、空字段和来源回退场景。
+- [x] 2.1 扩展 AkShare bridge 合同与 normalizer；完成标准：财报新增可补充 alias，现金流记录标准化，单端点错误可观察且不泄漏上游异常，现有 v1 fixture 继续通过。
+- [x] 2.2 扩展 bridge adapter 端点采集；完成标准：配置的每日、身份、财报、现金流端点按独立状态返回，空集合、未安装和异常路径均有稳定错误码。
+- [x] 3.1 在 API 增加 AkShare 财报/现金流 provider adapter 与组合链；完成标准：同报告期只填补 null，主值和行业字段优先，完全失败与未配置保持现有错误契约。
+- [x] 3.2 更新来源类型、研究报告文案、响应 schema 和 Quant parser；完成标准：`akshare` 补充/回退来源可回看，legacy report 和两来源股东回报 payload 继续可读。
+- [x] 4.1 执行 API、Quant、bridge 定向测试与类型检查；完成标准：相关测试、type-check、build、lint 和 OpenSpec strict 全部通过。
+- [x] 4.2 执行 GitNexus detect_changes、Gateway 和浏览器验收；完成标准：只影响预期 Quant flow，详情页正确区分覆盖/可比性/来源状态，桌面与 390px 无横向溢出且无浏览器 error/warn。

@@ -83,6 +83,20 @@ def _number(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
+def _optional_date(
+    value: Any,
+    field: str,
+    errors: list[BridgeError],
+    error_code: str,
+    source: str,
+) -> str | None:
+    try:
+        return normalize_date(value, field)
+    except ValueError:
+        errors.append(BridgeError(error_code, f"{field} is invalid; the report row was retained", source))
+        return None
+
+
 def normalize_daily_rows(ts_code: str, raw: Any, limit: int = 120) -> tuple[list[dict[str, Any]], list[BridgeError]]:
     normalized_code = normalize_ts_code(ts_code)
     errors: list[BridgeError] = []
@@ -120,13 +134,19 @@ def normalize_daily_rows(ts_code: str, raw: Any, limit: int = 120) -> tuple[list
 
 def normalize_identity_rows(raw: Any) -> dict[str, Any]:
     name_keys = {"公司简称", "股票简称", "名称", "name"}
+    industry_keys = {"行业", "所属行业", "industry"}
+    result: dict[str, Any] = {}
     for row in _rows(raw):
         item = str(_field(row, "item", "项目", "字段") or "")
-        if item in name_keys:
+        if item in name_keys and "name" not in result:
             value = _field(row, "value", "值", "内容", "name")
             if value is not None and str(value).strip():
-                return {"name": str(value).strip()}
-    return {}
+                result["name"] = str(value).strip()
+        elif item in industry_keys and "industry" not in result:
+            value = _field(row, "value", "值", "内容", "industry")
+            if value is not None and str(value).strip():
+                result["industry"] = str(value).strip()
+    return result
 
 
 def normalize_financial_rows(ts_code: str, raw: Any, observed_at: str, limit: int = 4) -> tuple[list[dict[str, Any]], list[BridgeError]]:
@@ -142,16 +162,73 @@ def normalize_financial_rows(ts_code: str, raw: Any, observed_at: str, limit: in
         if not report_date:
             errors.append(BridgeError("AKSHARE_FINANCIAL_ROW_INVALID", "financial row has no report date", "stock_financial_analysis_indicator"))
             continue
+        notice_date = _optional_date(
+            _field(row, "公告日期", "公告日", "NOTICE_DATE", "notice_date"),
+            "notice_date",
+            errors,
+            "AKSHARE_FINANCIAL_NOTICE_DATE_INVALID",
+            "stock_financial_analysis_indicator",
+        )
         result.append({
             "ts_code": normalized_code,
             "observed_at": observed_at,
             "report_date": report_date,
+            "notice_date": notice_date,
+            "industry": str(_field(row, "行业", "所属行业", "industry") or "").strip() or None,
+            "revenue": _number(_field(row, "营业总收入", "营业收入", "营业总收入(元)", "revenue")),
             "roe": _number(_field(row, "净资产收益率(%)", "净资产收益率", "ROE", "roe")),
             "revenue_yoy": _number(_field(row, "营业总收入同比增长率(%)", "营业收入同比增长率", "revenue_yoy")),
+            "net_profit": _number(_field(row, "净利润", "归母净利润", "归属母公司股东的净利润", "net_profit")),
             "net_profit_yoy": _number(_field(row, "净利润同比增长率(%)", "净利润同比", "net_profit_yoy")),
+            "adjusted_net_profit": _number(_field(row, "扣非净利润", "扣除非经常性损益后的净利润", "adjusted_net_profit")),
+            "adjusted_net_profit_yoy": _number(_field(row, "扣非净利润同比增长率(%)", "扣非净利润同比", "adjusted_net_profit_yoy")),
             "gross_margin": _number(_field(row, "销售毛利率(%)", "毛利率", "gross_margin")),
             "net_margin": _number(_field(row, "销售净利率(%)", "净利率", "net_margin")),
             "debt_asset_ratio": _number(_field(row, "资产负债率(%)", "资产负债率", "debt_asset_ratio")),
+            "operating_cashflow_to_revenue": _number(_field(row, "经营现金流/营业收入", "经营活动现金流量净额/营业收入", "经营现金流与营业收入比", "ocf_to_or", "operating_cashflow_to_revenue")),
+            "operating_cashflow_per_share": _number(_field(row, "每股经营现金流", "每股经营现金流量净额", "经营现金流/股", "ocfps", "operating_cashflow_per_share")),
+            "cash_ratio": _number(_field(row, "现金比率", "现金流量比率", "cash_ratio")),
+            "interest_coverage": _number(_field(row, "利息保障倍数", "利息覆盖倍数", "interest_coverage")),
+            "interest_bearing_debt_ratio": _number(_field(row, "带息负债率", "带息负债比率", "interest_bearing_debt_ratio")),
+            "total_liability": _number(_field(row, "负债合计", "负债总额", "total_liability")),
+            "roic": _number(_field(row, "投入资本回报率", "ROIC", "roic")),
+        })
+    deduplicated = {row["report_date"]: row for row in result}
+    ordered = sorted(deduplicated.values(), key=lambda item: item["report_date"], reverse=True)
+    return ordered[:max(1, min(limit, 12))], errors
+
+
+def normalize_cashflow_rows(ts_code: str, raw: Any, observed_at: str, limit: int = 8) -> tuple[list[dict[str, Any]], list[BridgeError]]:
+    normalized_code = normalize_ts_code(ts_code)
+    errors: list[BridgeError] = []
+    result: list[dict[str, Any]] = []
+    for row in _rows(raw):
+        try:
+            report_date = normalize_date(_field(row, "报告期", "报告日期", "日期", "REPORT_DATE", "report_date", "截止日期"), "report_date")
+        except ValueError:
+            errors.append(BridgeError("AKSHARE_CASHFLOW_ROW_INVALID", "cashflow row has an invalid date", "cashflow"))
+            continue
+        if not report_date:
+            errors.append(BridgeError("AKSHARE_CASHFLOW_ROW_INVALID", "cashflow row has no report date", "cashflow"))
+            continue
+        notice_date = _optional_date(
+            _field(row, "公告日期", "公告日", "NOTICE_DATE", "notice_date"),
+            "notice_date",
+            errors,
+            "AKSHARE_CASHFLOW_NOTICE_DATE_INVALID",
+            "cashflow",
+        )
+        result.append({
+            "ts_code": normalized_code,
+            "observed_at": observed_at,
+            "report_date": report_date,
+            "notice_date": notice_date,
+            "operating_cashflow": _number(_field(row, "经营活动产生的现金流量净额", "经营活动现金流量净额", "经营活动产生的现金流量净额(元)", "n_cashflow_act", "operating_cashflow")),
+            "capital_expenditure": _number(_field(row, "购建固定资产、无形资产和其他长期资产支付的现金", "购建固定资产、无形资产和其他长期资产所支付的现金", "购建长期资产支出", "c_pay_acq_const_fiolta", "capital_expenditure")),
+            "net_profit": _number(_field(row, "净利润", "net_profit")),
+            "cash_dividends_paid": None,
+            "interest_expense": None,
+            "interest_bearing_debt": None,
         })
     deduplicated = {row["report_date"]: row for row in result}
     ordered = sorted(deduplicated.values(), key=lambda item: item["report_date"], reverse=True)
@@ -163,7 +240,9 @@ def build_evidence(
     observed_at: str,
     daily_bars: list[dict[str, Any]],
     financials: list[dict[str, Any]],
+    cashflows: list[dict[str, Any]] | None = None,
 ) -> list[BridgeEvidence]:
+    cashflow_rows = cashflows or []
     latest_date = daily_bars[-1]["trade_date"] if daily_bars else None
     return20: float | None = None
     if len(daily_bars) >= 20:
@@ -261,6 +340,18 @@ def build_evidence(
             observed_at=observed_at,
             formula_version=FORMULA_VERSION,
             detail="可用于交叉核对财报方向" if financials else "AkShare 未返回有效财务记录",
+        ),
+        BridgeEvidence(
+            key="akshare-cashflow-sample",
+            dimension="shareholder-return",
+            label="AkShare 现金流样本",
+            status="pass" if len(cashflow_rows) >= 2 else "caution" if cashflow_rows else "missing",
+            value=float(len(cashflow_rows)),
+            threshold="至少 2 期标准化现金流记录",
+            source="AkShare cashflow endpoint",
+            observed_at=cashflow_rows[0].get("report_date") if cashflow_rows else None,
+            formula_version=FORMULA_VERSION,
+            detail="可用于补充自由现金流核心字段" if cashflow_rows else "AkShare 未返回有效现金流记录",
         ),
         financial_factor(
             "akshare-roe",

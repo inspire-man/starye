@@ -116,11 +116,12 @@ function genericFinancialMetricApplicable(input: QuantResearchReportInput): bool
 }
 
 function financialSourceFor(report: QuantFinancialQualitySnapshot | null, errorCode: string | null = null): { readonly id: string, readonly name: string, readonly formulaVersion: string } {
-  const primaryProvider = report?.provider === 'tushare' ? 'Tushare' : 'Eastmoney'
-  const primaryId = report?.provider === 'tushare' ? 'tushare-financial' : 'eastmoney-financial'
-  const primaryFormulaVersion = report?.provider === 'tushare' ? 'tushare-fina-indicator-v1' : 'eastmoney-financial-v1'
+  const provider = report?.provider
+  const primaryProvider = provider === 'tushare' ? 'Tushare' : provider === 'akshare' ? 'AkShare' : 'Eastmoney'
+  const primaryId = provider === 'tushare' ? 'tushare-financial' : provider === 'akshare' ? 'akshare-financial' : 'eastmoney-financial'
+  const primaryFormulaVersion = provider === 'tushare' ? 'tushare-fina-indicator-v1' : provider === 'akshare' ? 'akshare-adapter-v1' : 'eastmoney-financial-v1'
   const supplement = report?.supplementUsed && report.supplementalProvider
-    ? `，字段补充：${report.supplementalProvider === 'tushare' ? 'Tushare' : 'Eastmoney'}`
+    ? `，字段补充：${report.supplementalProvider === 'tushare' ? 'Tushare' : report.supplementalProvider === 'akshare' ? 'AkShare' : 'Eastmoney'}`
     : ''
   const fallback = report?.fallbackUsed && report.fallbackReason ? `，主源回退：${report.fallbackReason}` : ''
   const unavailable = !report && errorCode ? `，来源不可用：${errorCode}` : ''
@@ -163,12 +164,13 @@ function withAkshareCrossSourceCheck(item: QuantResearchEvidence, latestFinancia
   }
 
   const difference = round(Math.abs(item.value - existingValue))
+  const existingSource = financialSourceFor(latestFinancial).name
   return {
     ...item,
     status: difference <= 2 || item.status === 'fail' ? item.status : 'caution',
     detail: difference <= 2
-      ? `${item.detail}；与 Eastmoney 同期值接近（相差 ${difference} 个百分点）`
-      : `${item.detail}；与 Eastmoney 同期值相差 ${difference} 个百分点，需要人工核对`,
+      ? `${item.detail}；与 ${existingSource} 同期值接近（相差 ${difference} 个百分点）`
+      : `${item.detail}；与 ${existingSource} 同期值相差 ${difference} 个百分点，需要人工核对`,
   }
 }
 
@@ -194,12 +196,12 @@ function shareholderDividendSource(item: QuantShareholderReturnItem | null): { r
 }
 
 function shareholderCashflowSource(item: QuantShareholderReturnItem | null): { readonly id: string, readonly name: string } {
-  const provider = item?.cashflowEvidence?.provider === 'tushare' ? 'Tushare' : item?.cashflowEvidence?.provider === 'eastmoney' ? 'Eastmoney' : 'Quant'
+  const provider = item?.cashflowEvidence?.provider === 'tushare' ? 'Tushare' : item?.cashflowEvidence?.provider === 'akshare' ? 'AkShare' : item?.cashflowEvidence?.provider === 'eastmoney' ? 'Eastmoney' : 'Quant'
   const unavailable = item?.cashflowEvidence?.providerErrorCode ? `，来源不可用：${item.cashflowEvidence.providerErrorCode}` : ''
-  const supplement = item?.cashflowEvidence?.supplementalProvider ? `，字段补充：${item.cashflowEvidence.supplementalProvider === 'tushare' ? 'Tushare' : 'Eastmoney'}` : ''
+  const supplement = item?.cashflowEvidence?.supplementalProvider ? `，字段补充：${item.cashflowEvidence.supplementalProvider === 'tushare' ? 'Tushare' : item.cashflowEvidence.supplementalProvider === 'akshare' ? 'AkShare' : 'Eastmoney'}` : ''
   const fallback = item?.cashflowEvidence?.fallbackUsed && item.cashflowEvidence.fallbackReason ? `，主源回退：${item.cashflowEvidence.fallbackReason}` : ''
   return {
-    id: item?.cashflowEvidence?.provider === 'tushare' ? 'tushare-cashflow' : item?.cashflowEvidence?.provider === 'eastmoney' ? 'eastmoney-cashflow' : 'quant-cashflow-provider',
+    id: item?.cashflowEvidence?.provider === 'tushare' ? 'tushare-cashflow' : item?.cashflowEvidence?.provider === 'akshare' ? 'akshare-cashflow' : item?.cashflowEvidence?.provider === 'eastmoney' ? 'eastmoney-cashflow' : 'quant-cashflow-provider',
     name: `${provider} 现金流量表${supplement}${fallback}${unavailable}`,
   }
 }
@@ -249,11 +251,14 @@ function buildSources(input: QuantResearchReportInput, latestTradeDate: string |
     })
     const supplementalProvider = input.financialReports[0]?.supplementalProvider
     if (input.financialReports[0]?.supplementUsed && supplementalProvider) {
+      const providerLabel = supplementalProvider === 'tushare' ? 'Tushare' : supplementalProvider === 'akshare' ? 'AkShare' : 'Eastmoney'
+      const providerId = supplementalProvider === 'tushare' ? 'tushare-financial-supplement' : supplementalProvider === 'akshare' ? 'akshare-financial-supplement' : 'eastmoney-financial-supplement'
+      const formulaVersion = supplementalProvider === 'tushare' ? 'tushare-fina-indicator-v1' : supplementalProvider === 'akshare' ? 'akshare-adapter-v1' : 'eastmoney-financial-v1'
       sources.push({
-        id: supplementalProvider === 'tushare' ? 'tushare-financial-supplement' : 'eastmoney-financial-supplement',
-        name: `${supplementalProvider === 'tushare' ? 'Tushare' : 'Eastmoney'} 财务字段补充`,
+        id: providerId,
+        name: `${providerLabel} 财务字段补充`,
         observedAt: input.financialReports[0]?.observedAt ?? null,
-        formulaVersion: supplementalProvider === 'tushare' ? 'tushare-fina-indicator-v1' : 'eastmoney-financial-v1',
+        formulaVersion,
       })
     }
   }
@@ -294,9 +299,13 @@ function buildSources(input: QuantResearchReportInput, latestTradeDate: string |
     })
   }
   if (input.akshare || input.akshareConfigured || input.akshareErrorCode) {
+    const bridgeErrors = input.akshare?.errors ?? []
+    const errorSuffix = bridgeErrors.length
+      ? `，${input.akshare?.status === 'partial' ? '部分端点失败' : '来源异常'}：${[...new Set(bridgeErrors.map(error => error.code))].slice(0, 3).join('、')}`
+      : ''
     sources.push({
       id: 'akshare-bridge',
-      name: input.akshare?.source.name ?? 'AkShare bridge',
+      name: `${input.akshare?.source.name ?? 'AkShare bridge'}${errorSuffix}`,
       observedAt: input.akshare?.observedAt ?? null,
       formulaVersion: input.akshare?.source.formulaVersion ?? 'akshare-adapter-v1',
     })
@@ -836,6 +845,7 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     }))
   }
 
+  const akshareErrors = input.akshare?.errors ?? []
   if (input.akshare?.evidence.length) {
     evidenceItems.push(...input.akshare.evidence.map(item => withAkshareCrossSourceCheck({
       ...item,
@@ -845,7 +855,27 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
       optional: true,
     })))
   }
-  else if (input.akshareConfigured || input.akshareErrorCode) {
+  if (akshareErrors.length) {
+    evidenceItems.push(...akshareErrors.map((error, index) => {
+      const endpoint = error.source?.trim() || 'bridge'
+      const endpointKey = endpoint.replace(/[^\w-]/gu, '-').slice(0, 40) || 'bridge'
+      const dimension: QuantResearchDimension = /cashflow|cash/u.test(endpoint) ? 'shareholder-return' : /daily|hist/u.test(endpoint) ? 'trend' : 'quality'
+      return evidence({
+        key: `akshare-error-${endpointKey}-${index}`,
+        dimension,
+        label: `AkShare ${endpoint} 来源`,
+        status: 'missing',
+        value: null,
+        threshold: '端点返回有效标准化数据',
+        source: `AkShare bridge · ${endpoint}`,
+        observedAt: input.akshare?.observedAt ?? null,
+        formulaVersion: input.akshare?.source.formulaVersion ?? 'akshare-adapter-v1',
+        detail: `端点暂不可用（${error.code}），可重试 bridge 或检查该来源配置`,
+        optional: true,
+      })
+    }))
+  }
+  else if (!input.akshare?.evidence.length && (input.akshareConfigured || input.akshareErrorCode)) {
     evidenceItems.push(evidence({
       key: 'akshare-bridge',
       dimension: 'quality',

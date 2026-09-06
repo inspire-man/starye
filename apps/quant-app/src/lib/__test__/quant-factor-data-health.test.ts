@@ -166,6 +166,29 @@ describe('buildQuantFactorDataHealth', () => {
     })
   })
 
+  it('keeps raw coverage complete when value quality is partial for comparability', () => {
+    const base = report()
+    const result = buildQuantFactorDataHealth({
+      ...base,
+      factorModel: {
+        ...base.factorModel!,
+        factors: [{
+          ...base.factorModel!.factors[0]!,
+          status: 'partial',
+          source: 'Eastmoney 财报 · 同业可比样本不足',
+        }, base.factorModel!.factors[1]!],
+      },
+    })
+
+    expect(result.items[0]).toMatchObject({
+      status: 'ready',
+      usableEvidenceCount: 1,
+      missingEvidenceKeys: [],
+      nextAction: '已具备原始证据，可进入因子复核',
+    })
+    expect(result).toMatchObject({ status: 'ready', readyWeight: 1, coverage: 100 })
+  })
+
   it('marks a factor unavailable separately from a missing factor', () => {
     const base = report()
     const result = buildQuantFactorDataHealth({
@@ -228,6 +251,36 @@ describe('buildQuantFactorDataHealth', () => {
     })
 
     expect(result.items[0]).toMatchObject({ status: 'unavailable', sourceHealth: 'unavailable', nextAction: expect.stringContaining('检查') })
+  })
+
+  it('keeps usable fields partial when another evidence source is unavailable', () => {
+    const base = report()
+    const result = buildQuantFactorDataHealth({
+      ...base,
+      evidence: [...base.evidence, {
+        key: 'quality-debt',
+        dimension: 'quality',
+        label: '负债率',
+        status: 'missing',
+        value: null,
+        threshold: '可用',
+        source: 'Eastmoney 财务报告，来源不可用：QUANT_PROVIDER_TIMEOUT',
+        observedAt: null,
+        formulaVersion: 'quality-v1',
+        detail: '来源不可用。',
+      }],
+      factorModel: {
+        ...base.factorModel!,
+        factors: [{
+          ...base.factorModel!.factors[0]!,
+          evidenceKeys: ['quality-roe', 'quality-debt'],
+          missingEvidenceKeys: ['quality-debt'],
+        }, base.factorModel!.factors[1]!],
+      },
+    })
+
+    expect(result.items[0]).toMatchObject({ status: 'partial', sourceHealth: 'unavailable', usableEvidenceCount: 1, missingEvidenceKeys: ['quality-debt'] })
+    expect(result.items[0]?.nextAction).toContain('检查')
   })
 
   it('returns a missing summary when the report has no weighted factor model', () => {

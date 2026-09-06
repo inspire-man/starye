@@ -1,3 +1,4 @@
+import type { QuantCashflowProvider, QuantCashflowReport, QuantFinancialQualityProvider, QuantFinancialQualitySnapshot } from './provider'
 import type { QuantResearchEvidence, QuantResearchSource } from './research-report'
 import { QuantError } from './errors'
 
@@ -27,9 +28,11 @@ export interface QuantAkshareBridgeResult {
   readonly observedAt: string
   readonly status: QuantAkshareBridgeStatus
   readonly source: QuantResearchSource
-  readonly identity: { readonly name?: string }
+  readonly identity: { readonly name?: string, readonly industry?: string }
   readonly dailyBars: readonly Record<string, unknown>[]
   readonly financials: readonly Record<string, unknown>[]
+  /** Optional for responses produced by the pre-expansion v1 bridge. */
+  readonly cashflows?: readonly Record<string, unknown>[]
   readonly evidence: readonly QuantAkshareBridgeEvidence[]
   readonly errors: readonly { readonly code: string, readonly message: string, readonly source?: string | null }[]
 }
@@ -39,6 +42,11 @@ export interface QuantAkshareBridgeOptions {
   readonly token?: string | null
   readonly timeoutMs?: number
   readonly fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+}
+
+export interface QuantAkshareBridgeClient {
+  readonly isConfigured: boolean
+  readonly fetchEvidence: (input: { readonly tsCode: string, readonly startDate?: string, readonly endDate?: string }) => Promise<QuantAkshareBridgeResult>
 }
 
 export class QuantAkshareBridgeError extends Error {
@@ -154,6 +162,7 @@ function parseBridgeResponse(payload: unknown, requestedTsCode: string): QuantAk
     : []
   const identityRecord = asRecord(record?.identity)
   const name = asString(identityRecord?.name)
+  const industry = asString(identityRecord?.industry)
   return {
     schemaVersion: QUANT_AKSHARE_BRIDGE_VERSION,
     provider: 'akshare',
@@ -162,9 +171,10 @@ function parseBridgeResponse(payload: unknown, requestedTsCode: string): QuantAk
     observedAt,
     status,
     source: { ...source, observedAt },
-    identity: name ? { name } : {},
+    identity: name || industry ? { ...(name ? { name } : {}), ...(industry ? { industry } : {}) } : {},
     dailyBars: normalizeRows(record?.daily_bars ?? record?.dailyBars),
     financials: normalizeRows(record?.financials),
+    cashflows: normalizeRows(record?.cashflows),
     evidence,
     errors,
   }
@@ -185,7 +195,7 @@ function normalizedBaseUrl(value: string | null | undefined): string | null {
   }
 }
 
-export function createQuantAkshareBridge(options: QuantAkshareBridgeOptions = {}) {
+export function createQuantAkshareBridge(options: QuantAkshareBridgeOptions = {}): QuantAkshareBridgeClient {
   const baseUrl = normalizedBaseUrl(options.baseUrl)
   const token = options.token?.trim() || null
   const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs ?? 0) > 0 ? Math.min(options.timeoutMs!, 30_000) : 12_000
@@ -232,6 +242,208 @@ export function createQuantAkshareBridge(options: QuantAkshareBridgeOptions = {}
   }
 
   return { isConfigured: Boolean(baseUrl && token), fetchEvidence }
+}
+
+function bridgeString(record: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = asString(record[key])
+    if (value)
+      return value
+  }
+  return null
+}
+
+function bridgeNumber(record: Record<string, unknown>, ...keys: string[]): number | null {
+  for (const key of keys) {
+    const value = record[key]
+    if (value === null || value === undefined || value === '')
+      continue
+    const numeric = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : Number.NaN
+    if (Number.isFinite(numeric))
+      return numeric
+  }
+  return null
+}
+
+function bridgeDate(record: Record<string, unknown>, ...keys: string[]): string | null {
+  const value = bridgeString(record, ...keys)
+  if (!value)
+    return null
+  const match = /^(\d{4})-?(\d{2})-?(\d{2})/u.exec(value)
+  if (!match)
+    return null
+  const normalized = `${match[1]}-${match[2]}-${match[3]}`
+  const date = new Date(`${normalized}T00:00:00.000Z`)
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== normalized ? null : normalized
+}
+
+function reportTypeForDate(reportDate: string): { readonly reportType: string, readonly reportDateName: string } {
+  const monthDay = reportDate.slice(5)
+  const reportType = monthDay === '03-31' ? '一季报' : monthDay === '06-30' ? '中报' : monthDay === '09-30' ? '三季报' : monthDay === '12-31' ? '年报' : '定期报告'
+  return { reportType, reportDateName: `${reportDate.slice(0, 4)}${reportType}` }
+}
+
+function financialIndustry(value: string | null): QuantFinancialQualitySnapshot['industry'] {
+  if (!value)
+    return undefined
+  if (/保险/u.test(value))
+    return 'insurance'
+  if (/银行/u.test(value))
+    return 'bank'
+  if (/证券|券商/u.test(value))
+    return 'securities'
+  if (/通用|一般/u.test(value))
+    return 'general'
+  return 'other'
+}
+
+function bridgeReportCode(record: Record<string, unknown>, tsCode: string): boolean {
+  const returnedCode = bridgeString(record, 'ts_code', 'tsCode', 'SECURITY_CODE', 'security_code')
+  return !returnedCode || returnedCode.trim().toUpperCase().split('.')[0] === tsCode.split('.')[0]
+}
+
+function normalizeBridgeFinancialReport(result: QuantAkshareBridgeResult, record: Record<string, unknown>): QuantFinancialQualitySnapshot | null {
+  if (!bridgeReportCode(record, result.tsCode))
+    throw new QuantAkshareBridgeError('INVALID_RESPONSE', 'AkShare financial report code is missing or mismatched', 502)
+  const reportDate = bridgeDate(record, 'report_date', 'reportDate', 'REPORT_DATE', 'date')
+  if (!reportDate)
+    return null
+  const industry = financialIndustry(bridgeString(record, 'industry', '行业', 'ORG_TYPE') ?? result.identity.industry ?? null)
+  return {
+    tsCode: result.tsCode,
+    observedAt: result.observedAt,
+    reportDate,
+    reportType: bridgeString(record, 'report_type', 'reportType') ?? reportTypeForDate(reportDate).reportType,
+    reportDateName: bridgeString(record, 'report_date_name', 'reportDateName') ?? reportTypeForDate(reportDate).reportDateName,
+    noticeDate: bridgeDate(record, 'notice_date', 'noticeDate', '公告日期'),
+    revenue: bridgeNumber(record, 'revenue', '营业总收入', '营业收入'),
+    revenueYoY: bridgeNumber(record, 'revenue_yoy', 'revenueYoY', '营业总收入同比增长率(%)'),
+    netProfit: bridgeNumber(record, 'net_profit', 'netProfit', '净利润', '归母净利润'),
+    netProfitYoY: bridgeNumber(record, 'net_profit_yoy', 'netProfitYoY', '净利润同比增长率(%)'),
+    adjustedNetProfit: bridgeNumber(record, 'adjusted_net_profit', 'adjustedNetProfit', '扣非净利润'),
+    adjustedNetProfitYoY: bridgeNumber(record, 'adjusted_net_profit_yoy', 'adjustedNetProfitYoY', '扣非净利润同比增长率(%)'),
+    roe: bridgeNumber(record, 'roe', 'ROE', '净资产收益率(%)'),
+    grossMargin: bridgeNumber(record, 'gross_margin', 'grossMargin', '销售毛利率(%)', '毛利率'),
+    netMargin: bridgeNumber(record, 'net_margin', 'netMargin', '销售净利率(%)', '净利率'),
+    debtAssetRatio: bridgeNumber(record, 'debt_asset_ratio', 'debtAssetRatio', '资产负债率(%)', '资产负债率'),
+    operatingCashflowToRevenue: bridgeNumber(record, 'operating_cashflow_to_revenue', 'operatingCashflowToRevenue', 'ocf_to_or'),
+    operatingCashflowPerShare: bridgeNumber(record, 'operating_cashflow_per_share', 'operatingCashflowPerShare', 'ocfps'),
+    fcffBack: bridgeNumber(record, 'fcff_back', 'fcffBack', 'fcff'),
+    fcffForward: bridgeNumber(record, 'fcff_forward', 'fcffForward'),
+    interestCoverage: bridgeNumber(record, 'interest_coverage', 'interestCoverage'),
+    interestBearingDebtRatio: bridgeNumber(record, 'interest_bearing_debt_ratio', 'interestBearingDebtRatio'),
+    cashRatio: bridgeNumber(record, 'cash_ratio', 'cashRatio'),
+    totalLiability: bridgeNumber(record, 'total_liability', 'totalLiability'),
+    roic: bridgeNumber(record, 'roic', 'ROIC'),
+    provider: 'akshare',
+    ...(industry ? { industry } : {}),
+  }
+}
+
+function emptyBridgeDebtComponents(): QuantCashflowReport['interestBearingDebtComponents'] {
+  return {
+    shortLoan: null,
+    shortBondPayable: null,
+    shortFinancePayable: null,
+    acceptDepositInterbank: null,
+    borrowFund: null,
+    loanPbc: null,
+    currentMaturityDebt: null,
+    amortizedCostFinancialLiability: null,
+    longLoan: null,
+    amortizedCostNoncurrentFinancialLiability: null,
+    bondPayable: null,
+    perpetualBond: null,
+    perpetualBondPayable: null,
+    leaseLiability: null,
+  }
+}
+
+function normalizeBridgeCashflowReport(result: QuantAkshareBridgeResult, record: Record<string, unknown>): QuantCashflowReport | null {
+  if (!bridgeReportCode(record, result.tsCode))
+    throw new QuantAkshareBridgeError('INVALID_RESPONSE', 'AkShare cashflow report code is missing or mismatched', 502)
+  const reportDate = bridgeDate(record, 'report_date', 'reportDate', 'REPORT_DATE', '日期')
+  if (!reportDate)
+    return null
+  const reportType = reportTypeForDate(reportDate)
+  return {
+    tsCode: result.tsCode,
+    reportDate,
+    reportType: bridgeString(record, 'report_type', 'reportType') ?? reportType.reportType,
+    reportDateName: bridgeString(record, 'report_date_name', 'reportDateName') ?? reportType.reportDateName,
+    noticeDate: bridgeDate(record, 'notice_date', 'noticeDate', '公告日期'),
+    operatingCashflow: bridgeNumber(record, 'operating_cashflow', 'operatingCashflow', 'n_cashflow_act'),
+    capitalExpenditure: bridgeNumber(record, 'capital_expenditure', 'capitalExpenditure', 'c_pay_acq_const_fiolta'),
+    netProfit: bridgeNumber(record, 'net_profit', 'netProfit', '净利润'),
+    cashDividendsPaid: null,
+    interestExpense: null,
+    interestExpenseSourceField: null,
+    interestExpenseProviderErrorCode: null,
+    interestBearingDebt: null,
+    interestBearingDebtComponents: emptyBridgeDebtComponents(),
+    interestBearingDebtProviderErrorCode: null,
+    provider: 'akshare',
+  }
+}
+
+function bridgeLimit(value: number | undefined, fallback: number): number {
+  return Number.isInteger(value) ? Math.min(8, Math.max(1, value!)) : fallback
+}
+
+function bridgeDataUnavailable(kind: string): QuantAkshareBridgeError {
+  return new QuantAkshareBridgeError('UPSTREAM', `AkShare ${kind} data is unavailable`, 502)
+}
+
+export function createQuantAkshareFinancialProvider(bridge: QuantAkshareBridgeClient): QuantFinancialQualityProvider {
+  async function fetchFinancialQualityHistory(request: { readonly tsCode: string, readonly limit?: number }): Promise<readonly QuantFinancialQualitySnapshot[]> {
+    if (!bridge.isConfigured)
+      throw new QuantAkshareBridgeError('CONFIGURATION', 'AkShare bridge is not configured', 503)
+    const result = await bridge.fetchEvidence({ tsCode: request.tsCode })
+    const reports = result.financials
+      .map(record => normalizeBridgeFinancialReport(result, record))
+      .filter((report): report is QuantFinancialQualitySnapshot => report !== null)
+    if (!reports.length)
+      throw bridgeDataUnavailable('financial')
+    return [...new Map(reports.map(report => [report.reportDate, report] as const)).values()]
+      .sort((left, right) => right.reportDate.localeCompare(left.reportDate))
+      .slice(0, bridgeLimit(request.limit, 4))
+  }
+
+  async function fetchFinancialQuality(request: { readonly tsCode: string }): Promise<QuantFinancialQualitySnapshot> {
+    const report = (await fetchFinancialQualityHistory({ ...request, limit: 1 }))[0]
+    if (!report)
+      throw bridgeDataUnavailable('financial')
+    return report
+  }
+
+  return {
+    name: 'akshare',
+    isConfigured: bridge.isConfigured,
+    fetchFinancialQuality,
+    fetchFinancialQualityHistory,
+  }
+}
+
+export function createQuantAkshareCashflowProvider(bridge: QuantAkshareBridgeClient): QuantCashflowProvider {
+  async function fetchCashflowHistory(request: { readonly tsCode: string, readonly limit?: number }): Promise<readonly QuantCashflowReport[]> {
+    if (!bridge.isConfigured)
+      throw new QuantAkshareBridgeError('CONFIGURATION', 'AkShare bridge is not configured', 503)
+    const result = await bridge.fetchEvidence({ tsCode: request.tsCode })
+    const reports = (result.cashflows ?? [])
+      .map(record => normalizeBridgeCashflowReport(result, record))
+      .filter((report): report is QuantCashflowReport => report !== null)
+    if (!reports.length)
+      throw bridgeDataUnavailable('cashflow')
+    return [...new Map(reports.map(report => [report.reportDate, report] as const)).values()]
+      .sort((left, right) => right.reportDate.localeCompare(left.reportDate))
+      .slice(0, bridgeLimit(request.limit, 8))
+  }
+
+  return {
+    name: 'akshare',
+    isConfigured: bridge.isConfigured,
+    fetchCashflowHistory,
+  }
 }
 
 export function mapQuantAkshareBridgeError(error: unknown): QuantError {

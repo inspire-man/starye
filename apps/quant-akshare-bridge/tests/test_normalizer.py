@@ -1,7 +1,7 @@
 import unittest
 
 from quant_akshare_bridge.contracts import BridgeRequest
-from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_daily_rows, normalize_date, normalize_financial_rows, normalize_ts_code, validate_date_range
+from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_financial_rows, normalize_identity_rows, normalize_ts_code, validate_date_range
 
 
 class NormalizerTest(unittest.TestCase):
@@ -23,6 +23,12 @@ class NormalizerTest(unittest.TestCase):
         self.assertEqual(bars[0]["close"], 10.5)
         self.assertIsNone(bars[0]["pre_close"])
 
+    def test_normalizes_identity_name_and_industry(self) -> None:
+        self.assertEqual(normalize_identity_rows([
+            {"item": "股票简称", "value": "平安银行"},
+            {"item": "行业", "value": "银行"},
+        ]), {"name": "平安银行", "industry": "银行"})
+
     def test_keeps_invalid_rows_as_classified_errors(self) -> None:
         bars, errors = normalize_daily_rows("601899.SH", [{"日期": "bad", "收盘": 1}])
         self.assertEqual(bars, [])
@@ -42,13 +48,30 @@ class NormalizerTest(unittest.TestCase):
 
     def test_normalizes_financial_aliases_and_bounds_rows(self) -> None:
         rows, errors = normalize_financial_rows("601899.SH", [
-            {"日期": "2026-06-30", "净资产收益率(%)": "12.5", "净利润同比增长率(%)": 8},
+            {"日期": "2026-06-30", "净资产收益率(%)": "12.5", "净利润同比增长率(%)": 8, "营业收入": 100, "净利润": 20},
             {"日期": "2025-12-31", "净资产收益率(%)": "11.5"},
         ], "2026-08-26T00:00:00Z")
         self.assertEqual(errors, [])
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["roe"], 12.5)
         self.assertEqual(rows[0]["net_profit_yoy"], 8.0)
+        self.assertEqual(rows[0]["revenue"], 100.0)
+        self.assertEqual(rows[0]["net_profit"], 20.0)
+
+    def test_normalizes_cashflow_aliases_and_preserves_unverified_fields_as_null(self) -> None:
+        rows, errors = normalize_cashflow_rows("601899.SH", [{
+            "报告期": "2026-06-30",
+            "公告日期": "2026-08-26",
+            "经营活动产生的现金流量净额": "1000",
+            "购建固定资产、无形资产和其他长期资产支付的现金": 300,
+            "净利润": 200,
+        }], "2026-08-26T00:00:00Z")
+
+        self.assertEqual(errors, [])
+        self.assertEqual(rows[0]["operating_cashflow"], 1000.0)
+        self.assertEqual(rows[0]["capital_expenditure"], 300.0)
+        self.assertEqual(rows[0]["net_profit"], 200.0)
+        self.assertIsNone(rows[0]["cash_dividends_paid"])
 
     def test_keeps_valid_financial_rows_when_one_row_has_an_invalid_date(self) -> None:
         rows, errors = normalize_financial_rows("601899.SH", [
@@ -57,7 +80,30 @@ class NormalizerTest(unittest.TestCase):
         ], "2026-08-26T00:00:00Z")
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["report_date"], "20251231")
-        self.assertEqual(errors[0].code, "AKSHARE_FINANCIAL_ROW_INVALID")
+
+    def test_retains_valid_reports_when_optional_notice_date_is_invalid(self) -> None:
+        rows, errors = normalize_financial_rows("601899.SH", [{
+            "日期": "2026-06-30",
+            "公告日期": "not-a-date",
+            "净资产收益率(%)": "12.5",
+        }], "2026-08-26T00:00:00Z")
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["report_date"], "20260630")
+        self.assertIsNone(rows[0]["notice_date"])
+        self.assertEqual(errors[0].code, "AKSHARE_FINANCIAL_NOTICE_DATE_INVALID")
+
+    def test_retains_valid_cashflows_when_optional_notice_date_is_invalid(self) -> None:
+        rows, errors = normalize_cashflow_rows("601899.SH", [{
+            "报告期": "2026-06-30",
+            "公告日期": "not-a-date",
+            "经营活动产生的现金流量净额": 1000,
+        }], "2026-08-26T00:00:00Z")
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["report_date"], "20260630")
+        self.assertIsNone(rows[0]["notice_date"])
+        self.assertEqual(errors[0].code, "AKSHARE_CASHFLOW_NOTICE_DATE_INVALID")
 
     def test_request_contract_is_explicit(self) -> None:
         request = BridgeRequest(ts_code="600089.SH", start_date="20260101", end_date="20260826")
