@@ -29,6 +29,7 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 - 2026-09-05 Quant 数据健康刷新入口修复已合入 `main`（PR #79，merge SHA `4df0bde381f7d65a2f91ecb23c3802875c20c959`）：aging/stale 数据域现在显示已有刷新动作，完整度与新鲜度计算保持独立；数据健康/Overview 10 项、Quant 全量 317 项、type-check/build、边界检查通过，认证态 Gateway 已确认“日线同步：去更新日线”，合并 SHA 的 CI 与 Deploy Quant 通过。
 - 2026-09-05 Quant 缺失证据刷新入口已合入 `main`（PR #80，merge SHA `44420cbae32a93bc9a88ecde108fd6d803fc4cac`）：因子数据健康按 evidence key 提供日线、估值、基本面、股东回报的“刷新并重算”入口，候选列表提供“去补齐”直达详情；刷新只重算确定性报告，不自动提交 AI，AkShare bridge 缺口继续保留为来源问题。Quant 全量 321 项、type-check/build、root lint、边界检查、认证态 Gateway loading/success/候选入口验证通过；PR CI `33969770950`、合并 SHA CI `33970002924` 和 Deploy Quant `33970002956` 均通过。
 - 2026-09-06 Quant 证据来源补全已合入 `main`（PR #81，merge SHA `3723d2baaddd618b5ad9a5c28f01aff3be2d99b2`）：区分阈值失败、真实缺失、来源回退、来源不可用和银行/保险行业不适用字段；Eastmoney PEG 明细、财报 `fina_indicator` 和现金流 `cashflow` 的可选 Tushare 回退链已接通，详情页与研究报告同步来源元数据。PR CI `34000465004`、合并 SHA CI `34000682737`、Deploy API `34000682861`、Deploy API After PR Merge `34000682779`、Deploy Quant `34000682792` 均通过。认证态 Gateway 已验证 601318 保险指标、000001 银行指标、负 PEG、刷新动作和行业不适用历史口径；1920px/390px 无横向溢出且浏览器 error/warn 为 0。
+- 2026-09-06 Quant 现金流来源扩展已合入 `main`（PR #84，merge SHA `5c9ea56467fcc4fa06bf673f9fe5ac6913152dcb`）：现金流接入同报告期利息费用和有息负债分项；AkShare 增加 Eastmoney 指标、季度/年度/Sina 财报、Tencent/Sina 日线和代码名称 fallback；恢复后的完整响应保持 `ready`，端点异常继续保留在 `errors`。本地 bridge 34 项、API 定向 66 项、Quant 330 项、root lint/type-check、Quant/API build、OpenSpec strict 85/85 通过；Gateway 匿名 `/quant/` 为 302、现金流 API 为 401。PR CI `34015267195`、合并 SHA CI `34015480148`、Deploy API `34015480141`、Deploy API After PR Merge `34015480137` 均通过。root 全量 build 仍受既有 `STARYE_PAGES_BUILD_ENV_PATH` 缺失影响。
 
 ## 延后事项
 
@@ -38,7 +39,7 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 
 ## 下一步
 
-1. 新功能：Quant 来源扩展第二阶段，读 [`../openspec/README.md`](../openspec/README.md)，建立并推进一个 change。
+1. 新功能：Quant 来源覆盖审计，逐只核对活跃候选的 primary/fallback、报告期覆盖、错误恢复和剩余字段缺口；确认真实缺口后再按 [`../openspec/README.md`](../openspec/README.md) 建立 change。
 2. 小 bug：定位 → 最小修复 → 定向测试 → Gateway 验证。
 3. crawler/D1：补 Gateway、D1 readback、content integrity 和实际消费层证据。
 4. 完成后更新本文件的当前状态；稳定规则回写对应 canonical owner。
