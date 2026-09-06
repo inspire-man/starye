@@ -103,23 +103,95 @@ def _optional_date(
         return None
 
 
-def normalize_daily_rows(ts_code: str, raw: Any, limit: int = 120) -> tuple[list[dict[str, Any]], list[BridgeError]]:
+DEBT_COMPONENT_ALIASES = {
+    "short_loan": ("SHORT_LOAN", "shortLoan", "short_loan", "短期借款"),
+    "short_bond_payable": ("SHORT_BOND_PAYABLE", "shortBondPayable", "short_bond_payable", "应付短期债券"),
+    "short_finance_payable": ("SHORT_FIN_PAYABLE", "shortFinancePayable", "short_finance_payable"),
+    "accept_deposit_interbank": ("ACCEPT_DEPOSIT_INTERBANK", "acceptDepositInterbank", "accept_deposit_interbank", "吸收存款及同业存放"),
+    "borrow_fund": ("BORROW_FUND", "borrowFund", "borrow_fund", "拆入资金"),
+    "loan_pbc": ("LOAN_PBC", "loanPbc", "loan_pbc", "向中央银行借款"),
+    "current_maturity_debt": ("NONCURRENT_LIAB_1YEAR", "currentMaturityDebt", "current_maturity_debt", "一年内到期的非流动负债"),
+    "amortized_cost_financial_liability": ("AMORTIZE_COST_FINLIAB", "amortizedCostFinancialLiability", "amortized_cost_financial_liability"),
+    "long_loan": ("LONG_LOAN", "longLoan", "long_loan", "长期借款"),
+    "amortized_cost_noncurrent_financial_liability": ("AMORTIZE_COST_NCFINLIAB", "amortizedCostNoncurrentFinancialLiability", "amortized_cost_noncurrent_financial_liability"),
+    "bond_payable": ("BOND_PAYABLE", "bondPayable", "bond_payable", "应付债券"),
+    "perpetual_bond": ("PERPETUAL_BOND", "perpetualBond", "perpetual_bond", "永续债"),
+    "perpetual_bond_payable": ("PERPETUAL_BOND_PAYBALE", "perpetualBondPayable", "perpetual_bond_payable", "应付债券：永续债"),
+    "lease_liability": ("LEASE_LIAB", "leaseLiability", "lease_liability", "租赁负债"),
+}
+
+
+def _row_code(value: Any) -> str | None:
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    raw = str(value).strip().upper()
+    if not raw or raw == "NAN":
+        return None
+    if "." in raw:
+        raw = raw.split(".", 1)[0]
+    if len(raw) == 8 and raw[:2] in {"SH", "SZ", "BJ"}:
+        raw = raw[2:]
+    return raw.zfill(6) if raw.isdigit() else raw
+
+
+def _row_matches_ts_code(row: Mapping[str, Any], normalized_code: str) -> bool:
+    returned = _row_code(_field(row, "ts_code", "tsCode", "SECUCODE", "SECURITY_CODE", "security_code"))
+    return returned is None or returned == normalized_code.split(".", 1)[0]
+
+
+def _interest_expense(row: Mapping[str, Any]) -> tuple[float | None, str | None]:
+    finance_expense_interest = _number(_field(row, "FE_INTEREST_EXPENSE", "利息支出", "利息费用"))
+    if finance_expense_interest is not None:
+        return finance_expense_interest, "FE_INTEREST_EXPENSE"
+    income_statement_interest = _number(_field(row, "INTEREST_EXPENSE", "interestExpense", "interest_expense"))
+    return income_statement_interest, "INTEREST_EXPENSE" if income_statement_interest is not None else None
+
+
+def _debt_components(row: Mapping[str, Any]) -> dict[str, float | None]:
+    return {key: _number(_field(row, *aliases)) for key, aliases in DEBT_COMPONENT_ALIASES.items()}
+
+
+def _debt_total(components: Mapping[str, float | None], row: Mapping[str, Any]) -> float | None:
+    explicit = _number(_field(row, "interest_bearing_debt", "interestBearingDebt"))
+    if explicit is not None:
+        return explicit
+    values = [value for value in components.values() if value is not None]
+    return sum(values) if values else None
+
+
+def _merge_debt_components(primary: Mapping[str, Any] | None, supplement: Mapping[str, Any] | None) -> dict[str, float | None]:
+    primary_values = primary or {}
+    supplement_values = supplement or {}
+    return {
+        key: _number(primary_values.get(key)) if _number(primary_values.get(key)) is not None else _number(supplement_values.get(key))
+        for key in DEBT_COMPONENT_ALIASES
+    }
+
+
+def normalize_daily_rows(
+    ts_code: str,
+    raw: Any,
+    limit: int = 120,
+    source: str = "stock_zh_a_hist",
+) -> tuple[list[dict[str, Any]], list[BridgeError]]:
     normalized_code = normalize_ts_code(ts_code)
     errors: list[BridgeError] = []
     result: list[dict[str, Any]] = []
     for row in _rows(raw):
         try:
-            trade_date = normalize_date(_field(row, "日期", "交易日期", "trade_date"), "trade_date")
+            trade_date = normalize_date(_field(row, "日期", "交易日期", "date", "trade_date"), "trade_date")
         except ValueError:
-            errors.append(BridgeError("AKSHARE_DAILY_ROW_INVALID", "daily row has an invalid trade date", "stock_zh_a_hist"))
+            errors.append(BridgeError("AKSHARE_DAILY_ROW_INVALID", "daily row has an invalid trade date", source))
             continue
         close = _number(_field(row, "收盘", "close"))
         open_price = _number(_field(row, "开盘", "open"))
         high = _number(_field(row, "最高", "high"))
         low = _number(_field(row, "最低", "low"))
         if not trade_date or close is None or open_price is None or high is None or low is None:
-            errors.append(BridgeError("AKSHARE_DAILY_ROW_INVALID", "daily row is missing required fields", "stock_zh_a_hist"))
+            errors.append(BridgeError("AKSHARE_DAILY_ROW_INVALID", "daily row is missing required fields", source))
             continue
+        interest_expense, interest_expense_source_field = _interest_expense(row)
+        interest_bearing_debt_components = _debt_components(row)
         result.append({
             "ts_code": normalized_code,
             "trade_date": trade_date,
@@ -138,11 +210,16 @@ def normalize_daily_rows(ts_code: str, raw: Any, limit: int = 120) -> tuple[list
     return ordered[-max(1, min(limit, 250)) :], errors
 
 
-def normalize_identity_rows(raw: Any) -> dict[str, Any]:
+def normalize_identity_rows(raw: Any, ts_code: str | None = None) -> dict[str, Any]:
     name_keys = {"公司简称", "股票简称", "名称", "name"}
     industry_keys = {"行业", "所属行业", "industry"}
     result: dict[str, Any] = {}
+    normalized_code = normalize_ts_code(ts_code).split(".", 1)[0] if ts_code else None
     for row in _rows(raw):
+        if normalized_code:
+            returned_code = _field(row, "ts_code", "tsCode", "SECUCODE", "SECURITY_CODE", "security_code", "代码", "code")
+            if returned_code is not None and _row_code(returned_code) != normalized_code:
+                continue
         item = str(_field(row, "item", "项目", "字段") or "")
         if item in name_keys and "name" not in result:
             value = _field(row, "value", "值", "内容", "name")
@@ -150,6 +227,14 @@ def normalize_identity_rows(raw: Any) -> dict[str, Any]:
                 result["name"] = str(value).strip()
         elif item in industry_keys and "industry" not in result:
             value = _field(row, "value", "值", "内容", "industry")
+            if value is not None and str(value).strip():
+                result["industry"] = str(value).strip()
+        if "name" not in result:
+            value = _field(row, "名称", "name", "SECURITY_NAME_ABBR")
+            if value is not None and str(value).strip():
+                result["name"] = str(value).strip()
+        if "industry" not in result:
+            value = _field(row, "行业", "所属行业", "industry")
             if value is not None and str(value).strip():
                 result["industry"] = str(value).strip()
     return result
@@ -166,14 +251,19 @@ def normalize_financial_rows(
     errors: list[BridgeError] = []
     result: list[dict[str, Any]] = []
     for row in _rows(raw):
+        if not _row_matches_ts_code(row, normalized_code):
+            errors.append(BridgeError("AKSHARE_FINANCIAL_ROW_MISMATCHED", "financial row code does not match the requested stock", source))
+            continue
         try:
-            report_date = normalize_date(_field(row, "日期", "报告期", "REPORT_DATE", "report_date"), "report_date")
+            report_date = normalize_date(_field(row, "日期", "报告期", "报告日", "REPORT_DATE", "report_date"), "report_date")
         except ValueError:
             errors.append(BridgeError("AKSHARE_FINANCIAL_ROW_INVALID", "financial row has an invalid report date", source))
             continue
         if not report_date:
             errors.append(BridgeError("AKSHARE_FINANCIAL_ROW_INVALID", "financial row has no report date", source))
             continue
+        interest_expense, interest_expense_source_field = _interest_expense(row)
+        interest_bearing_debt_components = _debt_components(row)
         notice_date = _optional_date(
             _field(row, "公告日期", "公告日", "NOTICE_DATE", "notice_date"),
             "notice_date",
@@ -189,22 +279,26 @@ def normalize_financial_rows(
             "report_type": str(_field(row, "报告类型", "REPORT_TYPE", "report_type") or "").strip() or None,
             "report_date_name": str(_field(row, "报告期名称", "REPORT_DATE_NAME", "report_date_name") or "").strip() or None,
             "industry": str(_field(row, "行业", "所属行业", "ORG_TYPE", "industry") or "").strip() or None,
-            "revenue": _number(_field(row, "营业总收入", "营业收入", "营业总收入(元)", "TOTAL_OPERATE_INCOME", "OPERATE_INCOME", "revenue")),
-            "roe": _number(_field(row, "净资产收益率(%)", "净资产收益率", "ROE", "roe")),
-            "revenue_yoy": _number(_field(row, "营业总收入同比增长率(%)", "营业收入同比增长率", "TOTAL_OPERATE_INCOME_YOY", "OPERATE_INCOME_YOY", "revenue_yoy")),
+            "interest_expense": interest_expense,
+            "interest_expense_source_field": interest_expense_source_field,
+            "interest_bearing_debt": _debt_total(interest_bearing_debt_components, row),
+            "interest_bearing_debt_components": interest_bearing_debt_components,
+            "revenue": _number(_field(row, "营业总收入", "营业收入", "营业总收入(元)", "TOTAL_OPERATE_INCOME", "TOTALOPERATEREVE", "OPERATE_INCOME", "revenue")),
+            "roe": _number(_field(row, "净资产收益率(%)", "净资产收益率", "ROE", "ROEJQ", "roe")),
+            "revenue_yoy": _number(_field(row, "营业总收入同比增长率(%)", "营业收入同比增长率", "TOTAL_OPERATE_INCOME_YOY", "TOTALOPERATEREVETZ", "OPERATE_INCOME_YOY", "revenue_yoy")),
             "net_profit": _number(_field(row, "净利润", "归母净利润", "归属母公司股东的净利润", "PARENT_NETPROFIT", "NETPROFIT", "net_profit")),
-            "net_profit_yoy": _number(_field(row, "净利润同比增长率(%)", "净利润同比", "PARENT_NETPROFIT_YOY", "NETPROFIT_YOY", "net_profit_yoy")),
-            "adjusted_net_profit": _number(_field(row, "扣非净利润", "扣除非经常性损益后的净利润", "DEDUCT_PARENT_NETPROFIT", "adjusted_net_profit")),
-            "adjusted_net_profit_yoy": _number(_field(row, "扣非净利润同比增长率(%)", "扣非净利润同比", "DEDUCT_PARENT_NETPROFIT_YOY", "adjusted_net_profit_yoy")),
-            "gross_margin": _number(_field(row, "销售毛利率(%)", "毛利率", "gross_margin")),
-            "net_margin": _number(_field(row, "销售净利率(%)", "净利率", "net_margin")),
-            "debt_asset_ratio": _number(_field(row, "资产负债率(%)", "资产负债率", "DEBT_ASSET_RATIO", "debt_asset_ratio")),
-            "operating_cashflow_to_revenue": _number(_field(row, "经营现金流/营业收入", "经营活动现金流量净额/营业收入", "经营现金流与营业收入比", "ocf_to_or", "operating_cashflow_to_revenue")),
-            "operating_cashflow_per_share": _number(_field(row, "每股经营现金流", "每股经营现金流量净额", "经营现金流/股", "ocfps", "operating_cashflow_per_share")),
-            "cash_ratio": _number(_field(row, "现金比率", "现金流量比率", "cash_ratio")),
-            "interest_coverage": _number(_field(row, "利息保障倍数", "利息覆盖倍数", "interest_coverage")),
-            "interest_bearing_debt_ratio": _number(_field(row, "带息负债率", "带息负债比率", "interest_bearing_debt_ratio")),
-            "total_liability": _number(_field(row, "负债合计", "负债总额", "TOTAL_LIABILITIES", "total_liability")),
+            "net_profit_yoy": _number(_field(row, "净利润同比增长率(%)", "净利润同比", "PARENT_NETPROFIT_YOY", "PARENTNETPROFITTZ", "NETPROFIT_YOY", "net_profit_yoy")),
+            "adjusted_net_profit": _number(_field(row, "扣非净利润", "扣除非经常性损益后的净利润", "DEDUCT_PARENT_NETPROFIT", "KCFJCXSYJLR", "adjusted_net_profit")),
+            "adjusted_net_profit_yoy": _number(_field(row, "扣非净利润同比增长率(%)", "扣非净利润同比", "DEDUCT_PARENT_NETPROFIT_YOY", "KCFJCXSYJLRTZ", "adjusted_net_profit_yoy")),
+            "gross_margin": _number(_field(row, "销售毛利率(%)", "毛利率", "XSMLL", "gross_margin")),
+            "net_margin": _number(_field(row, "销售净利率(%)", "净利率", "XSJLL", "net_margin")),
+            "debt_asset_ratio": _number(_field(row, "资产负债率(%)", "资产负债率", "DEBT_ASSET_RATIO", "ZCFZL", "debt_asset_ratio")),
+            "operating_cashflow_to_revenue": _number(_field(row, "经营现金流/营业收入", "经营活动现金流量净额/营业收入", "经营现金流与营业收入比", "ocf_to_or", "JYXJLYYSR", "operating_cashflow_to_revenue")),
+            "operating_cashflow_per_share": _number(_field(row, "每股经营现金流", "每股经营现金流量净额", "经营现金流/股", "ocfps", "MGJYXJJE", "operating_cashflow_per_share")),
+            "cash_ratio": _number(_field(row, "现金比率", "现金流量比率", "CASH_RATIO", "cash_ratio")),
+            "interest_coverage": _number(_field(row, "利息保障倍数", "利息覆盖倍数", "INTEREST_COVERAGE_RATIO", "interest_coverage")),
+            "interest_bearing_debt_ratio": _number(_field(row, "带息负债率", "带息负债比率", "INTEREST_DEBT_RATIO", "interest_bearing_debt_ratio")),
+            "total_liability": _number(_field(row, "负债合计", "负债总额", "TOTAL_LIABILITIES", "LIABILITY", "total_liability")),
             "roic": _number(_field(row, "投入资本回报率", "ROIC", "roic")),
         })
     deduplicated = {row["report_date"]: row for row in result}
@@ -212,37 +306,50 @@ def normalize_financial_rows(
     return ordered[:max(1, min(limit, 12))], errors
 
 
-def normalize_cashflow_rows(ts_code: str, raw: Any, observed_at: str, limit: int = 8) -> tuple[list[dict[str, Any]], list[BridgeError]]:
+def normalize_cashflow_rows(
+    ts_code: str,
+    raw: Any,
+    observed_at: str,
+    limit: int = 8,
+    source: str = "cashflow",
+) -> tuple[list[dict[str, Any]], list[BridgeError]]:
     normalized_code = normalize_ts_code(ts_code)
     errors: list[BridgeError] = []
     result: list[dict[str, Any]] = []
     for row in _rows(raw):
+        if not _row_matches_ts_code(row, normalized_code):
+            errors.append(BridgeError("AKSHARE_CASHFLOW_ROW_MISMATCHED", "cashflow row code does not match the requested stock", source))
+            continue
         try:
-            report_date = normalize_date(_field(row, "报告期", "报告日期", "日期", "REPORT_DATE", "report_date", "截止日期"), "report_date")
+            report_date = normalize_date(_field(row, "报告期", "报告日期", "报告日", "日期", "REPORT_DATE", "report_date", "截止日期"), "report_date")
         except ValueError:
-            errors.append(BridgeError("AKSHARE_CASHFLOW_ROW_INVALID", "cashflow row has an invalid date", "cashflow"))
+            errors.append(BridgeError("AKSHARE_CASHFLOW_ROW_INVALID", "cashflow row has an invalid date", source))
             continue
         if not report_date:
-            errors.append(BridgeError("AKSHARE_CASHFLOW_ROW_INVALID", "cashflow row has no report date", "cashflow"))
+            errors.append(BridgeError("AKSHARE_CASHFLOW_ROW_INVALID", "cashflow row has no report date", source))
             continue
         notice_date = _optional_date(
             _field(row, "公告日期", "公告日", "NOTICE_DATE", "notice_date"),
             "notice_date",
             errors,
             "AKSHARE_CASHFLOW_NOTICE_DATE_INVALID",
-            "cashflow",
+            source,
         )
+        interest_expense, interest_expense_source_field = _interest_expense(row)
+        interest_bearing_debt_components = _debt_components(row)
         result.append({
             "ts_code": normalized_code,
             "observed_at": observed_at,
             "report_date": report_date,
             "notice_date": notice_date,
-            "operating_cashflow": _number(_field(row, "经营活动产生的现金流量净额", "经营活动现金流量净额", "经营活动产生的现金流量净额(元)", "n_cashflow_act", "operating_cashflow")),
-            "capital_expenditure": _number(_field(row, "购建固定资产、无形资产和其他长期资产支付的现金", "购建固定资产、无形资产和其他长期资产所支付的现金", "购建长期资产支出", "c_pay_acq_const_fiolta", "capital_expenditure")),
-            "net_profit": _number(_field(row, "净利润", "net_profit")),
+            "operating_cashflow": _number(_field(row, "经营活动产生的现金流量净额", "经营活动现金流量净额", "经营活动产生的现金流量净额(元)", "n_cashflow_act", "NETCASH_OPERATE", "operating_cashflow")),
+            "capital_expenditure": _number(_field(row, "购建固定资产、无形资产和其他长期资产支付的现金", "购建固定资产、无形资产和其他长期资产所支付的现金", "购建长期资产支出", "c_pay_acq_const_fiolta", "CONSTRUCT_LONG_ASSET", "capital_expenditure")),
+            "net_profit": _number(_field(row, "净利润", "NETPROFIT", "net_profit")),
             "cash_dividends_paid": None,
-            "interest_expense": None,
-            "interest_bearing_debt": None,
+            "interest_expense": interest_expense,
+            "interest_expense_source_field": interest_expense_source_field,
+            "interest_bearing_debt": _debt_total(interest_bearing_debt_components, row),
+            "interest_bearing_debt_components": interest_bearing_debt_components,
         })
     deduplicated = {row["report_date"]: row for row in result}
     ordered = sorted(deduplicated.values(), key=lambda item: item["report_date"], reverse=True)

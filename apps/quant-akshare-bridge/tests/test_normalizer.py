@@ -83,6 +83,108 @@ class NormalizerTest(unittest.TestCase):
         self.assertEqual(rows[0]["total_liability"], 500.0)
         self.assertIsNone(rows[0]["debt_asset_ratio"])
 
+    def test_normalizes_expanded_interest_and_debt_fields(self) -> None:
+        rows, errors = normalize_financial_rows("601899.SH", [{
+            "SECUCODE": "601899.SH",
+            "REPORT_DATE": "2026-06-30",
+            "FE_INTEREST_EXPENSE": 25,
+            "SHORT_LOAN": 400,
+            "LONG_LOAN": 500,
+            "LEASE_LIAB": 100,
+        }], "2026-08-26T00:00:00Z", source="stock_balance_sheet_by_report_em")
+
+        self.assertEqual(errors, [])
+        self.assertEqual(rows[0]["interest_expense"], 25.0)
+        self.assertEqual(rows[0]["interest_expense_source_field"], "FE_INTEREST_EXPENSE")
+        self.assertEqual(rows[0]["interest_bearing_debt"], 1000.0)
+        self.assertEqual(rows[0]["interest_bearing_debt_components"]["lease_liability"], 100.0)
+
+    def test_normalizes_eastmoney_indicator_column_names(self) -> None:
+        rows, errors = normalize_financial_rows("601899.SH", [{
+            "SECUCODE": "601899.SH",
+            "REPORT_DATE": "2026-06-30 00:00:00",
+            "TOTALOPERATEREVE": 1000,
+            "TOTALOPERATEREVETZ": 12,
+            "PARENTNETPROFIT": 200,
+            "PARENTNETPROFITTZ": 20,
+            "KCFJCXSYJLR": 180,
+            "KCFJCXSYJLRTZ": 18,
+            "ROEJQ": 16,
+            "XSMLL": 28,
+            "XSJLL": 12,
+            "ZCFZL": 45,
+            "JYXJLYYSR": 0.3,
+            "MGJYXJJE": 1.2,
+            "INTEREST_COVERAGE_RATIO": 8,
+            "INTEREST_DEBT_RATIO": 30,
+            "CASH_RATIO": 0.8,
+            "LIABILITY": 500,
+            "ROIC": 11,
+        }], "2026-08-26T00:00:00Z", source="stock_financial_analysis_indicator_em")
+
+        self.assertEqual(errors, [])
+        self.assertEqual(rows[0]["revenue"], 1000.0)
+        self.assertEqual(rows[0]["revenue_yoy"], 12.0)
+        self.assertEqual(rows[0]["adjusted_net_profit"], 180.0)
+        self.assertEqual(rows[0]["roe"], 16.0)
+        self.assertEqual(rows[0]["gross_margin"], 28.0)
+        self.assertEqual(rows[0]["net_margin"], 12.0)
+        self.assertEqual(rows[0]["total_liability"], 500.0)
+        self.assertEqual(rows[0]["roic"], 11.0)
+
+    def test_normalizes_eastmoney_cashflow_column_names(self) -> None:
+        rows, errors = normalize_cashflow_rows("601899.SH", [{
+            "SECUCODE": "601899.SH",
+            "REPORT_DATE": "2026-06-30 00:00:00",
+            "NETCASH_OPERATE": 1000,
+            "CONSTRUCT_LONG_ASSET": 300,
+            "NETPROFIT": 200,
+        }], "2026-08-26T00:00:00Z", source="stock_cash_flow_sheet_by_quarterly_em")
+
+        self.assertEqual(errors, [])
+        self.assertEqual(rows[0]["operating_cashflow"], 1000.0)
+        self.assertEqual(rows[0]["capital_expenditure"], 300.0)
+        self.assertEqual(rows[0]["net_profit"], 200.0)
+
+    def test_normalizes_sina_report_date_and_statement_labels(self) -> None:
+        financials, financial_errors = normalize_financial_rows("601899.SH", [{
+            "报告日": "2026-06-30",
+            "利息支出": 25,
+            "短期借款": 400,
+            "长期借款": 500,
+            "租赁负债": 100,
+        }], "2026-08-26T00:00:00Z", source="stock_financial_report_sina")
+        cashflows, cashflow_errors = normalize_cashflow_rows("601899.SH", [{
+            "报告日": "2026-06-30",
+            "经营活动产生的现金流量净额": 1000,
+            "购建固定资产、无形资产和其他长期资产所支付的现金": 300,
+            "净利润": 200,
+        }], "2026-08-26T00:00:00Z", source="stock_financial_report_sina")
+
+        self.assertEqual(financial_errors, [])
+        self.assertEqual(financials[0]["interest_expense"], 25.0)
+        self.assertEqual(financials[0]["interest_bearing_debt"], 1000.0)
+        self.assertEqual(cashflow_errors, [])
+        self.assertEqual(cashflows[0]["operating_cashflow"], 1000.0)
+        self.assertEqual(cashflows[0]["capital_expenditure"], 300.0)
+
+    def test_rejects_financial_and_cashflow_rows_for_another_stock(self) -> None:
+        financials, financial_errors = normalize_financial_rows("601899.SH", [{
+            "SECURITY_CODE": "000001",
+            "REPORT_DATE": "2026-06-30",
+        }], "2026-08-26T00:00:00Z", source="statement")
+        cashflows, cashflow_errors = normalize_cashflow_rows("601899.SH", [{
+            "SECURITY_CODE": "000001",
+            "REPORT_DATE": "2026-06-30",
+        }], "2026-08-26T00:00:00Z", source="cashflow-source")
+
+        self.assertEqual(financials, [])
+        self.assertEqual(financial_errors[0].code, "AKSHARE_FINANCIAL_ROW_MISMATCHED")
+        self.assertEqual(financial_errors[0].source, "statement")
+        self.assertEqual(cashflows, [])
+        self.assertEqual(cashflow_errors[0].code, "AKSHARE_CASHFLOW_ROW_MISMATCHED")
+        self.assertEqual(cashflow_errors[0].source, "cashflow-source")
+
     def test_normalizes_cashflow_aliases_and_preserves_unverified_fields_as_null(self) -> None:
         rows, errors = normalize_cashflow_rows("601899.SH", [{
             "报告期": "2026-06-30",

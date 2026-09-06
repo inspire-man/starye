@@ -1,0 +1,8 @@
+- [x] 1.1 扩展 bridge normalizer；完成标准：利息来源字段、债务分项、有限合计、Eastmoney 列名和报表代码校验可复用，未映射字段保持 null。
+- [x] 1.2 扩展 bridge cashflow enrichment；完成标准：同报告期合并财报/现金流字段，按报告期/季度/年度/Sina 顺序继续探测，端点失败局部可见，跨期不填充。
+- [x] 1.3 补充 Python fixture 与测试；完成标准：主值优先、同期间补充、错配、失败、季度/年度/Sina fallback、空值和 error redaction 全部通过。
+- [x] 1.4 扩展日线/身份 fallback 与 status 计算；完成标准：Tencent/Sina 日线和代码名称表可补齐首选来源缺口，恢复后的响应为 ready，未恢复缺口仍为 partial/unavailable。
+- [x] 2.1 扩展 API cashflow parser/provider chain；完成标准：AkShare 利息/债务字段可读，只补主源 null 并保留来源元数据。
+- [x] 2.2 补充 API/Quant 回归测试；完成标准：现金流 history、详情 parser、旧 payload 和未映射字段不回归。
+- [x] 3.1 运行 bridge/API/Quant 定向测试、root lint/type-check、变更包 build 和 OpenSpec strict；完成标准：变更范围门禁通过；root 全量 build 仅受既有 `STARYE_PAGES_BUILD_ENV_PATH` 前置缺失影响。
+- [ ] 3.2 运行 GitNexus detect_changes 与 Gateway 验收；完成标准：只影响预期 Quant cashflow/source flow，匿名入口契约保持 302/401。
