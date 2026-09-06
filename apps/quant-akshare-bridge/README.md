@@ -27,6 +27,7 @@ The default listener is `http://127.0.0.1:8091`. Configure `QUANT_AKSHARE_BRIDGE
 - Cashflow history uses `stock_financial_cash_new_ths` as a last source for report-period `act_cash_flow_net`, `pay_fixed_assets_etc_cash`, `cash_net_profit`, and `pay_dividends_profits_interest_cash`; the cumulative `value` column is used and quarterly `single` values are ignored.
 - When a cashflow row has no `net_profit`, a same-report-date normalized profit statement value may fill that field; no cashflow formula is used to infer it.
 - Company capital history uses `stock_share_change_cninfo` for `变动日期`, `总股本`, and `变动原因`; shareholder holding-change endpoints are not treated as company capital events.
+- Working-capital context maps same-period balance-sheet `应收账款`, `存货`, and `合同负债` to `accounts_receivable`, `inventory`, and `contract_liabilities` in yuan; missing fields remain `null` and do not infer orders, volume, price, or profit.
 - Profit forecast history uses `stock_profit_forecast_ths` for annual EPS and annual net-profit forecast ranges in `100m CNY`; Eastmoney `stock_profit_forecast_em` is a short-lived full-market fallback for EPS only. Forecast values remain separate from actual financial statements.
 - To enable it in the API, configure both `QUANT_AKSHARE_BRIDGE_URL` and `QUANT_AKSHARE_BRIDGE_TOKEN`; an unconfigured bridge is skipped and does not replace the existing Eastmoney/Tushare result.
 

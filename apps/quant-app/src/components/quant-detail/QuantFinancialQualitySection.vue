@@ -73,6 +73,10 @@ function financialSourceLabel(value: QuantFinancialQualitySnapshot): string {
   const fallback = value.fallbackUsed && value.fallbackReason ? `（回退：${value.fallbackReason}）` : ''
   return `${source}${supplement}${fallback}`
 }
+
+function workingCapitalAmount(value: number | null | undefined): string {
+  return value === null || value === undefined ? '缺失' : formatFinancialAmount(value)
+}
 </script>
 
 <template>
@@ -150,6 +154,32 @@ function financialSourceLabel(value: QuantFinancialQualitySnapshot): string {
     <div v-else class="valuation-state">
       <Info :size="17" aria-hidden="true" />
       <span>{{ selectedStock ? '报告已找到，但当前指标暂缺' : '选择一只股票后查看基本面' }}</span>
+    </div>
+    <div v-if="financialQuality" class="financial-context-panel" aria-label="经营驱动原始字段">
+      <div class="financial-subheading">
+        <div>
+          <span class="section-kicker">OPERATING DRIVERS</span>
+          <strong>经营驱动原始字段</strong>
+        </div>
+        <small>报告期 {{ formatTradeDate(financialQuality.reportDate) }}</small>
+      </div>
+      <div class="financial-context-grid">
+        <div class="financial-context-item">
+          <span>合同负债</span>
+          <strong>{{ workingCapitalAmount(financialQuality.contractLiabilities) }}</strong>
+        </div>
+        <div class="financial-context-item">
+          <span>应收账款</span>
+          <strong>{{ workingCapitalAmount(financialQuality.accountsReceivable) }}</strong>
+        </div>
+        <div class="financial-context-item">
+          <span>存货</span>
+          <strong>{{ workingCapitalAmount(financialQuality.inventory) }}</strong>
+        </div>
+      </div>
+      <p class="financial-context-note">
+        {{ financialQuality.workingCapitalErrorCode ? `经营驱动来源暂不可用（${financialQuality.workingCapitalErrorCode}）` : '这些是同报告期资产负债表原始金额；缺失表示来源未返回。' }} 订单、销量、价格与未来利润另行核验，不进入价值质量总分。
+      </p>
     </div>
     <div v-if="financialQuality?.industry && financialQuality.industry !== 'general' && financialQuality.industryMetrics" class="financial-context-panel financial-industry-panel">
       <div class="financial-subheading">

@@ -192,6 +192,35 @@ function appendProfitForecastEvidence(evidenceItems: QuantResearchEvidence[], in
   }
 }
 
+function appendWorkingCapitalEvidence(evidenceItems: QuantResearchEvidence[], latestFinancial: QuantFinancialQualitySnapshot | null, financialSource: ReturnType<typeof financialSourceFor>): void {
+  const fields = [
+    { key: 'accountsReceivable', evidenceKey: 'operating-driver-accounts-receivable', label: '应收账款', detailLabel: '应收账款' },
+    { key: 'inventory', evidenceKey: 'operating-driver-inventory', label: '存货', detailLabel: '存货' },
+    { key: 'contractLiabilities', evidenceKey: 'operating-driver-contract-liabilities', label: '合同负债', detailLabel: '合同负债' },
+  ] as const
+  for (const field of fields) {
+    const value = finite(latestFinancial?.[field.key])
+    const source = financialSource.name
+    evidenceItems.push(evidence({
+      key: field.evidenceKey,
+      dimension: 'quality',
+      label: field.label,
+      status: value === null ? 'missing' : 'pass',
+      value,
+      threshold: '仅记录同报告期资产负债表原始字段，不进入价值质量评分或交易判断',
+      source,
+      observedAt: latestFinancial?.reportDate ?? null,
+      formulaVersion: financialSource.formulaVersion,
+      detail: value === null
+        ? latestFinancial?.workingCapitalErrorCode
+          ? `${field.detailLabel}来源暂不可用（${latestFinancial.workingCapitalErrorCode}）`
+          : `当前报告期未返回${field.detailLabel}原始字段，需继续核验来源状态`
+        : `${field.detailLabel} ${value.toFixed(2)} 元；用于经营驱动上下文，订单、销量与未来利润另行核验`,
+      optional: true,
+    }))
+  }
+}
+
 function withAkshareCrossSourceCheck(item: QuantResearchEvidence, latestFinancial: QuantFinancialQualitySnapshot | null): QuantResearchEvidence {
   const existingValues: Record<string, number | null | undefined> = {
     'akshare-roe': latestFinancial?.roe,
@@ -389,6 +418,7 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
   const valuationSource = input.valuationErrorCode ? `Eastmoney 估值（来源不可用：${input.valuationErrorCode}）` : 'Eastmoney 估值'
   const genericMetricApplicable = genericFinancialMetricApplicable(input)
   const evidenceItems: QuantResearchEvidence[] = []
+  appendWorkingCapitalEvidence(evidenceItems, latestFinancial, financialSource)
 
   evidenceItems.push(evidence({
     key: 'trend-sample',

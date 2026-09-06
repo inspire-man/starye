@@ -63,6 +63,15 @@ describe('quant investment knowledge catalog', () => {
     expect(expectationGap.eligibleInValueQuality).toBe(false)
   })
 
+  it('records working-capital fields while retaining operating-driver gaps', () => {
+    const businessDriver = QUANT_KNOWLEDGE_FACTORS.find(factor => factor.id === 'business-driver')!
+
+    expect(businessDriver.availableFields).toEqual(expect.arrayContaining(['contractLiabilities', 'accountsReceivable', 'inventory']))
+    expect(businessDriver.missingFields).toEqual(expect.arrayContaining(['orderBacklog', 'segmentRevenue', 'segmentGrossMargin', 'volume', 'realizedPrice']))
+    expect(businessDriver.missingFields).not.toContain('contractLiabilities')
+    expect(businessDriver.status).toBe('partial')
+  })
+
   it('marks the interest-aware cashflow factor fields as connected context', () => {
     const factor = QUANT_KNOWLEDGE_FACTORS.find(item => item.id === 'cashflow-capex-coverage')!
 

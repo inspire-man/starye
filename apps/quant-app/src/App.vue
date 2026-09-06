@@ -677,13 +677,16 @@ const hasFinancialData = computed(() => Boolean(financialQuality.value && [
   financialQuality.value.cashRatio,
   financialQuality.value.totalLiability,
   financialQuality.value.roic,
+  financialQuality.value.accountsReceivable,
+  financialQuality.value.inventory,
+  financialQuality.value.contractLiabilities,
   financialQuality.value.industryMetrics?.insuranceSolvencyRatio,
   financialQuality.value.industryMetrics?.insuranceNetInvestmentReturn,
   financialQuality.value.industryMetrics?.insuranceNewBusinessValueRate,
   financialQuality.value.industryMetrics?.bankCoreTier1CapitalAdequacyRatio,
   financialQuality.value.industryMetrics?.bankNetInterestMargin,
   financialQuality.value.industryMetrics?.bankLoanProvisionRatio,
-].some(value => value !== null)))
+].some(value => value !== null && value !== undefined)))
 
 type FinancialTrendTone = 'positive' | 'negative' | 'neutral'
 type FinancialTrendFormat = 'growth' | 'metric'

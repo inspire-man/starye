@@ -371,6 +371,19 @@ function normalizeBridgeFinancialReport(result: QuantAkshareBridgeResult, record
   if (!reportDate)
     return null
   const industry = financialIndustry(bridgeString(record, 'industry', '行业', 'ORG_TYPE') ?? result.identity.industry ?? null)
+  const accountsReceivable = bridgeNumber(record, 'accounts_receivable', 'accountsReceivable', 'ACCOUNTS_RECE', '应收账款')
+  const inventory = bridgeNumber(record, 'inventory', 'INVENTORY', '存货')
+  const contractLiabilities = bridgeNumber(record, 'contract_liabilities', 'contractLiabilities', 'CONTRACT_LIAB', '合同负债')
+  const workingCapitalComplete = [accountsReceivable, inventory, contractLiabilities].every(value => value !== null)
+  const workingCapitalErrorCode = workingCapitalComplete
+    ? null
+    : result.errors.find((error) => {
+      if (error.code === 'AKSHARE_WORKING_CAPITAL_FIELDS_UNAVAILABLE')
+        return true
+      return /^[A-Z][A-Z0-9_-]{0,95}$/u.test(error.code)
+        && /AKSHARE_FINANCIAL_ENDPOINT_(?:FAILED|UNAVAILABLE)/u.test(error.code)
+        && /balance|financial_report_sina/iu.test(error.source ?? '')
+    })?.code ?? null
   return {
     tsCode: result.tsCode,
     observedAt: result.observedAt,
@@ -397,6 +410,10 @@ function normalizeBridgeFinancialReport(result: QuantAkshareBridgeResult, record
     cashRatio: bridgeNumber(record, 'cash_ratio', 'cashRatio'),
     totalLiability: bridgeNumber(record, 'total_liability', 'totalLiability'),
     roic: bridgeNumber(record, 'roic', 'ROIC'),
+    accountsReceivable,
+    inventory,
+    contractLiabilities,
+    ...(workingCapitalErrorCode ? { workingCapitalErrorCode } : {}),
     provider: 'akshare',
     ...(industry ? { industry } : {}),
   }

@@ -757,6 +757,10 @@ export interface QuantFinancialQualitySnapshot {
   cashRatio: number | null
   totalLiability: number | null
   roic: number | null
+  accountsReceivable?: number | null
+  inventory?: number | null
+  contractLiabilities?: number | null
+  workingCapitalErrorCode?: string | null
   provider?: QuantSourceName
   fallbackUsed?: boolean
   fallbackReason?: string | null
