@@ -2326,7 +2326,11 @@ export function createEastmoneyRepurchaseProvider(options: EastmoneyProviderOpti
     }
 
     const parsed = v.safeParse(EastmoneyRepurchaseResponseSchema, payload)
-    if (!parsed.success || parsed.output.code !== 0 || !parsed.output.success)
+    if (!parsed.success)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney repurchase response schema is invalid')
+    if (parsed.output.code === 9201 && parsed.output.result === null)
+      return []
+    if (parsed.output.code !== 0 || !parsed.output.success)
       throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney repurchase response schema is invalid')
 
     const reports = (parsed.output.result?.data ?? []).map((value) => {

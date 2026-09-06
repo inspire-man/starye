@@ -66,7 +66,7 @@ function dataCheck(report: QuantResearchReport): { readonly check: QuantDecision
   const factors = factorModel?.factors.filter(factor => factor.weight > 0 && Number.isFinite(factor.weight)) ?? []
   const readyFactors = factors.filter(factor => factor.status === 'ready').length
   const coverage = finite(factorModel?.coverage ?? report.decision?.coverage) ?? 0
-  const requiredEvidence = report.evidence.filter(item => item.optional !== true)
+  const requiredEvidence = report.evidence.filter(item => item.optional !== true && item.applicability !== 'not_applicable')
   const missingEvidence = requiredEvidence.filter(item => item.status === 'missing').length
   const failedEvidence = requiredEvidence.filter(item => item.status === 'fail').length
   const incompleteFactors = factors.filter(factor => factor.status !== 'ready')
