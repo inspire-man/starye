@@ -1,4 +1,4 @@
-import type { QuantCashflowProvider, QuantCashflowReport, QuantFinancialQualityProvider, QuantFinancialQualitySnapshot, QuantInterestBearingDebtComponents, QuantInterestExpenseSourceField, QuantRepurchaseProvider, QuantRepurchaseReport } from './provider'
+import type { QuantCashflowProvider, QuantCashflowReport, QuantDividendFetchResult, QuantDividendProvider, QuantDividendRecord, QuantFinancialQualityProvider, QuantFinancialQualitySnapshot, QuantInterestBearingDebtComponents, QuantInterestExpenseSourceField, QuantRepurchaseProvider, QuantRepurchaseReport } from './provider'
 import type { QuantResearchEvidence, QuantResearchSource } from './research-report'
 import { QuantError } from './errors'
 
@@ -35,6 +35,8 @@ export interface QuantAkshareBridgeResult {
   readonly cashflows?: readonly Record<string, unknown>[]
   /** Optional for responses produced before the AkShare repurchase expansion. */
   readonly repurchases?: readonly Record<string, unknown>[]
+  /** Optional for responses produced before the AkShare dividend expansion. */
+  readonly dividends?: readonly Record<string, unknown>[]
   readonly evidence: readonly QuantAkshareBridgeEvidence[]
   readonly errors: readonly { readonly code: string, readonly message: string, readonly source?: string | null }[]
 }
@@ -178,6 +180,7 @@ function parseBridgeResponse(payload: unknown, requestedTsCode: string): QuantAk
     financials: normalizeRows(record?.financials),
     cashflows: normalizeRows(record?.cashflows),
     repurchases: normalizeRows(record?.repurchases),
+    dividends: normalizeRows(record?.dividends),
     evidence,
     errors,
   }
@@ -450,6 +453,29 @@ function normalizeBridgeRepurchaseReport(result: QuantAkshareBridgeResult, recor
   }
 }
 
+function normalizeBridgeDividendReport(result: QuantAkshareBridgeResult, record: Record<string, unknown>): QuantDividendRecord | null {
+  const returnedCode = bridgeString(record, 'ts_code', 'tsCode', 'SECURITY_CODE', 'security_code')
+  if (!returnedCode || returnedCode.trim().toUpperCase().split('.')[0] !== result.tsCode.split('.')[0])
+    throw new QuantAkshareBridgeError('INVALID_RESPONSE', 'AkShare dividend report code is missing or mismatched', 502)
+  const announcementDate = bridgeDate(record, 'ann_date', 'annDate', 'announcement_date', 'announcementDate')
+  const exDate = bridgeDate(record, 'ex_date', 'exDate')
+  const payDate = bridgeDate(record, 'pay_date', 'payDate')
+  const endDate = bridgeDate(record, 'end_date', 'endDate') ?? announcementDate ?? exDate ?? payDate
+  const divProc = bridgeString(record, 'div_proc', 'divProc', 'progress')
+  const cashDiv = bridgeNumber(record, 'cash_div', 'cashDiv')
+  if (!endDate || (!divProc && cashDiv === null && !announcementDate && !exDate && !payDate))
+    return null
+  return {
+    tsCode: result.tsCode,
+    endDate,
+    annDate: announcementDate,
+    divProc,
+    cashDiv,
+    exDate,
+    payDate,
+  }
+}
+
 function bridgeLimit(value: number | undefined, fallback: number): number {
   return Number.isInteger(value) ? Math.min(8, Math.max(1, value!)) : fallback
 }
@@ -537,6 +563,38 @@ export function createQuantAkshareRepurchaseProvider(bridge: QuantAkshareBridgeC
     name: 'akshare',
     isConfigured: bridge.isConfigured,
     fetchRepurchaseHistory,
+  }
+}
+
+export function createQuantAkshareDividendProvider(bridge: QuantAkshareBridgeClient): QuantDividendProvider {
+  async function fetchDividends(request: { readonly tsCode: string }): Promise<QuantDividendFetchResult> {
+    if (!bridge.isConfigured)
+      throw new QuantAkshareBridgeError('CONFIGURATION', 'AkShare bridge is not configured', 503)
+    const result = await bridge.fetchEvidence({ tsCode: request.tsCode, includeFinancials: false })
+    const reports = (result.dividends ?? [])
+      .map(record => normalizeBridgeDividendReport(result, record))
+      .filter((report): report is QuantDividendRecord => report !== null)
+    const dividendErrors = result.errors.filter(error => error.code.startsWith('AKSHARE_DIVIDEND_'))
+    if (!reports.length && dividendErrors.length)
+      throw bridgeDataUnavailable('dividend')
+    return {
+      records: [...new Map(reports.map(report => [
+        `${report.endDate}:${report.annDate ?? ''}:${report.divProc ?? ''}:${report.exDate ?? ''}:${report.payDate ?? ''}`,
+        report,
+      ])).values()]
+        .sort((left, right) => `${right.payDate ?? right.exDate ?? right.annDate ?? right.endDate}`.localeCompare(`${left.payDate ?? left.exDate ?? left.annDate ?? left.endDate}`))
+        .slice(0, 60),
+      provider: 'akshare',
+      fallbackUsed: false,
+      fallbackReason: null,
+    }
+  }
+
+  return {
+    name: 'akshare',
+    isConfigured: bridge.isConfigured,
+    providerChain: ['akshare'],
+    fetchDividends,
   }
 }
 

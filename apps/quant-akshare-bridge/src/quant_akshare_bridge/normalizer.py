@@ -129,6 +129,17 @@ def _repurchase_date(
     return _optional_date(value, field, errors, "AKSHARE_REPURCHASE_DATE_INVALID", source)
 
 
+def _dividend_date(
+    value: Any,
+    field: str,
+    errors: list[BridgeError],
+    source: str,
+) -> str | None:
+    if _text(value) is None:
+        return None
+    return _optional_date(value, field, errors, "AKSHARE_DIVIDEND_DATE_INVALID", source)
+
+
 DEBT_COMPONENT_ALIASES = {
     "short_loan": ("SHORT_LOAN", "shortLoan", "short_loan", "短期借款"),
     "short_bond_payable": ("SHORT_BOND_PAYABLE", "shortBondPayable", "short_bond_payable", "应付短期债券"),
@@ -480,6 +491,61 @@ def normalize_repurchase_rows(
         reverse=True,
     )
     return ordered[:max(1, min(limit, 20))], errors
+
+
+def normalize_dividend_rows(
+    ts_code: str,
+    raw: Any,
+    limit: int = 60,
+    source: str = "stock_history_dividend_detail",
+) -> tuple[list[dict[str, Any]], list[BridgeError]]:
+    normalized_code = normalize_ts_code(ts_code)
+    errors: list[BridgeError] = []
+    result: list[dict[str, Any]] = []
+    for row in _rows(raw):
+        announcement_date = _dividend_date(
+            _field(row, "公告日期", "ANN_DATE", "ann_date", "announcement_date"),
+            "ann_date",
+            errors,
+            source,
+        )
+        ex_date = _dividend_date(
+            _field(row, "除权除息日", "EX_DATE", "ex_date", "exDate"),
+            "ex_date",
+            errors,
+            source,
+        )
+        pay_date = _dividend_date(
+            _field(row, "红利发放日", "PAY_DATE", "pay_date", "payDate"),
+            "pay_date",
+            errors,
+            source,
+        )
+        event_date = announcement_date or ex_date or pay_date
+        if event_date is None:
+            errors.append(BridgeError("AKSHARE_DIVIDEND_ROW_INVALID", "dividend row has no usable event date", source))
+            continue
+        cash_per_ten_shares = _number(_field(row, "派息", "CASH_DIV_PER_TEN", "cash_div_per_ten", "cash_div"))
+        cash_div = round(cash_per_ten_shares / 10, 6) if cash_per_ten_shares is not None else None
+        result.append({
+            "ts_code": normalized_code,
+            "end_date": event_date,
+            "ann_date": announcement_date,
+            "div_proc": _text(_field(row, "进度", "DIV_PROC", "div_proc", "progress")),
+            "cash_div": cash_div,
+            "ex_date": ex_date,
+            "pay_date": pay_date,
+        })
+    deduplicated = {
+        f"{row['end_date']}:{row['ann_date'] or ''}:{row['div_proc'] or ''}:{row['ex_date'] or ''}:{row['pay_date'] or ''}": row
+        for row in result
+    }
+    ordered = sorted(
+        deduplicated.values(),
+        key=lambda item: f"{item['pay_date'] or item['ex_date'] or item['ann_date'] or item['end_date']}",
+        reverse=True,
+    )
+    return ordered[:max(1, min(limit, 60))], errors
 
 
 def build_evidence(

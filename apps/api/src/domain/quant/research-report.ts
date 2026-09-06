@@ -184,8 +184,8 @@ function actionLabel(action: QuantResearchAction): string {
 }
 
 function shareholderDividendSource(item: QuantShareholderReturnItem | null): { readonly id: string, readonly name: string } {
-  const providerLabel = item?.provider === 'eastmoney' ? 'Eastmoney' : item?.provider === 'tushare' ? 'Tushare' : 'Quant'
-  const providerId = item?.provider === 'eastmoney' ? 'eastmoney-dividend' : item?.provider === 'tushare' ? 'tushare-dividend' : 'quant-dividend-provider'
+  const providerLabel = item?.provider === 'eastmoney' ? 'Eastmoney' : item?.provider === 'tushare' ? 'Tushare' : item?.provider === 'akshare' ? 'AkShare' : 'Quant'
+  const providerId = item?.provider === 'eastmoney' ? 'eastmoney-dividend' : item?.provider === 'tushare' ? 'tushare-dividend' : item?.provider === 'akshare' ? 'akshare-dividend' : 'quant-dividend-provider'
   const chain = item?.providerChain?.length ? `，回退链：${item.providerChain.join(' -> ')}` : ''
   const reason = item?.fallbackUsed && item.fallbackReason ? `，主源失败：${item.fallbackReason}` : ''
   const unavailable = item?.providerErrorCode && !item.provider ? `，来源不可用：${item.providerErrorCode}` : ''

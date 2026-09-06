@@ -5,7 +5,6 @@ import type {
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
   QuantInterestBearingDebtComponents,
-  QuantProviderName,
   QuantShareholderCapitalChange,
   QuantShareholderCapitalEvidence,
   QuantShareholderCashflowEvidence,
@@ -482,7 +481,7 @@ function parseShareholderReturnItem(value: unknown): QuantShareholderReturnItem 
     return null
   const status = readString(value, 'status')
   const provider = readString(value, 'provider', 'dataProvider', 'data_provider')
-  const providerChain = readStringList(value, 'providerChain', 'provider_chain').filter((item): item is QuantProviderName => item === 'tushare' || item === 'eastmoney')
+  const providerChain = readStringList(value, 'providerChain', 'provider_chain').filter((item): item is QuantSourceName => parseQuantSourceName(item) !== null)
   const missingFields = Array.isArray(value.missingFields)
     ? value.missingFields.filter((item): item is string => typeof item === 'string')
     : Array.isArray(value.missing_fields)
@@ -499,7 +498,7 @@ function parseShareholderReturnItem(value: unknown): QuantShareholderReturnItem 
     name: readString(value, 'name', 'stockName', 'stock_name'),
     formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'shareholder-return-v1',
     status: status === 'ready' || status === 'partial' ? status : 'insufficient_data',
-    provider: provider === 'tushare' || provider === 'eastmoney' ? provider : null,
+    provider: parseQuantSourceName(provider),
     providerChain,
     fallbackUsed: value.fallbackUsed === true || value.fallback_used === true,
     fallbackReason: readString(value, 'fallbackReason', 'fallback_reason'),
@@ -527,11 +526,11 @@ function parseShareholderReturns(payload: unknown): QuantShareholderReturnSelect
   const data = unwrapData(payload)
   const record = isRecord(data) ? data : {}
   const provider = readString(record, 'provider', 'dataProvider', 'data_provider')
-  const providerChain = readStringList(record, 'providerChain', 'provider_chain').filter((item): item is QuantProviderName => item === 'tushare' || item === 'eastmoney')
+  const providerChain = readStringList(record, 'providerChain', 'provider_chain').filter((item): item is QuantSourceName => parseQuantSourceName(item) !== null)
   return {
     formulaVersion: readString(record, 'formulaVersion', 'formula_version') || 'shareholder-return-v1',
     observedAt: readString(record, 'observedAt', 'observed_at') || '',
-    provider: provider === 'tushare' || provider === 'eastmoney' ? provider : null,
+    provider: parseQuantSourceName(provider),
     providerChain,
     sampleCount: readNumber(record, 'sampleCount', 'sample_count') ?? 0,
     readyCount: readNumber(record, 'readyCount', 'ready_count') ?? 0,

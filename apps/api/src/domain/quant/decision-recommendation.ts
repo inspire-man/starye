@@ -153,6 +153,8 @@ function factorSourceId(definition: FactorDefinition, items: readonly QuantResea
   if (definition.key !== 'shareholder-return')
     return definition.sourceId
   const source = items.map(item => item.source).join(' ')
+  if (/AkShare/iu.test(source))
+    return 'akshare-dividend'
   if (/Eastmoney/iu.test(source))
     return 'eastmoney-dividend'
   return definition.sourceId

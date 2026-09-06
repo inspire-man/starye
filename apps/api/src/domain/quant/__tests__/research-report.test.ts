@@ -215,6 +215,41 @@ describe('quant research report', () => {
     })
   })
 
+  it('keeps the AkShare dividend source in evidence and factor provenance', () => {
+    const report = buildQuantResearchReport({
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-akshare-dividend',
+      candidate,
+      dailyBars: bars(80),
+      valuation,
+      financialReports: [financial, { ...financial, reportDate: '2025-12-31' }],
+      shareholderReturn: {
+        ...shareholderReturn,
+        provider: 'akshare',
+        providerChain: ['tushare', 'eastmoney', 'akshare'],
+        fallbackUsed: true,
+        fallbackReason: 'QUANT_PROVIDER_EMPTY',
+      },
+    })
+
+    expect(report.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: 'shareholder-yield',
+        source: expect.stringContaining('AkShare'),
+        detail: expect.stringContaining('QUANT_PROVIDER_EMPTY'),
+      }),
+    ]))
+    expect(report.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'akshare-dividend', name: expect.stringContaining('AkShare') }),
+    ]))
+    expect(report.factorModel?.factors.find(factor => factor.key === 'shareholder-return')).toMatchObject({
+      sourceId: 'akshare-dividend',
+      source: expect.stringContaining('AkShare'),
+    })
+  })
+
   it('fails closed on missing data and highlights risk before research timing', () => {
     const report = buildQuantResearchReport({
       tsCode: '600089.SH',

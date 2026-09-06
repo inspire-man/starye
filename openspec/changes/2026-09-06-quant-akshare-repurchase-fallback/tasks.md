@@ -5,4 +5,4 @@
 - [x] 3. 增加 Eastmoney → AkShare repurchase provider chain 并接入 Quant handler。完成标准：空历史、主源错误、回退成功、回退为空和两端错误均有测试，provider metadata 与安全错误码正确。
 - [x] 4. 扩展 API schema、Quant view model/client parser 与研究报告来源。完成标准：`akshare` 能通过 schema/type-check，旧 Eastmoney/Tushare payload 仍可解析，报告来源与实际 provider 一致。
 - [x] 5. 运行 bridge/API/Quant 定向测试、type-check/build、OpenSpec strict 和 GitNexus detect changes。完成标准：所有相关检查通过且变更范围符合预期。
-- [ ] 6. 通过 Gateway 验证认证边界、AkShare 回购数据、无匹配空历史和来源展示，随后提交、创建 PR、检查 Actions，并在合并后验证主分支。
+- [x] 6. 通过 Gateway 验证认证边界、AkShare 回购数据、无匹配空历史和来源展示，随后提交、创建 PR、检查 Actions，并在合并后验证主分支。

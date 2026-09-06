@@ -1,7 +1,7 @@
 import unittest
 
 from quant_akshare_bridge.contracts import BridgeRequest
-from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ts_code, validate_date_range
+from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ts_code, validate_date_range
 
 
 class NormalizerTest(unittest.TestCase):
@@ -47,6 +47,46 @@ class NormalizerTest(unittest.TestCase):
         validate_date_range("20160101", "20260101")
         with self.assertRaisesRegex(ValueError, "10 years"):
             validate_date_range("20150101", "20260826")
+
+    def test_normalizes_dividend_detail_and_converts_cash_per_ten_shares(self) -> None:
+        rows, errors = normalize_dividend_rows("601899.SH", [
+            {
+                "公告日期": "2026-08-13",
+                "派息": 4.2,
+                "进度": "实施",
+                "除权除息日": "2026-08-21",
+                "红利发放日": "NaT",
+            },
+            {
+                "公告日期": "2026-08-15",
+                "派息": 2.49,
+                "进度": "预案",
+                "除权除息日": None,
+                "红利发放日": None,
+            },
+        ])
+
+        self.assertEqual(errors, [])
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["end_date"], "20260813")
+        self.assertEqual(rows[0]["ann_date"], "20260813")
+        self.assertEqual(rows[0]["cash_div"], 0.42)
+        self.assertEqual(rows[0]["div_proc"], "实施")
+        self.assertEqual(rows[0]["ex_date"], "20260821")
+        self.assertIsNone(rows[0]["pay_date"])
+        self.assertEqual(rows[1]["cash_div"], 0.249)
+
+    def test_classifies_dividend_rows_without_an_event_date(self) -> None:
+        rows, errors = normalize_dividend_rows("601899.SH", [{
+            "公告日期": "NaT",
+            "派息": 4.2,
+            "进度": "实施",
+            "除权除息日": None,
+            "红利发放日": None,
+        }])
+
+        self.assertEqual(rows, [])
+        self.assertEqual(errors[0].code, "AKSHARE_DIVIDEND_ROW_INVALID")
 
     def test_normalizes_repurchase_rows_and_filters_the_full_market_table(self) -> None:
         rows, errors = normalize_repurchase_rows("601899.SH", [

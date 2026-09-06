@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 from .contracts import BridgeError, BridgeRequest, BridgeResponse, BridgeSource, observed_now
-from .normalizer import FORMULA_VERSION, _merge_debt_components, akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ts_code, validate_date_range
+from .normalizer import FORMULA_VERSION, _merge_debt_components, akshare_symbol, build_evidence, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_repurchase_rows, normalize_ts_code, validate_date_range
 
 
 def akshare_available() -> bool:
@@ -332,6 +332,22 @@ def _collect_repurchases(api: Any, ts_code: str, use_cache: bool = False) -> tup
         return [], [BridgeError("AKSHARE_REPURCHASE_ENDPOINT_FAILED", "AkShare repurchase endpoint failed", endpoint)], [endpoint]
 
 
+def _collect_dividends(api: Any, ts_code: str) -> tuple[list[dict[str, Any]], list[BridgeError], list[str]]:
+    endpoint = "stock_history_dividend_detail"
+    method = getattr(api, endpoint, None)
+    if not callable(method):
+        return [], [BridgeError("AKSHARE_DIVIDEND_ENDPOINT_UNAVAILABLE", "AkShare dividend endpoint is unavailable", endpoint)], []
+    try:
+        rows, row_errors = normalize_dividend_rows(
+            ts_code,
+            method(symbol=akshare_symbol(ts_code)),
+            source=endpoint,
+        )
+        return rows, row_errors, [endpoint]
+    except Exception:
+        return [], [BridgeError("AKSHARE_DIVIDEND_ENDPOINT_FAILED", "AkShare dividend endpoint failed", endpoint)], [endpoint]
+
+
 def collect_evidence(request: BridgeRequest, client: Any | None = None) -> BridgeResponse:
     ts_code = normalize_ts_code(request.ts_code)
     start_date = normalize_date(request.start_date, "start_date")
@@ -345,12 +361,14 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
     financials: list[dict[str, Any]] = []
     cashflows: list[dict[str, Any]] = []
     repurchases: list[dict[str, Any]] = []
+    dividends: list[dict[str, Any]] = []
     identity: dict[str, Any] = {}
     daily_endpoints: list[str] = []
     identity_endpoints: list[str] = []
     financial_endpoints: list[str] = []
     cashflow_endpoints: list[str] = []
     repurchase_endpoints: list[str] = []
+    dividend_endpoints: list[str] = []
 
     from datetime import date, timedelta
 
@@ -409,6 +427,9 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
     repurchases, repurchase_errors, repurchase_endpoints = _collect_repurchases(api, ts_code, use_cache=client is None)
     errors.extend(repurchase_errors)
 
+    dividends, dividend_errors, dividend_endpoints = _collect_dividends(api, ts_code)
+    errors.extend(dividend_errors)
+
     evidence = build_evidence(ts_code, observed_at, daily_bars, financials, cashflows)
     has_data = bool(daily_bars or identity or financials or cashflows)
     status = "ready" if has_data and not _has_unresolved_gaps(request, daily_bars, identity, financials, cashflows, errors) else "partial" if has_data else "unavailable"
@@ -424,6 +445,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
                 *financial_endpoints,
                 *cashflow_endpoints,
                 *repurchase_endpoints,
+                *dividend_endpoints,
             ])),
             formula_version=FORMULA_VERSION,
         ),
@@ -432,6 +454,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
         financials=financials,
         cashflows=cashflows,
         repurchases=repurchases,
+        dividends=dividends,
         evidence=evidence,
         errors=errors,
     )

@@ -1199,6 +1199,129 @@ describe('quant daily providers', () => {
     expect(eastmoneyFetch).toHaveBeenCalledOnce()
   })
 
+  it('falls back from an empty Eastmoney dividend history to AkShare once', async () => {
+    const primaryFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      code: 0,
+      success: true,
+      result: { data: [] },
+    }), { status: 200 }))
+    const primary = createEastmoneyDividendProvider({
+      fetchImpl: primaryFetch,
+    })
+    const fallback = {
+      name: 'akshare' as const,
+      isConfigured: true,
+      providerChain: ['akshare'] as const,
+      fetchDividends: vi.fn().mockResolvedValue({
+        records: [{
+          tsCode: '601899.SH',
+          endDate: '2026-08-13',
+          annDate: '2026-08-13',
+          divProc: '实施',
+          cashDiv: 0.42,
+          exDate: '2026-08-21',
+          payDate: null,
+        }],
+        provider: 'akshare' as const,
+        fallbackUsed: false,
+        fallbackReason: null,
+      }),
+    }
+    const chain = createQuantDividendProviderChain(primary, fallback)
+
+    await expect(chain.fetchDividends({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      provider: 'akshare',
+      fallbackUsed: true,
+      fallbackReason: 'QUANT_PROVIDER_EMPTY',
+      records: [expect.objectContaining({ cashDiv: 0.42 })],
+    })
+    expect(primaryFetch).toHaveBeenCalledOnce()
+    expect(fallback.fetchDividends).toHaveBeenCalledOnce()
+    expect(chain.providerChain).toEqual(['eastmoney', 'akshare'])
+  })
+
+  it('falls back from an Eastmoney dividend error to AkShare with a safe reason', async () => {
+    const primary = createEastmoneyDividendProvider({
+      fetchImpl: vi.fn().mockResolvedValue(new Response('upstream failed', { status: 503 })),
+    })
+    const fallback = {
+      name: 'akshare' as const,
+      isConfigured: true,
+      providerChain: ['akshare'] as const,
+      fetchDividends: vi.fn().mockResolvedValue({
+        records: [{
+          tsCode: '601899.SH',
+          endDate: '2026-08-13',
+          annDate: '2026-08-13',
+          divProc: '实施',
+          cashDiv: 0.42,
+          exDate: '2026-08-21',
+          payDate: null,
+        }],
+        provider: 'akshare' as const,
+        fallbackUsed: false,
+        fallbackReason: null,
+      }),
+    }
+    const chain = createQuantDividendProviderChain(primary, fallback)
+
+    await expect(chain.fetchDividends({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      provider: 'akshare',
+      fallbackUsed: true,
+      fallbackReason: 'QUANT_PROVIDER_UPSTREAM',
+    })
+  })
+
+  it('keeps two valid empty dividend histories without calling an unconfigured AkShare provider', async () => {
+    const primary = createEastmoneyDividendProvider({
+      fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        code: 0,
+        success: true,
+        result: { data: [] },
+      }), { status: 200 })),
+    })
+    const fallback = {
+      name: 'akshare' as const,
+      isConfigured: false,
+      providerChain: ['akshare'] as const,
+      fetchDividends: vi.fn(),
+    }
+    const chain = createQuantDividendProviderChain(primary, fallback)
+
+    await expect(chain.fetchDividends({ tsCode: '000001.SZ' })).resolves.toMatchObject({
+      records: [],
+      provider: 'eastmoney',
+      fallbackUsed: false,
+    })
+    expect(fallback.fetchDividends).not.toHaveBeenCalled()
+  })
+
+  it('preserves a fallback provider failure when an earlier provider returned an empty history', async () => {
+    const chain = createQuantDividendProviderChain(
+      {
+        name: 'eastmoney',
+        isConfigured: true,
+        providerChain: ['eastmoney'],
+        fetchDividends: vi.fn().mockResolvedValue({
+          records: [],
+          provider: 'eastmoney',
+          fallbackUsed: false,
+          fallbackReason: null,
+        }),
+      },
+      {
+        name: 'akshare',
+        isConfigured: true,
+        providerChain: ['akshare'],
+        fetchDividends: vi.fn().mockRejectedValue(new Error('upstream secret')),
+      },
+    )
+
+    await expect(chain.fetchDividends({ tsCode: '000001.SZ' })).rejects.toMatchObject({
+      name: 'QuantDividendProviderChainError',
+    })
+  })
+
   it('fails with both provider error categories when the dividend chain is exhausted', async () => {
     const chain = createQuantDividendProviderChain(
       createTushareDividendProvider({

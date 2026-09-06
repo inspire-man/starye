@@ -1,7 +1,7 @@
 import type { Database } from '@starye/db'
 import type { QuantDecisionAssistantMarketInput } from '../../../domain/quant/decision-assistant'
 import type { AppEnv } from '../../../types'
-import { createQuantAkshareBridge, createQuantAkshareCashflowProvider, createQuantAkshareFinancialProvider, createQuantAkshareRepurchaseProvider } from '../../../domain/quant/akshare-bridge'
+import { createQuantAkshareBridge, createQuantAkshareCashflowProvider, createQuantAkshareDividendProvider, createQuantAkshareFinancialProvider, createQuantAkshareRepurchaseProvider } from '../../../domain/quant/akshare-bridge'
 import { QuantError } from '../../../domain/quant/errors'
 import { createEastmoneyCapitalStructureProvider, createEastmoneyCashflowProvider, createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyMarketQuoteProvider, createEastmoneyRepurchaseProvider, createQuantCashflowProviderChain, createQuantDividendProviderChain, createQuantFinancialProviderChain, createQuantRepurchaseProviderChain, createTushareCashflowProvider, createTushareDividendProvider, createTushareFinancialProvider, mapQuantProviderError, resolveQuantProviderName } from '../../../domain/quant/provider'
 import { getLatestQuantDailyBar } from '../../../domain/quant/repository'
@@ -78,6 +78,7 @@ function isCurrentMarketDate(observedAt: string, now = new Date()): boolean {
 export function dividendProvider(env?: AppEnv['Bindings']) {
   const tushare = createTushareDividendProvider(tushareProviderOptions(env))
   const eastmoney = createEastmoneyDividendProvider(eastmoneyProviderOptions(env))
+  const akshare = createQuantAkshareDividendProvider(akshareBridge(env))
   const selected = resolveQuantProviderName(env)
   const primary = selected === 'tushare' && tushare.isConfigured ? tushare : eastmoney
   const fallback = primary.name === 'tushare' && eastmoney.isConfigured
@@ -85,7 +86,7 @@ export function dividendProvider(env?: AppEnv['Bindings']) {
     : primary.name === 'eastmoney' && tushare.isConfigured
       ? tushare
       : undefined
-  return createQuantDividendProviderChain(primary, fallback)
+  return createQuantDividendProviderChain(primary, fallback, akshare.isConfigured ? akshare : undefined)
 }
 
 export function cashflowProvider(env?: AppEnv['Bindings']) {

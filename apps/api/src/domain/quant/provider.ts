@@ -107,15 +107,15 @@ export interface QuantDividendRecord {
 
 export interface QuantDividendFetchResult {
   readonly records: readonly QuantDividendRecord[]
-  readonly provider: QuantProviderName
+  readonly provider: QuantSourceName
   readonly fallbackUsed: boolean
   readonly fallbackReason: string | null
 }
 
 export interface QuantDividendProvider {
-  readonly name: QuantProviderName
+  readonly name: QuantSourceName
   readonly isConfigured: boolean
-  readonly providerChain: readonly QuantProviderName[]
+  readonly providerChain: readonly QuantSourceName[]
   fetchDividends: (request: QuantDividendRequest) => Promise<QuantDividendFetchResult>
 }
 
@@ -1616,31 +1616,58 @@ export function createEastmoneyDividendProvider(options: EastmoneyProviderOption
   }
 }
 
-export function createQuantDividendProviderChain(primary: QuantDividendProvider, fallback?: QuantDividendProvider): QuantDividendProvider {
-  const providers = [primary, fallback].filter((provider): provider is QuantDividendProvider => provider !== undefined)
+export function createQuantDividendProviderChain(primary: QuantDividendProvider, ...fallbacks: readonly (QuantDividendProvider | undefined)[]): QuantDividendProvider {
+  const providers = [primary, ...fallbacks].filter((provider): provider is QuantDividendProvider => provider !== undefined)
   const providerChain = providers.flatMap(provider => provider.providerChain)
   const configured = providers.find(provider => provider.isConfigured)
 
   async function fetchDividends(request: QuantDividendRequest): Promise<QuantDividendFetchResult> {
     let primaryError: unknown = null
+    let fallbackError: unknown = null
+    let emptyResult: QuantDividendFetchResult | null = null
+    let providerFailure = false
     for (const provider of providers) {
       if (!provider.isConfigured) {
-        primaryError ??= new TushareProviderError('TOKEN_MISSING', `${provider.name} provider is not configured`, 'dividend')
+        if (!emptyResult)
+          primaryError ??= new TushareProviderError('TOKEN_MISSING', `${provider.name} provider is not configured`, 'dividend')
         continue
       }
       try {
         const result = await provider.fetchDividends(request)
-        return primaryError
-          ? { ...result, fallbackUsed: true, fallbackReason: mapQuantProviderError(primaryError).code }
-          : result
+        if (result.records.length > 0) {
+          const fallbackReason = primaryError
+            ? mapQuantProviderError(primaryError).code
+            : emptyResult
+              ? emptyResult.fallbackUsed && emptyResult.fallbackReason ? emptyResult.fallbackReason : 'QUANT_PROVIDER_EMPTY'
+              : null
+          return fallbackReason
+            ? { ...result, fallbackUsed: true, fallbackReason }
+            : result
+        }
+        if (!emptyResult) {
+          emptyResult = result
+          continue
+        }
       }
       catch (error) {
+        providerFailure = true
         if (primaryError)
-          throw new QuantDividendProviderChainError(primaryError, error)
-        primaryError = error
+          fallbackError = error
+        else
+          primaryError = error
       }
     }
-    throw new QuantDividendProviderChainError(primaryError ?? new Error('No dividend provider is configured'))
+    if (emptyResult) {
+      if (providerFailure)
+        throw new QuantDividendProviderChainError(primaryError ?? fallbackError ?? new Error('Dividend providers failed'), fallbackError)
+      const fallbackReason = primaryError
+        ? mapQuantProviderError(primaryError).code
+        : null
+      return fallbackReason
+        ? { ...emptyResult, fallbackUsed: true, fallbackReason }
+        : emptyResult
+    }
+    throw new QuantDividendProviderChainError(primaryError ?? new Error('No dividend provider is configured'), fallbackError)
   }
 
   return {

@@ -941,8 +941,8 @@ export interface QuantShareholderReturnItem {
   name: string | null
   formulaVersion: string
   status: QuantShareholderReturnStatus
-  provider: QuantProviderName | null
-  providerChain: QuantProviderName[]
+  provider: QuantSourceName | null
+  providerChain: QuantSourceName[]
   fallbackUsed: boolean
   fallbackReason: string | null
   providerErrorCode: string | null
@@ -961,8 +961,8 @@ export interface QuantShareholderReturnItem {
 export interface QuantShareholderReturnSelection {
   formulaVersion: string
   observedAt: string
-  provider: QuantProviderName | null
-  providerChain: QuantProviderName[]
+  provider: QuantSourceName | null
+  providerChain: QuantSourceName[]
   sampleCount: number
   readyCount: number
   partialCount: number

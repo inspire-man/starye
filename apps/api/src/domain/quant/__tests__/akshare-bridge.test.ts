@@ -1,6 +1,6 @@
 import type { QuantResearchReport } from '../research-report'
 import { describe, expect, it, vi } from 'vitest'
-import { createQuantAkshareBridge, createQuantAkshareCashflowProvider, createQuantAkshareFinancialProvider, createQuantAkshareRepurchaseProvider, QuantAkshareBridgeError } from '../akshare-bridge'
+import { createQuantAkshareBridge, createQuantAkshareCashflowProvider, createQuantAkshareDividendProvider, createQuantAkshareFinancialProvider, createQuantAkshareRepurchaseProvider, QuantAkshareBridgeError } from '../akshare-bridge'
 import { createQuantCashflowProviderChain, createQuantFinancialProviderChain } from '../provider'
 
 const reportEvidence: QuantResearchReport = {
@@ -197,6 +197,56 @@ describe('akShare bridge client', () => {
     })
 
     await expect(createQuantAkshareRepurchaseProvider(bridge).fetchRepurchaseHistory({ tsCode: '601899.SH' })).rejects.toMatchObject({ code: 'UPSTREAM' })
+  })
+
+  it('maps optional AkShare dividend rows and keeps legacy bridge payloads valid', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload({
+      dividends: [{
+        ts_code: '601899.SH',
+        end_date: '2026-08-13',
+        ann_date: '2026-08-13',
+        div_proc: '实施',
+        cash_div: 0.42,
+        ex_date: '2026-08-21',
+        pay_date: null,
+      }],
+    })), { status: 200 }))
+    const bridge = createQuantAkshareBridge({ baseUrl: 'https://bridge.example.test', token: 'secret-token', fetchImpl })
+
+    await expect(createQuantAkshareDividendProvider(bridge).fetchDividends({ tsCode: '601899.SH' })).resolves.toEqual({
+      records: [{
+        tsCode: '601899.SH',
+        endDate: '2026-08-13',
+        annDate: '2026-08-13',
+        divProc: '实施',
+        cashDiv: 0.42,
+        exDate: '2026-08-21',
+        payDate: null,
+      }],
+      provider: 'akshare',
+      fallbackUsed: false,
+      fallbackReason: null,
+    })
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toMatchObject({ include_financials: false })
+
+    const legacyBridge = createQuantAkshareBridge({
+      baseUrl: 'https://bridge.example.test',
+      token: 'secret-token',
+      fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify(payload()), { status: 200 })),
+    })
+    await expect(createQuantAkshareDividendProvider(legacyBridge).fetchDividends({ tsCode: '601899.SH' })).resolves.toMatchObject({ records: [] })
+  })
+
+  it('surfaces a dividend endpoint error instead of treating it as an empty history', async () => {
+    const bridge = createQuantAkshareBridge({
+      baseUrl: 'https://bridge.example.test',
+      token: 'secret-token',
+      fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify(payload({
+        errors: [{ code: 'AKSHARE_DIVIDEND_ENDPOINT_FAILED', message: 'endpoint failed' }],
+      })), { status: 200 })),
+    })
+
+    await expect(createQuantAkshareDividendProvider(bridge).fetchDividends({ tsCode: '601899.SH' })).rejects.toMatchObject({ code: 'UPSTREAM' })
   })
 
   it('supplements only same-period null fields and keeps the primary report', async () => {
