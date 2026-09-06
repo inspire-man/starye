@@ -235,6 +235,37 @@ describe('quant value quality formula', () => {
     expect(coverage.favorablePercentile).toBeNull()
   })
 
+  it('uses insurance-specific resilience fields without treating generic fields as missing', () => {
+    const target = input('601318.SH', {
+      financialReports: [report('601318.SH', '2026-06-30', {
+        industry: 'insurance',
+        grossMargin: null,
+        roic: null,
+        debtAssetRatio: 89.8,
+        interestCoverage: null,
+        cashRatio: null,
+        interestBearingDebtRatio: null,
+        industryMetrics: {
+          insuranceSolvencyRatio: 198.1,
+          insuranceNetInvestmentReturn: 2.8,
+          insuranceNewBusinessValueRate: 29,
+          bankCoreTier1CapitalAdequacyRatio: null,
+          bankNetInterestMargin: null,
+          bankLoanProvisionRatio: null,
+        },
+      }), report('601318.SH', '2025-12-31', { industry: 'insurance' })],
+    })
+    const result = buildValueQualityResult(target, [target, input('601899.SH')])
+    const quality = result.dimensions.find(dimension => dimension.key === 'quality')!
+    const resilience = result.dimensions.find(dimension => dimension.key === 'resilience')!
+
+    expect(result.status).toBe('partial')
+    expect(quality.metrics.find(metric => metric.key === 'gross_margin')).toMatchObject({ applicability: 'not_applicable', value: null })
+    expect(resilience.metrics.find(metric => metric.key === 'insurance_solvency_ratio')).toMatchObject({ applicability: 'applicable', value: 198.1 })
+    expect(result.missingFields).toContain('行业专用韧性指标暂无足够同业可比样本')
+    expect(result.missingFields).not.toContain('盈利质量指标不足（至少需要 3 项）')
+  })
+
   it('reports partial source failure without zero-filling the result', () => {
     const result = buildValueQualityResult(input('000001.SZ', {
       valuation: null,

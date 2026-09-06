@@ -4,14 +4,14 @@ import { validator } from 'hono-openapi'
 import { buildQuantValuationComparison } from '../../../domain/quant/comparison'
 import { QuantError } from '../../../domain/quant/errors'
 import { buildQuantFinancialQualityComparison } from '../../../domain/quant/financial-comparison'
-import { createEastmoneyFinancialProvider, createEastmoneyValuationProvider, mapQuantProviderError } from '../../../domain/quant/provider'
+import { createEastmoneyValuationProvider, mapQuantProviderError } from '../../../domain/quant/provider'
 import { ensureQuantStarterWatchlist, listQuantWatchlist, normalizeTsCode } from '../../../domain/quant/repository'
 import { readQuantShareholderReturns } from '../../../domain/quant/shareholder-return'
 import { readQuantValueSelection } from '../../../domain/quant/value-selection-service'
 import { QuantFinancialHistoryQuerySchema, QuantWatchlistParamSchema } from '../../../schemas/quant'
 import { quantRouteDocs } from '../contract-docs'
 import { currentQuantUserId, eastmoneyProviderOptions } from '../route-context'
-import { capitalStructureProvider, cashflowProvider, dividendProvider, repurchaseProvider } from './market-support'
+import { capitalStructureProvider, cashflowProvider, dividendProvider, financialProvider, repurchaseProvider } from './market-support'
 
 export const quantMarketRoutes = new Hono<AppEnv>()
 
@@ -60,7 +60,7 @@ quantMarketRoutes.get('/valuation/compare/:tsCode', quantRouteDocs('market.valua
 quantMarketRoutes.get('/financial/:tsCode', quantRouteDocs('market.financial.get'), validator('param', QuantWatchlistParamSchema), async (c) => {
   const { tsCode } = c.req.valid('param')
   try {
-    const provider = createEastmoneyFinancialProvider(eastmoneyProviderOptions(c.env))
+    const provider = financialProvider(c.env)
     const data = await provider.fetchFinancialQuality({ tsCode })
     return c.json({ success: true as const, data })
   }
@@ -73,7 +73,7 @@ quantMarketRoutes.get('/financial/history/:tsCode', quantRouteDocs('market.finan
   const { tsCode } = c.req.valid('param')
   const input = c.req.valid('query')
   try {
-    const provider = createEastmoneyFinancialProvider(eastmoneyProviderOptions(c.env))
+    const provider = financialProvider(c.env)
     const reports = await provider.fetchFinancialQualityHistory({
       tsCode,
       ...(input.limit ? { limit: Number(input.limit) } : {}),
@@ -98,7 +98,7 @@ quantMarketRoutes.get('/financial/compare/:tsCode', quantRouteDocs('market.finan
   if (!watchlist.some(item => item.tsCode === tsCode))
     throw new QuantError('QUANT_NOT_FOUND', 'Watchlist item not found', 404)
 
-  const provider = createEastmoneyFinancialProvider(eastmoneyProviderOptions(c.env))
+  const provider = financialProvider(c.env)
   try {
     const samples = await Promise.all(watchlist.map(async (item) => {
       try {
@@ -128,7 +128,7 @@ quantMarketRoutes.get('/value-selection', quantRouteDocs('market.valueSelection.
   const options = eastmoneyProviderOptions(c.env)
   const data = await readQuantValueSelection(c.get('db'), userId, {
     valuation: createEastmoneyValuationProvider(options),
-    financial: createEastmoneyFinancialProvider(options),
+    financial: financialProvider(c.env),
   })
   return c.json({ success: true as const, data })
 })

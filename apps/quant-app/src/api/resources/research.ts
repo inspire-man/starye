@@ -82,6 +82,7 @@ function parseResearchEvidence(value: unknown): QuantResearchEvidence | null {
     formulaVersion: readString(value, 'formulaVersion', 'formula_version') || 'unknown',
     detail: readString(value, 'detail') || '',
     optional: value.optional === true,
+    applicability: value.applicability === 'not_applicable' ? 'not_applicable' : 'applicable',
   }
 }
 
@@ -126,6 +127,7 @@ function parseResearchFactor(value: unknown): QuantResearchFactor | null {
     score,
     evidenceKeys: readStringList(value, 'evidenceKeys', 'evidence_keys'),
     missingEvidenceKeys: readStringList(value, 'missingEvidenceKeys', 'missing_evidence_keys'),
+    notApplicableEvidenceKeys: readStringList(value, 'notApplicableEvidenceKeys', 'not_applicable_evidence_keys'),
   }
 }
 

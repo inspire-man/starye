@@ -2,7 +2,7 @@ import type { Database } from '@starye/db'
 import type { QuantDecisionAssistantMarketInput } from '../../../domain/quant/decision-assistant'
 import type { AppEnv } from '../../../types'
 import { QuantError } from '../../../domain/quant/errors'
-import { createEastmoneyCapitalStructureProvider, createEastmoneyCashflowProvider, createEastmoneyDividendProvider, createEastmoneyMarketQuoteProvider, createEastmoneyRepurchaseProvider, createQuantDividendProviderChain, createTushareDividendProvider, mapQuantProviderError, resolveQuantProviderName } from '../../../domain/quant/provider'
+import { createEastmoneyCapitalStructureProvider, createEastmoneyCashflowProvider, createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyMarketQuoteProvider, createEastmoneyRepurchaseProvider, createQuantCashflowProviderChain, createQuantDividendProviderChain, createQuantFinancialProviderChain, createTushareCashflowProvider, createTushareDividendProvider, createTushareFinancialProvider, mapQuantProviderError, resolveQuantProviderName } from '../../../domain/quant/provider'
 import { getLatestQuantDailyBar } from '../../../domain/quant/repository'
 import { eastmoneyProviderOptions, tushareProviderOptions } from '../route-context'
 
@@ -79,7 +79,29 @@ export function dividendProvider(env?: AppEnv['Bindings']) {
 }
 
 export function cashflowProvider(env?: AppEnv['Bindings']) {
-  return createEastmoneyCashflowProvider(eastmoneyProviderOptions(env))
+  const tushare = createTushareCashflowProvider(tushareProviderOptions(env))
+  const eastmoney = createEastmoneyCashflowProvider(eastmoneyProviderOptions(env))
+  const explicitlySelected = env?.QUANT_DATA_PROVIDER?.trim().toLowerCase()
+  const primary = explicitlySelected === 'tushare' && tushare.isConfigured ? tushare : eastmoney
+  const fallback = primary.name === 'tushare' && eastmoney.isConfigured
+    ? eastmoney
+    : primary.name === 'eastmoney' && tushare.isConfigured
+      ? tushare
+      : undefined
+  return createQuantCashflowProviderChain(primary, fallback)
+}
+
+export function financialProvider(env?: AppEnv['Bindings']) {
+  const tushare = createTushareFinancialProvider(tushareProviderOptions(env))
+  const eastmoney = createEastmoneyFinancialProvider(eastmoneyProviderOptions(env))
+  const explicitlySelected = env?.QUANT_DATA_PROVIDER?.trim().toLowerCase()
+  const primary = explicitlySelected === 'tushare' && tushare.isConfigured ? tushare : eastmoney
+  const fallback = primary.name === 'tushare' && eastmoney.isConfigured
+    ? eastmoney
+    : primary.name === 'eastmoney' && tushare.isConfigured
+      ? tushare
+      : undefined
+  return createQuantFinancialProviderChain(primary, fallback)
 }
 
 export function capitalStructureProvider(env?: AppEnv['Bindings']) {

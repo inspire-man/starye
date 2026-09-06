@@ -1,4 +1,6 @@
 import type {
+  QuantFinancialIndustry,
+  QuantFinancialIndustryMetrics,
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
@@ -86,6 +88,22 @@ function parseFinancialQuality(payload: unknown): QuantFinancialQualitySnapshot 
   const reportDate = readString(data, 'reportDate', 'report_date')
   if (!tsCode || !observedAt || !reportDate)
     throw new QuantApiError('基本面数据格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  const industry = readString(data, 'industry')
+  const provider = readString(data, 'provider')
+  const industryMetricsRecord = isRecord(data.industryMetrics) ? data.industryMetrics : isRecord(data.industry_metrics) ? data.industry_metrics : null
+  const normalizedIndustry = industry === 'general' || industry === 'bank' || industry === 'insurance' || industry === 'securities' || industry === 'other'
+    ? industry as QuantFinancialIndustry
+    : undefined
+  const industryMetrics: QuantFinancialIndustryMetrics | undefined = industryMetricsRecord
+    ? {
+        insuranceSolvencyRatio: readNumber(industryMetricsRecord, 'insuranceSolvencyRatio', 'insurance_solvency_ratio'),
+        insuranceNetInvestmentReturn: readNumber(industryMetricsRecord, 'insuranceNetInvestmentReturn', 'insurance_net_investment_return'),
+        insuranceNewBusinessValueRate: readNumber(industryMetricsRecord, 'insuranceNewBusinessValueRate', 'insurance_new_business_value_rate'),
+        bankCoreTier1CapitalAdequacyRatio: readNumber(industryMetricsRecord, 'bankCoreTier1CapitalAdequacyRatio', 'bank_core_tier1_capital_adequacy_ratio'),
+        bankNetInterestMargin: readNumber(industryMetricsRecord, 'bankNetInterestMargin', 'bank_net_interest_margin'),
+        bankLoanProvisionRatio: readNumber(industryMetricsRecord, 'bankLoanProvisionRatio', 'bank_loan_provision_ratio'),
+      }
+    : undefined
   return {
     tsCode,
     observedAt,
@@ -112,6 +130,13 @@ function parseFinancialQuality(payload: unknown): QuantFinancialQualitySnapshot 
     cashRatio: readNumber(data, 'cashRatio', 'cash_ratio'),
     totalLiability: readNumber(data, 'totalLiability', 'total_liability'),
     roic: readNumber(data, 'roic'),
+    ...(provider === 'tushare' || provider === 'eastmoney' ? { provider } : {}),
+    ...(typeof data.fallbackUsed === 'boolean' ? { fallbackUsed: data.fallbackUsed } : {}),
+    ...(readString(data, 'fallbackReason', 'fallback_reason') ? { fallbackReason: readString(data, 'fallbackReason', 'fallback_reason') } : {}),
+    ...(data.supplementalProvider === 'tushare' || data.supplementalProvider === 'eastmoney' ? { supplementalProvider: data.supplementalProvider } : {}),
+    ...(typeof data.supplementUsed === 'boolean' ? { supplementUsed: data.supplementUsed } : {}),
+    ...(normalizedIndustry ? { industry: normalizedIndustry } : {}),
+    ...(industryMetrics ? { industryMetrics } : {}),
   }
 }
 
@@ -302,6 +327,9 @@ function parseShareholderCashflowEvidence(value: unknown): QuantShareholderCashf
     status,
     provider: provider === 'tushare' || provider === 'eastmoney' ? provider : null,
     providerErrorCode: readString(value, 'providerErrorCode', 'provider_error_code'),
+    ...(typeof value.fallbackUsed === 'boolean' ? { fallbackUsed: value.fallbackUsed } : {}),
+    ...(readString(value, 'fallbackReason', 'fallback_reason') ? { fallbackReason: readString(value, 'fallbackReason', 'fallback_reason') } : {}),
+    ...(value.supplementalProvider === 'tushare' || value.supplementalProvider === 'eastmoney' ? { supplementalProvider: value.supplementalProvider } : {}),
     observedAt: readString(value, 'observedAt', 'observed_at') || '',
     reportDate: readString(value, 'reportDate', 'report_date'),
     reportType: readString(value, 'reportType', 'report_type'),
@@ -518,6 +546,7 @@ function parseValueQualityMetric(value: unknown): QuantValueQualityMetric | null
     key,
     label,
     value: readNumber(value, 'value'),
+    applicability: value.applicability === 'not_applicable' ? 'not_applicable' : 'applicable',
     favorablePercentile: readNumber(value, 'favorablePercentile', 'favorable_percentile'),
     sampleCount: readNumber(value, 'sampleCount', 'sample_count') ?? 0,
   }

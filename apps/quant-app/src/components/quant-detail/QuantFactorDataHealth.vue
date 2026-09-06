@@ -56,7 +56,7 @@ function factorObservedAt(value: string | null): string {
 }
 
 function refreshTargetsForFactor(factor: QuantFactorDataHealthItem): { key: string, label: string, actionLabel: string }[] {
-  const missingKeys = [...new Set([...factor.missingEvidenceKeys, ...factor.failedEvidenceKeys])]
+  const missingKeys = [...new Set(factor.missingEvidenceKeys)]
   const shouldRefreshCurrentEvidence = factor.status === 'unavailable'
     || factor.sourceHealth === 'unavailable'
     || factor.sourceHealth === 'fallback'
@@ -107,7 +107,7 @@ function requestEvidenceRefresh(key: string): void {
           <span class="quant-factor-data-health-freshness" :class="factorFreshnessClass(freshnessForFactor(factor.factor))">{{ factorFreshnessLabel(freshnessForFactor(factor.factor)) }}</span>
         </div>
         <div class="quant-factor-data-health-meta">
-          <span>证据 {{ factor.usableEvidenceCount }} / {{ factor.evidenceCount }} 可用</span>
+          <span>证据 {{ factor.usableEvidenceCount }} / {{ factor.evidenceCount - factor.notApplicableEvidenceKeys.length }} 可用<span v-if="factor.notApplicableEvidenceKeys.length"> · {{ factor.notApplicableEvidenceKeys.length }} 项行业不适用</span></span>
           <span>观察 {{ factorObservedAt(factor.observedAt) }}</span>
           <span>时效 {{ freshnessForFactor(factor.factor)?.detail || '没有可核验因子证据时间' }}</span>
           <span :class="factorSourceHealthClass(factor.sourceHealth)">{{ factorSourceHealthLabel(factor.sourceHealth) }}：{{ factor.source || '来源未记录' }}</span>

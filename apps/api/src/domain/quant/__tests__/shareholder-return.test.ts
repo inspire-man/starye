@@ -356,6 +356,41 @@ describe('quant shareholder return formula', () => {
     ]))
   })
 
+  it('preserves cashflow fallback provenance while leaving unmapped fields null', () => {
+    const result = buildShareholderReturnResult({
+      tsCode: '601318.SH',
+      name: '中国平安',
+      dividends: [dividend()],
+      dailyBars: bars(34.54),
+      dividendErrorCode: null,
+      cashflowProvider: 'tushare',
+      cashflowFallbackUsed: true,
+      cashflowFallbackReason: 'QUANT_PROVIDER_EMPTY',
+      cashflowReports: [cashflow({
+        provider: 'tushare',
+        fallbackUsed: true,
+        fallbackReason: 'QUANT_PROVIDER_EMPTY',
+        operatingCashflow: 400,
+        capitalExpenditure: 120,
+        cashDividendsPaid: null,
+        interestExpense: null,
+        interestBearingDebt: null,
+      })],
+      cashflowErrorCode: null,
+      observedAt: '2026-08-25T00:00:00.000Z',
+    })
+
+    expect(result.cashflowEvidence).toMatchObject({
+      provider: 'tushare',
+      fallbackUsed: true,
+      fallbackReason: 'QUANT_PROVIDER_EMPTY',
+      freeCashflow: 280,
+      cashDividendsPaid: null,
+      interestExpense: null,
+      interestBearingDebt: null,
+    })
+  })
+
   it('starts dividend and cashflow reads together for one stock', async () => {
     repositoryMocks.getQuantWatchlistItem.mockResolvedValue({ tsCode: '601899.SH', name: '紫金矿业' })
     repositoryMocks.listQuantDailyBars.mockResolvedValue(bars(34.54))

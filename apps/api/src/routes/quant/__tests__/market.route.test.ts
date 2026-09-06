@@ -138,6 +138,49 @@ describe('quant market route contract', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('https://eastmoney.fixture.test/PC_HSF10/NewFinanceAnalysis/ZYZBAjaxNew')
   })
 
+  it('uses Tushare financial indicators when explicitly selected and supplements them with Eastmoney', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input) === 'https://tushare.fixture.test') {
+        return new Response(JSON.stringify({
+          code: 0,
+          data: {
+            fields: ['ts_code', 'ann_date', 'end_date', 'roe'],
+            items: [['601899.SH', '20260830', '20260630', 12.5]],
+          },
+        }), { status: 200 })
+      }
+      return new Response(JSON.stringify({
+        data: [{
+          SECURITY_CODE: '601899',
+          REPORT_DATE: '2026-06-30 00:00:00',
+          XSMLL: 30,
+          XSJLL: 12,
+          ZCFZL: 45,
+        }],
+      }), { status: 200 })
+    })
+
+    const response = await createQuantRouteTestApp({ user: { role: 'admin' } }).request('/api/quant/financial/601899.SH', {}, {
+      QUANT_DATA_PROVIDER: 'tushare',
+      TUSHARE_TOKEN: 'fixture-token',
+      TUSHARE_BASE_URL: 'https://tushare.fixture.test',
+      EASTMONEY_BASE_URL: 'https://eastmoney.fixture.test',
+    } as AppEnv['Bindings'])
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        provider: 'tushare',
+        supplementalProvider: 'eastmoney',
+        supplementUsed: true,
+        roe: 12.5,
+        grossMargin: 30,
+      },
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('returns recent financial history in report-date order', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
       data: [

@@ -654,6 +654,32 @@ describe('quant detail feature sections', () => {
     expect(loadShareholderReturns).toHaveBeenCalledOnce()
   })
 
+  it('does not surface generic cashflow gaps for specialized financial industries', () => {
+    const wrapper = shallowMount(QuantShareholderReturnsSection, {
+      props: {
+        selectedShareholderReturn: shareholderReturn,
+        financialIndustry: 'insurance',
+        loading,
+        errors,
+        formatNumber,
+        formatFinancialAmount: formatNumber,
+        formatTradeDate,
+        formatDividendYield: formatPercent,
+        shareholderReturnStatusLabel: () => '数据完整',
+        shareholderReturnStatusClass: () => 'value-quality-status-ready',
+        shareholderReturnHeaderLabel: () => '最近观察',
+        shareholderReturnSourceLabel: () => 'Eastmoney 实施分红',
+        parsedError: formatErrors,
+        loadShareholderReturns: vi.fn(),
+      },
+    })
+
+    expect(wrapper.text()).toContain('行业不适用')
+    expect(wrapper.text()).toContain('保险不使用通用自由现金流')
+    expect(wrapper.text()).not.toContain('70.00')
+    expect(wrapper.text()).not.toContain('现金流核心字段完整')
+  })
+
   it('keeps daily error retry outside the table component', async () => {
     const loadDailyBars = vi.fn()
     const wrapper = shallowMount(QuantDailyDataSection, {

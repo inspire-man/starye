@@ -64,6 +64,9 @@ export interface QuantShareholderCashflowEvidence {
   readonly status: QuantShareholderCashflowStatus
   readonly provider: QuantProviderName | null
   readonly providerErrorCode: string | null
+  readonly fallbackUsed?: boolean
+  readonly fallbackReason?: string | null
+  readonly supplementalProvider?: QuantProviderName
   readonly observedAt: string
   readonly reportDate: string | null
   readonly reportType: string | null
@@ -200,6 +203,9 @@ export interface ShareholderReturnInput {
   readonly cashflowReports?: readonly QuantCashflowReport[]
   readonly cashflowProvider?: QuantProviderName | null
   readonly cashflowErrorCode?: string | null
+  readonly cashflowFallbackUsed?: boolean
+  readonly cashflowFallbackReason?: string | null
+  readonly cashflowSupplementalProvider?: QuantProviderName
   readonly capitalStructureReports?: readonly QuantCapitalStructureReport[]
   readonly capitalStructureProvider?: QuantProviderName | null
   readonly capitalStructureErrorCode?: string | null
@@ -463,8 +469,11 @@ function buildCashflowEvidence(input: ShareholderReturnInput): QuantShareholderC
   return {
     formulaVersion: QUANT_SHAREHOLDER_CASHFLOW_FORMULA_VERSION,
     status,
-    provider: input.cashflowProvider ?? null,
+    provider: input.cashflowProvider ?? latest?.provider ?? null,
     providerErrorCode: input.cashflowErrorCode ?? null,
+    ...(input.cashflowFallbackUsed || latest?.fallbackUsed ? { fallbackUsed: true } : {}),
+    ...(input.cashflowFallbackReason || latest?.fallbackReason ? { fallbackReason: input.cashflowFallbackReason ?? latest?.fallbackReason ?? null } : {}),
+    ...(input.cashflowSupplementalProvider || latest?.supplementalProvider ? { supplementalProvider: input.cashflowSupplementalProvider ?? latest?.supplementalProvider } : {}),
     observedAt: input.observedAt,
     reportDate: latest?.reportDate ?? null,
     reportType: latest?.reportType ?? null,
@@ -753,17 +762,26 @@ async function readShareholderReturnInput(
       ? cashflowProvider.fetchCashflowHistory({ tsCode: item.tsCode, limit: 8 })
           .then(cashflowReports => ({
             cashflowReports,
-            cashflowProvider: cashflowProvider.name as QuantProviderName | null,
+            cashflowProvider: cashflowReports[0]?.provider ?? null,
+            cashflowFallbackUsed: cashflowReports.some(report => report.fallbackUsed === true),
+            cashflowFallbackReason: cashflowReports.find(report => report.fallbackUsed === true)?.fallbackReason ?? null,
+            cashflowSupplementalProvider: cashflowReports.find(report => report.supplementalProvider)?.supplementalProvider,
             cashflowErrorCode: null as string | null,
           }))
           .catch(error => ({
             cashflowReports: [] as readonly QuantCashflowReport[],
-            cashflowProvider: cashflowProvider.name as QuantProviderName | null,
+            cashflowProvider: null as QuantProviderName | null,
+            cashflowFallbackUsed: false,
+            cashflowFallbackReason: null as string | null,
+            cashflowSupplementalProvider: undefined as QuantProviderName | undefined,
             cashflowErrorCode: mapQuantProviderError(error).code,
           }))
       : Promise.resolve({
           cashflowReports: [] as readonly QuantCashflowReport[],
           cashflowProvider: null as QuantProviderName | null,
+          cashflowFallbackUsed: false,
+          cashflowFallbackReason: null as string | null,
+          cashflowSupplementalProvider: undefined as QuantProviderName | undefined,
           cashflowErrorCode: 'QUANT_PROVIDER_CONFIGURATION',
         })
     : Promise.resolve(null)
@@ -824,6 +842,9 @@ async function readShareholderReturnInput(
       ? {
           cashflowReports: cashflow.cashflowReports,
           cashflowProvider: cashflow.cashflowProvider,
+          cashflowFallbackUsed: cashflow.cashflowFallbackUsed,
+          cashflowFallbackReason: cashflow.cashflowFallbackReason,
+          cashflowSupplementalProvider: cashflow.cashflowSupplementalProvider,
           cashflowErrorCode: cashflow.cashflowErrorCode,
         }
       : {}),

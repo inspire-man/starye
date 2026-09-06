@@ -148,6 +148,7 @@ export interface QuantResearchFactor {
   score: number | null
   evidenceKeys: string[]
   missingEvidenceKeys: string[]
+  notApplicableEvidenceKeys?: string[]
 }
 
 export interface QuantFactorModel {
@@ -196,6 +197,7 @@ export interface QuantResearchEvidence {
   formulaVersion: string
   detail: string
   optional?: boolean
+  applicability?: 'applicable' | 'not_applicable'
 }
 
 export interface QuantResearchSource {
@@ -754,6 +756,24 @@ export interface QuantFinancialQualitySnapshot {
   cashRatio: number | null
   totalLiability: number | null
   roic: number | null
+  provider?: 'tushare' | 'eastmoney'
+  fallbackUsed?: boolean
+  fallbackReason?: string | null
+  supplementalProvider?: 'tushare' | 'eastmoney'
+  supplementUsed?: boolean
+  industry?: QuantFinancialIndustry
+  industryMetrics?: QuantFinancialIndustryMetrics
+}
+
+export type QuantFinancialIndustry = 'general' | 'bank' | 'insurance' | 'securities' | 'other'
+
+export interface QuantFinancialIndustryMetrics {
+  insuranceSolvencyRatio: number | null
+  insuranceNetInvestmentReturn: number | null
+  insuranceNewBusinessValueRate: number | null
+  bankCoreTier1CapitalAdequacyRatio: number | null
+  bankNetInterestMargin: number | null
+  bankLoanProvisionRatio: number | null
 }
 
 export type QuantShareholderReturnStatus = 'ready' | 'partial' | 'insufficient_data'
@@ -827,6 +847,9 @@ export interface QuantShareholderCashflowEvidence {
   status: QuantShareholderCashflowStatus
   provider: QuantProviderName | null
   providerErrorCode: string | null
+  fallbackUsed?: boolean
+  fallbackReason?: string | null
+  supplementalProvider?: QuantProviderName
   observedAt: string
   reportDate: string | null
   reportType: string | null
@@ -979,6 +1002,7 @@ export interface QuantValueQualityMetric {
   key: string
   label: string
   value: number | null
+  applicability?: 'applicable' | 'not_applicable'
   favorablePercentile: number | null
   sampleCount: number
 }

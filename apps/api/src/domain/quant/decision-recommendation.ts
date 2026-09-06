@@ -21,6 +21,7 @@ export interface QuantResearchFactor {
   readonly score: number | null
   readonly evidenceKeys: readonly string[]
   readonly missingEvidenceKeys: readonly string[]
+  readonly notApplicableEvidenceKeys?: readonly string[]
 }
 
 export interface QuantFactorModel {
@@ -128,6 +129,8 @@ function round(value: number, digits = 2): number {
 }
 
 function evidenceScore(item: QuantResearchEvidence): number | null {
+  if (item.applicability === 'not_applicable')
+    return null
   if (item.status === 'missing')
     return null
   return item.status === 'pass' ? 100 : item.status === 'caution' ? 50 : 0
@@ -159,7 +162,8 @@ function buildFactorModel(evidence: readonly QuantResearchEvidence[], configurat
   const evidenceByKey = new Map(evidence.map(item => [item.key, item] as const))
   const factors = QUANT_FACTOR_DEFINITIONS.map((definition) => {
     const optionalEvidenceKeys = new Set(definition.optionalEvidenceKeys ?? [])
-    const requiredEvidenceKeys = definition.evidenceKeys.filter(key => !optionalEvidenceKeys.has(key))
+    const notApplicableEvidenceKeys = definition.evidenceKeys.filter(key => evidenceByKey.get(key)?.applicability === 'not_applicable')
+    const requiredEvidenceKeys = definition.evidenceKeys.filter(key => !optionalEvidenceKeys.has(key) && !notApplicableEvidenceKeys.includes(key))
     const items = definition.evidenceKeys.flatMap((key) => {
       const item = evidenceByKey.get(key)
       return item ? [item] : []
@@ -167,7 +171,7 @@ function buildFactorModel(evidence: readonly QuantResearchEvidence[], configurat
     const status = factorStatus(items, requiredEvidenceKeys)
     const scored = items.map(evidenceScore).filter((value): value is number => value !== null)
     const score = scored.length ? round(scored.reduce((total, value) => total + value, 0) / scored.length) : null
-    const coveredRatio = definition.evidenceKeys.length > 0 ? scored.length / definition.evidenceKeys.length : 0
+    const coveredRatio = definition.evidenceKeys.length > 0 ? (scored.length + notApplicableEvidenceKeys.length) / definition.evidenceKeys.length : 0
     return {
       key: definition.key,
       label: definition.label,
@@ -177,7 +181,8 @@ function buildFactorModel(evidence: readonly QuantResearchEvidence[], configurat
       status,
       score,
       evidenceKeys: definition.evidenceKeys,
-      missingEvidenceKeys: definition.evidenceKeys.filter(key => evidenceByKey.get(key) === undefined || evidenceScore(evidenceByKey.get(key)!) === null),
+      missingEvidenceKeys: definition.evidenceKeys.filter(key => !notApplicableEvidenceKeys.includes(key) && (evidenceByKey.get(key) === undefined || evidenceScore(evidenceByKey.get(key)!) === null)),
+      notApplicableEvidenceKeys,
       coveredRatio,
     }
   })

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import type { QuantShareholderCapitalStatus, QuantShareholderCashflowHistorySummary, QuantShareholderCashflowStatus, QuantShareholderRepurchaseStatus, QuantShareholderReturnItem } from '../../lib/quant-view-models'
+import type { QuantFinancialIndustry, QuantShareholderCapitalStatus, QuantShareholderCashflowHistorySummary, QuantShareholderCashflowStatus, QuantShareholderRepurchaseStatus, QuantShareholderReturnItem } from '../../lib/quant-view-models'
 import type { QuantDetailErrorState, QuantDetailLoadingState } from './quant-detail-contracts'
 import { SkeletonCard } from '@starye/ui'
 import { Info, RefreshCw } from 'lucide-vue-next'
 
 export interface QuantShareholderReturnsSectionProps {
   selectedShareholderReturn: QuantShareholderReturnItem | null
+  financialIndustry?: QuantFinancialIndustry | null
   loading: QuantDetailLoadingState
   errors: QuantDetailErrorState
   formatNumber: (value: number | null) => string
@@ -22,6 +23,7 @@ export interface QuantShareholderReturnsSectionProps {
 
 const {
   selectedShareholderReturn,
+  financialIndustry,
   loading,
   errors,
   formatNumber,
@@ -56,6 +58,14 @@ function cashflowHistoryStatusLabel(summary: QuantShareholderCashflowHistorySumm
     insufficient_data: '历史报告不足',
     unavailable: '历史来源暂不可用',
   }[summary.status]
+}
+
+function financialIndustryLabel(value: QuantFinancialIndustry | null | undefined): string {
+  return value === 'insurance' ? '保险' : value === 'bank' ? '银行' : value === 'securities' ? '证券' : value === 'other' ? '专用行业' : '该行业'
+}
+
+function genericCashflowApplicable(value: QuantFinancialIndustry | null | undefined): boolean {
+  return !value || value === 'general'
 }
 
 function formatCashflowCoverage(value: number | null): string {
@@ -172,7 +182,7 @@ function formatRepurchaseRange(lower: number | null, upper: number | null): stri
         <small v-if="selectedShareholderReturn.providerChain.length > 1">来源链：{{ selectedShareholderReturn.providerChain.join(' -> ') }}</small>
         <small v-if="selectedShareholderReturn.providerErrorCode">来源错误：{{ selectedShareholderReturn.providerErrorCode }}</small>
       </div>
-      <div v-if="selectedShareholderReturn.cashflowEvidence" class="shareholder-cashflow-evidence" aria-label="股东回报现金流证据">
+      <div v-if="selectedShareholderReturn.cashflowEvidence && genericCashflowApplicable(financialIndustry)" class="shareholder-cashflow-evidence" aria-label="股东回报现金流证据">
         <div class="financial-subheading">
           <div>
             <span class="section-kicker">CASHFLOW EVIDENCE</span>
@@ -231,6 +241,8 @@ function formatRepurchaseRange(lower: number | null, upper: number | null): stri
         <div class="shareholder-return-provenance">
           <strong>{{ selectedShareholderReturn.cashflowEvidence.provider ? `${selectedShareholderReturn.cashflowEvidence.provider} 现金流量表` : '现金流量表来源待补' }}</strong>
           <small v-if="selectedShareholderReturn.cashflowEvidence.providerErrorCode">来源错误：{{ selectedShareholderReturn.cashflowEvidence.providerErrorCode }}</small>
+          <small v-if="selectedShareholderReturn.cashflowEvidence.fallbackUsed && selectedShareholderReturn.cashflowEvidence.fallbackReason">主源回退：{{ selectedShareholderReturn.cashflowEvidence.fallbackReason }}</small>
+          <small v-if="selectedShareholderReturn.cashflowEvidence.supplementalProvider">字段补充：{{ selectedShareholderReturn.cashflowEvidence.supplementalProvider }}</small>
           <small v-if="selectedShareholderReturn.cashflowEvidence.interestExpenseSourceField">利息口径：{{ selectedShareholderReturn.cashflowEvidence.interestExpenseSourceField }}</small>
           <small v-if="selectedShareholderReturn.cashflowEvidence.interestExpenseProviderErrorCode">利息支出来源错误：{{ selectedShareholderReturn.cashflowEvidence.interestExpenseProviderErrorCode }}</small>
           <small v-if="selectedShareholderReturn.cashflowEvidence.interestBearingDebtProviderErrorCode">有息负债来源错误：{{ selectedShareholderReturn.cashflowEvidence.interestBearingDebtProviderErrorCode }}</small>
@@ -274,6 +286,19 @@ function formatRepurchaseRange(lower: number | null, upper: number | null): stri
         <p class="shareholder-cashflow-note">
           自由现金流 = 经营活动净现金流 - 购建长期资产支出；利息后自由现金流再减同报告期利息支出；有息负债只汇总明确借款、债券、租赁及一年内到期非流动负债。覆盖倍数只比较同报告期现金分红，支付率只比较最近完整年度。该区域用于研究核对，不改变价值质量与决策结果。
         </p>
+      </div>
+      <div v-else-if="selectedShareholderReturn.cashflowEvidence && financialIndustry && financialIndustry !== 'general'" class="shareholder-cashflow-evidence shareholder-cashflow-evidence-na" aria-label="股东回报现金流行业口径">
+        <div class="financial-subheading">
+          <div>
+            <span class="section-kicker">CASHFLOW EVIDENCE</span>
+            <strong>现金流与分红覆盖</strong>
+          </div>
+          <small class="shareholder-cashflow-status-insufficient_data">行业不适用</small>
+        </div>
+        <div class="financial-context-note financial-context-note-na">
+          <Info :size="15" aria-hidden="true" />
+          <span>{{ financialIndustryLabel(financialIndustry) }}不使用通用自由现金流、利息覆盖和分红支付率口径；这些字段不进入该行业的数据缺口或刷新动作，请结合行业专用财报指标、股东回报和股本事件核对。</span>
+        </div>
       </div>
       <div v-if="selectedShareholderReturn.capitalStructureEvidence" class="shareholder-capital-evidence" aria-label="股东回报股本证据">
         <div class="financial-subheading">

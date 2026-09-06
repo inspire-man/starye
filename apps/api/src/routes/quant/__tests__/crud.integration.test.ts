@@ -743,7 +743,7 @@ describe('quant watchlist CRUD contract', () => {
         decision: expect.objectContaining({ recommendation: 'watch', buyPriceRange: null, sellPriceRange: null }),
       },
     })
-    expect(fetchMock.mock.calls.filter(([input]) => String(input) === 'https://tushare.fixture.test')).toHaveLength(1)
+    expect(fetchMock.mock.calls.filter(([input]) => String(input) === 'https://tushare.fixture.test')).toHaveLength(3)
 
     await client.execute(`
       INSERT INTO quant_scan_snapshot (
@@ -1593,7 +1593,7 @@ describe('quant watchlist CRUD contract', () => {
         ],
       },
     })
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock).toHaveBeenCalledTimes(3 * 2)
   })
 
   it('returns a structured not-found error when the target is outside the watchlist', async () => {
@@ -1812,7 +1812,7 @@ describe('quant watchlist CRUD contract', () => {
         ],
       },
     })
-    expect(fetchMock).toHaveBeenCalledTimes(stocks.length * 2)
+    expect(fetchMock).toHaveBeenCalledTimes(stocks.length * 3)
   })
 
   it('returns shareholder returns from implemented Tushare dividends and local prices', async () => {

@@ -56,6 +56,23 @@ const {
   formatTrendDelta,
   loadFinancialQuality,
 } = defineProps<QuantFinancialQualitySectionProps>()
+
+function industryLabel(value: QuantFinancialQualitySnapshot['industry']): string {
+  return value === 'insurance' ? '保险行业' : value === 'bank' ? '银行行业' : value === 'securities' ? '证券行业' : value === 'other' ? '行业专用' : '通用行业'
+}
+
+function genericMetricApplicable(value: QuantFinancialQualitySnapshot | null): boolean {
+  return !value?.industry || value.industry === 'general'
+}
+
+function financialSourceLabel(value: QuantFinancialQualitySnapshot): string {
+  const source = value.provider === 'tushare' ? 'Tushare 财报指标' : 'Eastmoney 财务报告'
+  const supplement = value.supplementUsed && value.supplementalProvider
+    ? ` + ${value.supplementalProvider === 'tushare' ? 'Tushare' : 'Eastmoney'} 字段补充`
+    : ''
+  const fallback = value.fallbackUsed && value.fallbackReason ? `（回退：${value.fallbackReason}）` : ''
+  return `${source}${supplement}${fallback}`
+}
 </script>
 
 <template>
@@ -76,6 +93,7 @@ const {
       <span>报告期 <strong>{{ formatTradeDate(financialQuality.reportDate) }}</strong></span>
       <span>公告日期 <strong>{{ formatTradeDate(financialQuality.noticeDate) }}</strong></span>
       <span>报告口径 <strong>{{ financialQuality.reportType || '最近已披露' }}</strong></span>
+      <span>数据源 <strong>{{ financialSourceLabel(financialQuality) }}</strong></span>
     </div>
     <div v-if="loading.financial" class="valuation-state" aria-label="基本面数据加载中">
       <SkeletonCard variant="content" />
@@ -110,7 +128,7 @@ const {
       </div>
       <div class="financial-item">
         <span>毛利率</span>
-        <strong>{{ formatMetricPercent(financialQuality.grossMargin) }}</strong>
+        <strong>{{ genericMetricApplicable(financialQuality) ? formatMetricPercent(financialQuality.grossMargin) : '行业不适用' }}</strong>
       </div>
       <div class="financial-item">
         <span>净利率</span>
@@ -118,11 +136,11 @@ const {
       </div>
       <div class="financial-item">
         <span>资产负债率</span>
-        <strong>{{ formatMetricPercent(financialQuality.debtAssetRatio) }}</strong>
+        <strong>{{ genericMetricApplicable(financialQuality) ? formatMetricPercent(financialQuality.debtAssetRatio) : '行业不适用' }}</strong>
       </div>
       <div class="financial-item">
         <span>经营现金流 / 营收</span>
-        <strong>{{ formatRatioPercent(financialQuality.operatingCashflowToRevenue) }}</strong>
+        <strong>{{ genericMetricApplicable(financialQuality) ? formatRatioPercent(financialQuality.operatingCashflowToRevenue) : '行业不适用' }}</strong>
       </div>
       <div class="financial-item">
         <span>ROIC 投入资本回报</span>
@@ -132,6 +150,46 @@ const {
     <div v-else class="valuation-state">
       <Info :size="17" aria-hidden="true" />
       <span>{{ selectedStock ? '报告已找到，但当前指标暂缺' : '选择一只股票后查看基本面' }}</span>
+    </div>
+    <div v-if="financialQuality?.industry && financialQuality.industry !== 'general' && financialQuality.industryMetrics" class="financial-context-panel financial-industry-panel">
+      <div class="financial-subheading">
+        <div>
+          <span class="section-kicker">INDUSTRY METRICS</span>
+          <strong>{{ industryLabel(financialQuality.industry) }}专用口径</strong>
+        </div>
+        <small>不与通用毛利率、资产负债率直接混算</small>
+      </div>
+      <div v-if="financialQuality.industry === 'insurance'" class="financial-context-grid">
+        <div class="financial-context-item">
+          <span>偿付能力充足率</span>
+          <strong>{{ formatMetricPercent(financialQuality.industryMetrics.insuranceSolvencyRatio) }}</strong>
+        </div>
+        <div class="financial-context-item">
+          <span>净投资收益率</span>
+          <strong>{{ formatMetricPercent(financialQuality.industryMetrics.insuranceNetInvestmentReturn) }}</strong>
+        </div>
+        <div class="financial-context-item">
+          <span>新业务价值率</span>
+          <strong>{{ formatMetricPercent(financialQuality.industryMetrics.insuranceNewBusinessValueRate) }}</strong>
+        </div>
+      </div>
+      <div v-else-if="financialQuality.industry === 'bank'" class="financial-context-grid">
+        <div class="financial-context-item">
+          <span>核心一级资本充足率</span>
+          <strong>{{ formatMetricPercent(financialQuality.industryMetrics.bankCoreTier1CapitalAdequacyRatio) }}</strong>
+        </div>
+        <div class="financial-context-item">
+          <span>净息差</span>
+          <strong>{{ formatMetricPercent(financialQuality.industryMetrics.bankNetInterestMargin) }}</strong>
+        </div>
+        <div class="financial-context-item">
+          <span>贷款拨备率</span>
+          <strong>{{ formatMetricPercent(financialQuality.industryMetrics.bankLoanProvisionRatio) }}</strong>
+        </div>
+      </div>
+      <p class="financial-context-note">
+        这些字段来自 Eastmoney 财报行业专用指标；通用指标显示为缺口时，先判断是否属于行业口径差异。
+      </p>
     </div>
     <div v-if="financialTrendItems.length" class="financial-trend" aria-label="财务质量趋势">
       <div class="financial-subheading">
@@ -177,7 +235,7 @@ const {
           <strong>{{ formatComparisonPosition(financialComparison?.roeHigherThanPercent ?? null) }}</strong>
           <small>样本 {{ financialComparison?.roeSampleCount ?? 0 }} 只</small>
         </div>
-        <div class="financial-comparison-item">
+        <div v-if="genericMetricApplicable(financialQuality)" class="financial-comparison-item">
           <span>资产负债率</span>
           <strong>{{ formatLowerComparisonPosition(financialComparison?.debtAssetRatioLowerThanPercent ?? null) }}</strong>
           <small>样本 {{ financialComparison?.debtAssetRatioSampleCount ?? 0 }} 只</small>
@@ -195,7 +253,7 @@ const {
         </div>
         <small>报告期 {{ formatTradeDate(financialQuality.reportDate) }}</small>
       </div>
-      <div class="financial-context-grid">
+      <div v-if="genericMetricApplicable(financialQuality)" class="financial-context-grid">
         <div class="financial-context-item">
           <span>经营现金流 / 营收</span>
           <strong>{{ formatRatioPercent(financialQuality.operatingCashflowToRevenue) }}</strong>
@@ -229,8 +287,12 @@ const {
           <strong>{{ formatFinancialAmount(financialQuality.totalLiability) }}</strong>
         </div>
       </div>
+      <div v-else class="financial-context-note financial-context-note-na">
+        <Info :size="15" aria-hidden="true" />
+        <span>{{ industryLabel(financialQuality.industry) }}不使用通用自由现金流、利息覆盖和现金比率阈值；请结合上方行业专用指标、股东回报和股本事件核对。</span>
+      </div>
       <p class="financial-context-note">
-        这些指标用于判断现金流和偿债韧性；资本开支、回购和分红支付率已在股东回报区域独立展示，不进入价值质量总分。
+        {{ genericMetricApplicable(financialQuality) ? '这些指标用于判断现金流和偿债韧性；资本开支、回购和分红支付率已在股东回报区域独立展示，不进入价值质量总分。' : '行业专用指标与通用现金流韧性分开保存，避免把金融机构的业务结构误判为普通公司的数据缺口。' }}
       </p>
     </div>
   </section>

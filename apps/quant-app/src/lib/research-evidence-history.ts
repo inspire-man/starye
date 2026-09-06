@@ -82,6 +82,7 @@ function compareEvidence(previous: QuantResearchEvidence | null, current: QuantR
   const previousValue = previous?.status === 'missing' ? null : finite(previous?.value ?? null)
   const currentValue = current?.status === 'missing' ? null : finite(current?.value ?? null)
   const provenanceChanged = Boolean(previous && current && (previous.source !== current.source || previous.formulaVersion !== current.formulaVersion))
+  const applicabilityChanged = Boolean(previous && current && previous.applicability !== current.applicability)
   const valueDelta = !provenanceChanged && previousValue !== null && currentValue !== null ? round(currentValue - previousValue) : null
   const direction: ResearchEvidenceValueDirection = valueDelta === null ? 'none' : valueDelta > 0 ? 'up' : valueDelta < 0 ? 'down' : 'flat'
   let kind: ResearchEvidenceChangeKind
@@ -90,6 +91,8 @@ function compareEvidence(previous: QuantResearchEvidence | null, current: QuantR
     kind = 'added'
   else if (previous && !current)
     kind = 'removed'
+  else if (previous && current && (previous.applicability === 'not_applicable' || current.applicability === 'not_applicable'))
+    kind = applicabilityChanged || provenanceChanged ? 'incomparable' : 'unchanged'
   else if (previous?.status === 'missing' && current?.status === 'missing')
     kind = 'persistent-missing'
   else if (previous?.status === 'missing' && current?.status !== 'missing')

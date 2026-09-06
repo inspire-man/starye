@@ -1,6 +1,6 @@
 import type { TushareProviderError } from '../provider'
 import { describe, expect, it, vi } from 'vitest'
-import { createEastmoneyCapitalStructureProvider, createEastmoneyCashflowProvider, createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyMarketQuoteProvider, createEastmoneyProvider, createEastmoneyRepurchaseProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createQuantDividendProviderChain, createTushareDividendProvider, createTushareProvider, createTushareStockBasicProvider, resolveQuantProviderName } from '../provider'
+import { createEastmoneyCapitalStructureProvider, createEastmoneyCashflowProvider, createEastmoneyDividendProvider, createEastmoneyFinancialProvider, createEastmoneyMarketQuoteProvider, createEastmoneyProvider, createEastmoneyRepurchaseProvider, createEastmoneyStockBasicProvider, createEastmoneyValuationProvider, createQuantCashflowProviderChain, createQuantDividendProviderChain, createQuantFinancialProviderChain, createTushareCashflowProvider, createTushareDividendProvider, createTushareFinancialProvider, createTushareProvider, createTushareStockBasicProvider, resolveQuantProviderName } from '../provider'
 
 describe('quant daily providers', () => {
   it('normalizes the declared daily response and keeps the token server-side', async () => {
@@ -150,6 +150,58 @@ describe('quant daily providers', () => {
     expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('f162')
   })
 
+  it('fills missing PEG from the daily valuation detail endpoint without overwriting primary fields', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString())
+      if (url.pathname === '/api/qt/stock/get') {
+        return new Response(JSON.stringify({
+          rc: 0,
+          data: {
+            f57: '601899',
+            f162: 11.79,
+            f163: 17.84,
+            f164: 13.65,
+            f165: 2.46,
+            f166: 9.05,
+            f168: null,
+            f116: 923761425968.28,
+          },
+        }), { status: 200 })
+      }
+      return new Response(JSON.stringify({
+        code: 0,
+        result: {
+          data: [{
+            SECUCODE: '601899.SH',
+            SECURITY_CODE: '601899',
+            PE_TTM: 13.1,
+            PE_LAR: 18.2,
+            PB_MRQ: 3.4,
+            PS_TTM: 2.2,
+            PEG_CAR: 0.187,
+            TOTAL_MARKET_CAP: 999,
+            TRADE_DATE: '2026-09-04 00:00:00',
+          }],
+        },
+      }), { status: 200 })
+    })
+    const provider = createEastmoneyValuationProvider({ fetchImpl })
+
+    await expect(provider.fetchValuation({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      dynamicPe: 11.79,
+      peTtm: 17.84,
+      peStatic: 13.65,
+      pb: 2.46,
+      ps: 9.05,
+      peg: 0.187,
+      marketCap: 923761425968.28,
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    const supplementUrl = new URL(String(fetchImpl.mock.calls[1]?.[0]))
+    expect(supplementUrl.searchParams.get('reportName')).toBe('RPT_VALUEANALYSIS_DET')
+    expect(supplementUrl.searchParams.get('columns')).toBe('SECUCODE,SECURITY_CODE,PE_TTM,PE_LAR,PB_MRQ,PS_TTM,PEG_CAR,TOTAL_MARKET_CAP,TRADE_DATE')
+  })
+
   it('fails closed when Eastmoney valuation has no stock body', async () => {
     const provider = createEastmoneyValuationProvider({
       fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ rc: 0, data: null }), { status: 200 })),
@@ -210,7 +262,16 @@ describe('quant daily providers', () => {
   it('maps Eastmoney valuation requests to SH, SZ, and BJ markets', async () => {
     const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
       const code = new URL(input.toString()).searchParams.get('secid')?.split('.')[1] || ''
-      return new Response(JSON.stringify({ rc: 0, data: { f57: code } }), { status: 200 })
+      return new Response(JSON.stringify({ rc: 0, data: {
+        f57: code,
+        f162: 11,
+        f163: 12,
+        f164: 13,
+        f165: 1,
+        f166: 2,
+        f168: 0.8,
+        f116: 100,
+      } }), { status: 200 })
     })
     const provider = createEastmoneyValuationProvider({ fetchImpl })
 
@@ -302,6 +363,7 @@ describe('quant daily providers', () => {
     await expect(provider.fetchFinancialQuality({ tsCode: '601899.SH' })).resolves.toEqual({
       tsCode: '601899.SH',
       observedAt: '2026-08-23T00:00:00.000Z',
+      provider: 'eastmoney',
       reportDate: '2026-06-30',
       reportType: '中报',
       reportDateName: '2026中报',
@@ -329,6 +391,47 @@ describe('quant daily providers', () => {
     expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('code=SH601899')
   })
 
+  it('preserves industry-specific insurance and bank financial metrics', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const code = new URL(input.toString()).searchParams.get('code') || ''
+      const isInsurance = code === 'SH601318'
+      return new Response(JSON.stringify({
+        data: [{
+          SECURITY_CODE: code.slice(2),
+          ORG_TYPE: isInsurance ? '保险' : '银行',
+          REPORT_DATE: '2026-06-30 00:00:00',
+          ROEJQ: 9,
+          XSJLL: 18,
+          ZCFZL: 89,
+          SOLVENCY_AR: isInsurance ? 198.1 : null,
+          NET_ROI: isInsurance ? 2.8 : null,
+          NBV_RATE: isInsurance ? 29 : null,
+          FIRST_ADEQUACY_RATIO: isInsurance ? null : 10.95,
+          NET_INTEREST_MARGIN: isInsurance ? null : 1.8,
+          LOAN_PROVISION_RATIO: isInsurance ? null : 2.3,
+        }],
+      }), { status: 200 })
+    })
+    const provider = createEastmoneyFinancialProvider({ fetchImpl })
+
+    await expect(provider.fetchFinancialQuality({ tsCode: '601318.SH' })).resolves.toMatchObject({
+      industry: 'insurance',
+      industryMetrics: {
+        insuranceSolvencyRatio: 198.1,
+        insuranceNetInvestmentReturn: 2.8,
+        insuranceNewBusinessValueRate: 29,
+      },
+    })
+    await expect(provider.fetchFinancialQuality({ tsCode: '000001.SZ' })).resolves.toMatchObject({
+      industry: 'bank',
+      industryMetrics: {
+        bankCoreTier1CapitalAdequacyRatio: 10.95,
+        bankNetInterestMargin: 1.8,
+        bankLoanProvisionRatio: 2.3,
+      },
+    })
+  })
+
   it('returns recent Eastmoney financial reports in descending report-date order', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       data: [
@@ -342,6 +445,156 @@ describe('quant daily providers', () => {
       { reportDate: '2026-06-30', reportType: '中报' },
       { reportDate: '2025-12-31', reportType: '年报' },
     ])
+  })
+
+  it('normalizes Tushare fina_indicator reports for financial source expansion', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      code: 0,
+      data: {
+        fields: ['ts_code', 'ann_date', 'end_date', 'roe', 'grossprofit_margin', 'netprofit_margin', 'debt_to_assets', 'ocf_to_or', 'ocfps', 'fcff', 'roic', 'cash_ratio', 'q_sales_yoy', 'q_profit_yoy'],
+        items: [['601899.SH', '20260830', '20260630', 12.5, 24.2, 10.1, 45.3, 8.2, 1.2, 100, 9.4, 1.1, 15.5, 18.2]],
+      },
+    }), { status: 200 }))
+    const provider = createTushareFinancialProvider({
+      token: 'SERVER_TOKEN',
+      fetchImpl,
+      now: () => new Date('2026-09-06T00:00:00.000Z'),
+    })
+
+    await expect(provider.fetchFinancialQuality({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      tsCode: '601899.SH',
+      provider: 'tushare',
+      observedAt: '2026-09-06T00:00:00.000Z',
+      reportDate: '2026-06-30',
+      noticeDate: '2026-08-30',
+      revenueYoY: 15.5,
+      netProfitYoY: 18.2,
+      grossMargin: 24.2,
+      debtAssetRatio: 45.3,
+    })
+    const request = JSON.parse(String((fetchImpl.mock.calls[0]?.[1] as RequestInit).body)) as { api_name: string, fields: string }
+    expect(request).toMatchObject({ api_name: 'fina_indicator', token: 'SERVER_TOKEN' })
+    expect(request.fields).toContain('grossprofit_margin')
+  })
+
+  it('supplements missing Eastmoney financial fields with the matching Tushare report', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      if (String(input) === 'https://tushare.fixture.test') {
+        return new Response(JSON.stringify({
+          code: 0,
+          data: {
+            fields: ['ts_code', 'ann_date', 'end_date', 'grossprofit_margin', 'cash_ratio'],
+            items: [['601899.SH', '20260830', '20260630', 24.2, 1.1]],
+          },
+        }), { status: 200 })
+      }
+      return new Response(JSON.stringify({
+        data: [{
+          SECURITY_CODE: '601899',
+          REPORT_DATE: '2026-06-30 00:00:00',
+          ROEJQ: 19.6,
+          XSMLL: null,
+          CASH_RATIO: null,
+        }],
+      }), { status: 200 })
+    })
+    const eastmoney = createEastmoneyFinancialProvider({ fetchImpl, now: () => new Date('2026-09-06T00:00:00.000Z') })
+    const tushare = createTushareFinancialProvider({ token: 'SERVER_TOKEN', baseUrl: 'https://tushare.fixture.test', fetchImpl, now: () => new Date('2026-09-06T00:00:00.000Z') })
+    const provider = createQuantFinancialProviderChain(eastmoney, tushare)
+
+    await expect(provider.fetchFinancialQuality({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      provider: 'eastmoney',
+      supplementalProvider: 'tushare',
+      supplementUsed: true,
+      roe: 19.6,
+      grossMargin: 24.2,
+      cashRatio: 1.1,
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('falls back to Tushare when the Eastmoney financial provider fails completely', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      if (String(input) === 'https://tushare.fixture.test') {
+        return new Response(JSON.stringify({
+          code: 0,
+          data: {
+            fields: ['ts_code', 'ann_date', 'end_date', 'roe'],
+            items: [['601899.SH', '20260830', '20260630', 12.5]],
+          },
+        }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ data: null }), { status: 200 })
+    })
+    const eastmoney = createEastmoneyFinancialProvider({ fetchImpl })
+    const tushare = createTushareFinancialProvider({ token: 'SERVER_TOKEN', baseUrl: 'https://tushare.fixture.test', fetchImpl })
+    const provider = createQuantFinancialProviderChain(eastmoney, tushare)
+
+    await expect(provider.fetchFinancialQuality({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      provider: 'tushare',
+      fallbackUsed: true,
+      fallbackReason: 'QUANT_PROVIDER_INVALID_RESPONSE',
+      roe: 12.5,
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('normalizes Tushare cashflow rows without inferring dividends, interest, or debt', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      code: 0,
+      data: {
+        fields: ['ts_code', 'ann_date', 'end_date', 'net_profit', 'n_cashflow_act', 'c_pay_acq_const_fiolta'],
+        items: [['601318.SH', '20260821', '20260630', 92585000000, 40000000000, 12000000000]],
+      },
+    }), { status: 200 }))
+    const provider = createTushareCashflowProvider({
+      token: 'SERVER_TOKEN',
+      fetchImpl,
+      now: () => new Date('2026-09-06T00:00:00.000Z'),
+    })
+
+    await expect(provider.fetchCashflowHistory({ tsCode: '601318.SH', limit: 2 })).resolves.toMatchObject([{
+      tsCode: '601318.SH',
+      provider: 'tushare',
+      reportDate: '2026-06-30',
+      noticeDate: '2026-08-21',
+      operatingCashflow: 40000000000,
+      capitalExpenditure: 12000000000,
+      netProfit: 92585000000,
+      cashDividendsPaid: null,
+      interestExpense: null,
+      interestBearingDebt: null,
+    }])
+    const request = JSON.parse(String((fetchImpl.mock.calls[0]?.[1] as RequestInit).body)) as { api_name: string, fields: string }
+    expect(request).toMatchObject({ api_name: 'cashflow', token: 'SERVER_TOKEN' })
+    expect(request.fields).toContain('c_pay_acq_const_fiolta')
+  })
+
+  it('uses Tushare cashflow when Eastmoney returns a valid empty history', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      if (String(input) === 'https://tushare.fixture.test') {
+        return new Response(JSON.stringify({
+          code: 0,
+          data: {
+            fields: ['ts_code', 'ann_date', 'end_date', 'n_cashflow_act', 'c_pay_acq_const_fiolta'],
+            items: [['601318.SH', '20260821', '20260630', 400, 120]],
+          },
+        }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ data: [] }), { status: 200 })
+    })
+    const eastmoney = createEastmoneyCashflowProvider({ fetchImpl })
+    const tushare = createTushareCashflowProvider({ token: 'SERVER_TOKEN', baseUrl: 'https://tushare.fixture.test', fetchImpl })
+    const provider = createQuantCashflowProviderChain(eastmoney, tushare)
+
+    await expect(provider.fetchCashflowHistory({ tsCode: '601318.SH', limit: 2 })).resolves.toMatchObject([{
+      provider: 'tushare',
+      fallbackUsed: true,
+      fallbackReason: 'QUANT_PROVIDER_EMPTY',
+      operatingCashflow: 400,
+      capitalExpenditure: 120,
+    }])
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
 
   it('normalizes Eastmoney cashflow reports and sends the report-date window', async () => {
@@ -432,6 +685,7 @@ describe('quant daily providers', () => {
     await expect(provider.fetchCashflowHistory({ tsCode: '601899.SH', limit: 2 })).resolves.toEqual([
       {
         tsCode: '601899.SH',
+        provider: 'eastmoney',
         reportDate: '2026-06-30',
         reportType: '中报',
         reportDateName: '2026中报',
@@ -464,6 +718,7 @@ describe('quant daily providers', () => {
       },
       {
         tsCode: '601899.SH',
+        provider: 'eastmoney',
         reportDate: '2025-12-31',
         reportType: '年报',
         reportDateName: '2025年报',
@@ -537,6 +792,14 @@ describe('quant daily providers', () => {
     const provider = createEastmoneyCashflowProvider({ fetchImpl })
 
     await expect(provider.fetchCashflowHistory({ tsCode: '601899.SH' })).resolves.toEqual([])
+    expect(fetchImpl).toHaveBeenCalledOnce()
+  })
+
+  it('treats an Eastmoney null cashflow-date response as insufficient history', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('null', { status: 200 }))
+    const provider = createEastmoneyCashflowProvider({ fetchImpl })
+
+    await expect(provider.fetchCashflowHistory({ tsCode: '601318.SH' })).resolves.toEqual([])
     expect(fetchImpl).toHaveBeenCalledOnce()
   })
 

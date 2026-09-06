@@ -85,6 +85,19 @@ describe('research evidence history', () => {
     expect(result?.changedCount).toBe(13)
   })
 
+  it('does not classify an industry-inapplicable metric as a missing transition', () => {
+    const previous = report([evidence('generic-cashflow', 'pass', 12)])
+    const current = report([{
+      ...evidence('generic-cashflow', 'missing', null, 'financial-report'),
+      applicability: 'not_applicable',
+    }])
+
+    const result = buildResearchEvidenceComparison(current, previous)
+
+    expect(result?.items[0]).toMatchObject({ key: 'generic-cashflow', kind: 'incomparable', kindLabel: '口径变化' })
+    expect(result).toMatchObject({ changedCount: 1, missingCount: 0, weakenedCount: 0 })
+  })
+
   it('returns no comparison until two reports exist', () => {
     expect(buildResearchEvidenceComparison(report([]), null)).toBeNull()
   })

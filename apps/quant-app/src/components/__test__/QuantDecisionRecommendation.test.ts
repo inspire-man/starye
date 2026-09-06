@@ -257,7 +257,7 @@ describe('quant decision recommendation', () => {
             factors: [{
               ...base.factorModel!.factors[0]!,
               status: 'partial',
-              source: 'Eastmoney 财务，回退链：备用来源',
+              source: 'Eastmoney 财务，回退链：备用来源，主源失败：QUANT_PROVIDER_QUOTA',
               evidenceKeys: ['trend-sample', 'quality-cashflow'],
               missingEvidenceKeys: ['quality-cashflow'],
             }],
@@ -277,6 +277,29 @@ describe('quant decision recommendation', () => {
     expect(refreshEvidence).toHaveBeenCalledWith('quality-cashflow')
     expect(wrapper.text()).toContain('看多')
     expect(wrapper.text()).toContain('10.00 - 11.00 元')
+  })
+
+  it('keeps finite failed evidence complete and does not offer a refresh action', () => {
+    const base = report()
+    const wrapper = mount(QuantDecisionRecommendation, {
+      props: {
+        report: {
+          ...base,
+          evidence: [{
+            ...base.evidence[0]!,
+            status: 'fail',
+            value: -5,
+            detail: '趋势未达到门槛。',
+          }],
+        },
+        summary: null,
+      },
+    })
+
+    expect(wrapper.text()).toContain('字段完整')
+    expect(wrapper.text()).toContain('证据 1 / 1 可用')
+    expect(wrapper.text()).toContain('失败证据：日线样本')
+    expect(wrapper.find('.quant-factor-data-health-refresh-button').exists()).toBe(false)
   })
 
   it('offers a source retry when a factor is unavailable despite having an evidence key', async () => {

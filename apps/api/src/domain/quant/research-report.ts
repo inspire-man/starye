@@ -26,6 +26,7 @@ export interface QuantResearchEvidence {
   readonly formulaVersion: string
   readonly detail: string
   readonly optional?: boolean
+  readonly applicability?: 'applicable' | 'not_applicable'
 }
 
 export interface QuantResearchSource {
@@ -102,6 +103,34 @@ function statusForValue(value: number | null, pass: (value: number) => boolean, 
   return caution?.(value) ? 'caution' : 'fail'
 }
 
+function financialIndustry(input: QuantResearchReportInput): 'general' | 'bank' | 'insurance' | 'securities' | 'other' {
+  return input.financialReports[0]?.industry ?? 'general'
+}
+
+function financialIndustryLabel(industry: ReturnType<typeof financialIndustry>): string {
+  return industry === 'insurance' ? '保险' : industry === 'bank' ? '银行' : industry === 'securities' ? '证券' : industry === 'other' ? '专用行业' : '通用行业'
+}
+
+function genericFinancialMetricApplicable(input: QuantResearchReportInput): boolean {
+  return financialIndustry(input) === 'general'
+}
+
+function financialSourceFor(report: QuantFinancialQualitySnapshot | null, errorCode: string | null = null): { readonly id: string, readonly name: string, readonly formulaVersion: string } {
+  const primaryProvider = report?.provider === 'tushare' ? 'Tushare' : 'Eastmoney'
+  const primaryId = report?.provider === 'tushare' ? 'tushare-financial' : 'eastmoney-financial'
+  const primaryFormulaVersion = report?.provider === 'tushare' ? 'tushare-fina-indicator-v1' : 'eastmoney-financial-v1'
+  const supplement = report?.supplementUsed && report.supplementalProvider
+    ? `，字段补充：${report.supplementalProvider === 'tushare' ? 'Tushare' : 'Eastmoney'}`
+    : ''
+  const fallback = report?.fallbackUsed && report.fallbackReason ? `，主源回退：${report.fallbackReason}` : ''
+  const unavailable = !report && errorCode ? `，来源不可用：${errorCode}` : ''
+  return {
+    id: primaryId,
+    name: `${primaryProvider} 财务报告${supplement}${fallback}${unavailable}`,
+    formulaVersion: primaryFormulaVersion,
+  }
+}
+
 function compactDate(value: string | null | undefined): string | null {
   const normalized = value?.trim()
   return normalized ? normalized.replace(/-/gu, '').slice(0, 8) : null
@@ -129,7 +158,7 @@ function withAkshareCrossSourceCheck(item: QuantResearchEvidence, latestFinancia
     return {
       ...item,
       status: item.status === 'fail' ? 'fail' : 'caution',
-      detail: `${item.detail}；与 Eastmoney 报告期不同（AkShare ${bridgeDate}，Eastmoney ${existingDate}），仅供交叉核对`,
+      detail: `${item.detail}；与 ${financialSourceFor(latestFinancial).name} 报告期不同（AkShare ${bridgeDate}，${financialSourceFor(latestFinancial).name} ${existingDate}），仅供交叉核对`,
     }
   }
 
@@ -157,33 +186,39 @@ function shareholderDividendSource(item: QuantShareholderReturnItem | null): { r
   const providerId = item?.provider === 'eastmoney' ? 'eastmoney-dividend' : item?.provider === 'tushare' ? 'tushare-dividend' : 'quant-dividend-provider'
   const chain = item?.providerChain?.length ? `，回退链：${item.providerChain.join(' -> ')}` : ''
   const reason = item?.fallbackUsed && item.fallbackReason ? `，主源失败：${item.fallbackReason}` : ''
+  const unavailable = item?.providerErrorCode && !item.provider ? `，来源不可用：${item.providerErrorCode}` : ''
   return {
     id: providerId,
-    name: `${providerLabel} 实施分红${chain}${reason}`,
+    name: `${providerLabel} 实施分红${chain}${reason}${unavailable}`,
   }
 }
 
 function shareholderCashflowSource(item: QuantShareholderReturnItem | null): { readonly id: string, readonly name: string } {
   const provider = item?.cashflowEvidence?.provider === 'tushare' ? 'Tushare' : item?.cashflowEvidence?.provider === 'eastmoney' ? 'Eastmoney' : 'Quant'
+  const unavailable = item?.cashflowEvidence?.providerErrorCode ? `，来源不可用：${item.cashflowEvidence.providerErrorCode}` : ''
+  const supplement = item?.cashflowEvidence?.supplementalProvider ? `，字段补充：${item.cashflowEvidence.supplementalProvider === 'tushare' ? 'Tushare' : 'Eastmoney'}` : ''
+  const fallback = item?.cashflowEvidence?.fallbackUsed && item.cashflowEvidence.fallbackReason ? `，主源回退：${item.cashflowEvidence.fallbackReason}` : ''
   return {
-    id: item?.cashflowEvidence?.provider === 'eastmoney' ? 'eastmoney-cashflow' : 'quant-cashflow-provider',
-    name: `${provider} 现金流量表`,
+    id: item?.cashflowEvidence?.provider === 'tushare' ? 'tushare-cashflow' : item?.cashflowEvidence?.provider === 'eastmoney' ? 'eastmoney-cashflow' : 'quant-cashflow-provider',
+    name: `${provider} 现金流量表${supplement}${fallback}${unavailable}`,
   }
 }
 
 function shareholderCapitalSource(item: QuantShareholderReturnItem | null): { readonly id: string, readonly name: string } {
   const provider = item?.capitalStructureEvidence?.provider === 'tushare' ? 'Tushare' : item?.capitalStructureEvidence?.provider === 'eastmoney' ? 'Eastmoney' : 'Quant'
+  const unavailable = item?.capitalStructureEvidence?.providerErrorCode ? `，来源不可用：${item.capitalStructureEvidence.providerErrorCode}` : ''
   return {
     id: item?.capitalStructureEvidence?.provider === 'eastmoney' ? 'eastmoney-capital-structure' : 'quant-capital-structure-provider',
-    name: `${provider} 股本结构`,
+    name: `${provider} 股本结构${unavailable}`,
   }
 }
 
 function shareholderRepurchaseSource(item: QuantShareholderReturnItem | null): { readonly id: string, readonly name: string } {
   const provider = item?.repurchaseEvidence?.provider === 'tushare' ? 'Tushare' : item?.repurchaseEvidence?.provider === 'eastmoney' ? 'Eastmoney' : 'Quant'
+  const unavailable = item?.repurchaseEvidence?.providerErrorCode ? `，来源不可用：${item.repurchaseEvidence.providerErrorCode}` : ''
   return {
     id: item?.repurchaseEvidence?.provider === 'eastmoney' ? 'eastmoney-repurchase' : 'quant-repurchase-provider',
-    name: `${provider} 回购计划`,
+    name: `${provider} 回购计划${unavailable}`,
   }
 }
 
@@ -205,12 +240,22 @@ function buildSources(input: QuantResearchReportInput, latestTradeDate: string |
     })
   }
   if (input.financialReports.length || input.financialErrorCode) {
+    const source = financialSourceFor(input.financialReports[0] ?? null, input.financialErrorCode ?? null)
     sources.push({
-      id: 'eastmoney-financial',
-      name: 'Eastmoney 财务报告',
+      id: source.id,
+      name: source.name,
       observedAt: input.financialReports[0]?.observedAt ?? null,
-      formulaVersion: 'eastmoney-financial-v1',
+      formulaVersion: source.formulaVersion,
     })
+    const supplementalProvider = input.financialReports[0]?.supplementalProvider
+    if (input.financialReports[0]?.supplementUsed && supplementalProvider) {
+      sources.push({
+        id: supplementalProvider === 'tushare' ? 'tushare-financial-supplement' : 'eastmoney-financial-supplement',
+        name: `${supplementalProvider === 'tushare' ? 'Tushare' : 'Eastmoney'} 财务字段补充`,
+        observedAt: input.financialReports[0]?.observedAt ?? null,
+        formulaVersion: supplementalProvider === 'tushare' ? 'tushare-fina-indicator-v1' : 'eastmoney-financial-v1',
+      })
+    }
   }
   if (input.shareholderReturn) {
     const source = shareholderDividendSource(input.shareholderReturn)
@@ -221,7 +266,7 @@ function buildSources(input: QuantResearchReportInput, latestTradeDate: string |
       formulaVersion: input.shareholderReturn.formulaVersion,
     })
   }
-  if (input.shareholderReturn?.cashflowEvidence) {
+  if (input.shareholderReturn?.cashflowEvidence && genericFinancialMetricApplicable(input)) {
     const source = shareholderCashflowSource(input.shareholderReturn)
     sources.push({
       id: source.id,
@@ -265,6 +310,9 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
   const candidate = input.candidate
   const latestTradeDate = latest?.tradeDate ?? null
   const latestFinancial = input.financialReports[0] ?? null
+  const financialSource = financialSourceFor(latestFinancial, input.financialErrorCode ?? null)
+  const valuationSource = input.valuationErrorCode ? `Eastmoney 估值（来源不可用：${input.valuationErrorCode}）` : 'Eastmoney 估值'
+  const genericMetricApplicable = genericFinancialMetricApplicable(input)
   const evidenceItems: QuantResearchEvidence[] = []
 
   evidenceItems.push(evidence({
@@ -317,7 +365,7 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     status: statusForValue(peTtm, value => value > 0),
     value: peTtm,
     threshold: '有效且大于 0；需结合行业比较',
-    source: 'Eastmoney 估值',
+    source: valuationSource,
     observedAt: input.valuation?.observedAt ?? null,
     formulaVersion: 'eastmoney-valuation-v1',
     detail: peTtm !== null && peTtm > 0 ? '已有当前估值值，仍需结合行业与历史区间' : input.valuationErrorCode ? `估值读取失败（${input.valuationErrorCode}）` : '缺少有效 TTM PE',
@@ -329,7 +377,7 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     status: statusForValue(pb, value => value > 0),
     value: pb,
     threshold: '有效且大于 0；需结合资产质量',
-    source: 'Eastmoney 估值',
+    source: valuationSource,
     observedAt: input.valuation?.observedAt ?? null,
     formulaVersion: 'eastmoney-valuation-v1',
     detail: pb !== null && pb > 0 ? '已有当前 PB，不能单独证明低估' : '缺少有效 PB',
@@ -343,7 +391,7 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     status: statusForValue(ps, value => value > 0),
     value: ps,
     threshold: '有效且大于 0；需结合行业比较',
-    source: 'Eastmoney 估值',
+    source: valuationSource,
     observedAt: input.valuation?.observedAt ?? null,
     formulaVersion: 'eastmoney-valuation-v1',
     detail: ps !== null && ps > 0 ? '已有当前 PS，仍需结合行业与历史区间' : '缺少有效 PS',
@@ -356,10 +404,14 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     status: statusForValue(peg, value => value > 0),
     value: peg,
     threshold: '有效且大于 0；需结合增长口径比较',
-    source: 'Eastmoney 估值',
+    source: valuationSource,
     observedAt: input.valuation?.observedAt ?? null,
     formulaVersion: 'eastmoney-valuation-v1',
-    detail: peg !== null && peg > 0 ? '已有当前 PEG，仍需核对增长口径' : '缺少有效 PEG',
+    detail: peg === null
+      ? '缺少有效 PEG'
+      : peg > 0
+        ? '已有当前 PEG，仍需核对增长口径'
+        : 'PEG 为负，增长口径不满足正值比较，仅保留源站原始值，不触发刷新',
     optional: true,
   }))
 
@@ -378,9 +430,9 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     status: statusForValue(revenueYoY, value => value >= 0, value => value >= -10),
     value: revenueYoY,
     threshold: '不低于 0%，低于 -10% 为未通过',
-    source: 'Eastmoney 最新财报',
+    source: financialSource.name,
     observedAt: latestFinancial?.reportDate ?? null,
-    formulaVersion: 'eastmoney-financial-v1',
+    formulaVersion: financialSource.formulaVersion,
     detail: revenueYoY !== null && revenueYoY >= 0 ? '最新报告期营收方向未转负' : '营收同比需要进一步核对',
   }))
   evidenceItems.push(evidence({
@@ -390,9 +442,9 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     status: statusForValue(netProfitYoY, value => value >= 0),
     value: netProfitYoY,
     threshold: '不低于 0%',
-    source: 'Eastmoney 最新财报',
+    source: financialSource.name,
     observedAt: latestFinancial?.reportDate ?? null,
-    formulaVersion: 'eastmoney-financial-v1',
+    formulaVersion: financialSource.formulaVersion,
     detail: netProfitYoY !== null && netProfitYoY >= 0 ? '最新报告期利润方向未转负' : '利润同比需要进一步核对',
   }))
   evidenceItems.push(evidence({
@@ -402,9 +454,9 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     status: statusForValue(adjustedNetProfitYoY, value => value >= 0, value => value >= -10),
     value: adjustedNetProfitYoY,
     threshold: '不低于 0%，低于 -10% 为未通过',
-    source: 'Eastmoney 最新财报',
+    source: financialSource.name,
     observedAt: latestFinancial?.reportDate ?? null,
-    formulaVersion: 'eastmoney-financial-v1',
+    formulaVersion: financialSource.formulaVersion,
     detail: adjustedNetProfitYoY !== null && adjustedNetProfitYoY >= 0 ? '扣非利润方向未转负' : '扣非利润同比需要进一步核对',
   }))
   evidenceItems.push(evidence({
@@ -414,9 +466,9 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     status: statusForValue(roe, value => value >= 10, value => value >= 0),
     value: roe,
     threshold: '至少 10%',
-    source: 'Eastmoney 最新财报',
+    source: financialSource.name,
     observedAt: latestFinancial?.reportDate ?? null,
-    formulaVersion: 'eastmoney-financial-v1',
+    formulaVersion: financialSource.formulaVersion,
     detail: roe !== null && roe >= 10 ? '资本回报达到研究门槛' : '资本回报仍需核对持续性',
   }))
   evidenceItems.push(evidence({
@@ -426,10 +478,13 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     status: statusForValue(grossMargin, value => value > 0),
     value: grossMargin,
     threshold: '有效且大于 0%',
-    source: 'Eastmoney 最新财报',
+    source: financialSource.name,
     observedAt: latestFinancial?.reportDate ?? null,
-    formulaVersion: 'eastmoney-financial-v1',
-    detail: grossMargin !== null && grossMargin > 0 ? '毛利率为正，可继续核对稳定性' : '缺少有效毛利率',
+    formulaVersion: financialSource.formulaVersion,
+    detail: !genericMetricApplicable
+      ? `${financialIndustry(input) === 'insurance' ? '保险' : financialIndustry(input) === 'bank' ? '银行' : '该行业'}财报不适用通用毛利率，使用行业专用指标核对`
+      : grossMargin !== null && grossMargin > 0 ? '毛利率为正，可继续核对稳定性' : '缺少有效毛利率',
+    ...(genericMetricApplicable ? {} : { applicability: 'not_applicable' as const, value: null }),
   }))
   evidenceItems.push(evidence({
     key: 'quality-net-margin',
@@ -438,35 +493,131 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     status: statusForValue(netMargin, value => value > 0),
     value: netMargin,
     threshold: '有效且大于 0%',
-    source: 'Eastmoney 最新财报',
+    source: financialSource.name,
     observedAt: latestFinancial?.reportDate ?? null,
-    formulaVersion: 'eastmoney-financial-v1',
+    formulaVersion: financialSource.formulaVersion,
     detail: netMargin !== null && netMargin > 0 ? '净利率为正，可继续核对稳定性' : '缺少有效净利率',
   }))
   evidenceItems.push(evidence({
     key: 'quality-cashflow',
     dimension: 'quality',
     label: '经营现金流 / 营收',
-    status: statusForValue(cashflowToRevenue, value => value >= 0),
-    value: cashflowToRevenue,
+    status: genericMetricApplicable ? statusForValue(cashflowToRevenue, value => value >= 0) : 'missing',
+    value: genericMetricApplicable ? cashflowToRevenue : null,
     threshold: '不低于 0%',
-    source: 'Eastmoney 最新财报',
+    source: financialSource.name,
     observedAt: latestFinancial?.reportDate ?? null,
-    formulaVersion: 'eastmoney-financial-v1',
-    detail: cashflowToRevenue !== null && cashflowToRevenue >= 0 ? '经营现金流未低于 0' : '利润需要现金流复核',
+    formulaVersion: financialSource.formulaVersion,
+    detail: genericMetricApplicable
+      ? cashflowToRevenue !== null && cashflowToRevenue >= 0 ? '经营现金流未低于 0' : '利润需要现金流复核'
+      : `${financialIndustry(input) === 'insurance' ? '保险' : financialIndustry(input) === 'bank' ? '银行' : '该行业'}不使用通用经营现金流 / 营收阈值，改看行业专用指标`,
+    ...(genericMetricApplicable ? {} : { applicability: 'not_applicable' as const }),
   }))
   evidenceItems.push(evidence({
     key: 'quality-debt-asset',
     dimension: 'quality',
     label: '资产负债率',
-    status: statusForValue(debtAssetRatio, value => value <= 60, value => value <= 75),
+    status: genericMetricApplicable ? statusForValue(debtAssetRatio, value => value <= 60, value => value <= 75) : 'missing',
     value: debtAssetRatio,
     threshold: '不高于 60%，高于 75% 为未通过',
-    source: 'Eastmoney 最新财报',
+    source: financialSource.name,
     observedAt: latestFinancial?.reportDate ?? null,
-    formulaVersion: 'eastmoney-financial-v1',
-    detail: debtAssetRatio !== null && debtAssetRatio <= 60 ? '资产负债率处于当前研究门槛内' : '资产负债率需要结合行业结构核对',
+    formulaVersion: financialSource.formulaVersion,
+    detail: !genericMetricApplicable
+      ? `${financialIndustry(input) === 'insurance' ? '保险' : financialIndustry(input) === 'bank' ? '银行' : '该行业'}资产负债率受业务结构影响，不使用通用阈值`
+      : debtAssetRatio !== null && debtAssetRatio <= 60 ? '资产负债率处于当前研究门槛内' : '资产负债率需要结合行业结构核对',
+    ...(genericMetricApplicable ? {} : { applicability: 'not_applicable' as const, value: null }),
   }))
+
+  const industryMetrics = latestFinancial?.industryMetrics
+  if (financialIndustry(input) === 'insurance') {
+    const solvencyRatio = finite(industryMetrics?.insuranceSolvencyRatio)
+    const netInvestmentReturn = finite(industryMetrics?.insuranceNetInvestmentReturn)
+    const newBusinessValueRate = finite(industryMetrics?.insuranceNewBusinessValueRate)
+    evidenceItems.push(evidence({
+      key: 'quality-insurance-solvency',
+      dimension: 'quality',
+      label: '偿付能力充足率',
+      status: statusForValue(solvencyRatio, value => value >= 100, value => value >= 100),
+      value: solvencyRatio,
+      threshold: '至少 100%；行业监管口径',
+      source: `${financialSource.name} · 保险专用指标`,
+      observedAt: latestFinancial?.reportDate ?? null,
+      formulaVersion: financialSource.formulaVersion,
+      detail: solvencyRatio === null ? '保险专用偿付能力指标未返回' : `偿付能力充足率 ${solvencyRatio.toFixed(2)}%`,
+      optional: true,
+    }))
+    evidenceItems.push(evidence({
+      key: 'quality-insurance-net-investment-return',
+      dimension: 'quality',
+      label: '净投资收益率',
+      status: statusForValue(netInvestmentReturn, value => value >= 0, value => value >= 0),
+      value: netInvestmentReturn,
+      threshold: '不低于 0%；保险投资收益口径',
+      source: `${financialSource.name} · 保险专用指标`,
+      observedAt: latestFinancial?.reportDate ?? null,
+      formulaVersion: financialSource.formulaVersion,
+      detail: netInvestmentReturn === null ? '保险专用净投资收益率未返回' : `净投资收益率 ${netInvestmentReturn.toFixed(2)}%`,
+      optional: true,
+    }))
+    evidenceItems.push(evidence({
+      key: 'quality-insurance-new-business-value',
+      dimension: 'quality',
+      label: '新业务价值率',
+      status: statusForValue(newBusinessValueRate, value => value >= 0, value => value >= 0),
+      value: newBusinessValueRate,
+      threshold: '保险新业务价值专用口径',
+      source: `${financialSource.name} · 保险专用指标`,
+      observedAt: latestFinancial?.reportDate ?? null,
+      formulaVersion: financialSource.formulaVersion,
+      detail: newBusinessValueRate === null ? '保险专用新业务价值率未返回' : `新业务价值率 ${newBusinessValueRate.toFixed(2)}%`,
+      optional: true,
+    }))
+  }
+  if (financialIndustry(input) === 'bank') {
+    const coreTier1Ratio = finite(industryMetrics?.bankCoreTier1CapitalAdequacyRatio)
+    const netInterestMargin = finite(industryMetrics?.bankNetInterestMargin)
+    const loanProvisionRatio = finite(industryMetrics?.bankLoanProvisionRatio)
+    evidenceItems.push(evidence({
+      key: 'quality-bank-core-tier1',
+      dimension: 'quality',
+      label: '核心一级资本充足率',
+      status: statusForValue(coreTier1Ratio, value => value >= 8.5, value => value >= 8.5),
+      value: coreTier1Ratio,
+      threshold: '至少 8.5%；银行监管口径',
+      source: `${financialSource.name} · 银行专用指标`,
+      observedAt: latestFinancial?.reportDate ?? null,
+      formulaVersion: financialSource.formulaVersion,
+      detail: coreTier1Ratio === null ? '银行专用核心一级资本充足率未返回' : `核心一级资本充足率 ${coreTier1Ratio.toFixed(2)}%`,
+      optional: true,
+    }))
+    evidenceItems.push(evidence({
+      key: 'quality-bank-net-interest-margin',
+      dimension: 'quality',
+      label: '净息差',
+      status: statusForValue(netInterestMargin, value => value >= 0, value => value >= 0),
+      value: netInterestMargin,
+      threshold: '不低于 0%；银行经营指标口径',
+      source: `${financialSource.name} · 银行专用指标`,
+      observedAt: latestFinancial?.reportDate ?? null,
+      formulaVersion: financialSource.formulaVersion,
+      detail: netInterestMargin === null ? '银行专用净息差未返回' : `净息差 ${netInterestMargin.toFixed(2)}%`,
+      optional: true,
+    }))
+    evidenceItems.push(evidence({
+      key: 'quality-bank-loan-provision',
+      dimension: 'quality',
+      label: '贷款拨备率',
+      status: statusForValue(loanProvisionRatio, value => value >= 0, value => value >= 0),
+      value: loanProvisionRatio,
+      threshold: '银行风险覆盖专用口径',
+      source: `${financialSource.name} · 银行专用指标`,
+      observedAt: latestFinancial?.reportDate ?? null,
+      formulaVersion: financialSource.formulaVersion,
+      detail: loanProvisionRatio === null ? '银行专用贷款拨备率未返回' : `贷款拨备率 ${loanProvisionRatio.toFixed(2)}%`,
+      optional: true,
+    }))
+  }
   evidenceItems.push(evidence({
     key: 'quality-history',
     dimension: 'quality',
@@ -474,9 +625,9 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     status: input.financialReports.length >= 2 ? 'pass' : input.financialReports.length === 1 ? 'caution' : 'missing',
     value: input.financialReports.length,
     threshold: '至少 2 期报告',
-    source: 'Eastmoney 财务报告',
+    source: financialSource.name,
     observedAt: latestFinancial?.observedAt ?? null,
-    formulaVersion: 'eastmoney-financial-v1',
+    formulaVersion: financialSource.formulaVersion,
     detail: input.financialReports.length >= 2 ? '可以比较最近两期方向' : input.financialErrorCode ? `财报读取失败（${input.financialErrorCode}）` : '单期报告不能证明持续性',
   }))
 
@@ -737,7 +888,29 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     detail: upStreak !== null && upStreak < 5 ? '未处于连续上涨过热区' : '连续上涨较久，避免追逐短期强势',
   }))
 
-  const required = evidenceItems.filter(item => !item.optional)
+  const genericCashflowEvidenceKeys = new Set([
+    'shareholder-free-cashflow',
+    'shareholder-cashflow-coverage',
+    'shareholder-interest-expense',
+    'shareholder-interest-bearing-debt',
+    'shareholder-free-cashflow-after-interest',
+    'shareholder-payout-ratio',
+    'shareholder-cashflow-history',
+  ])
+  const finalEvidenceItems = evidenceItems.map((item) => {
+    if (genericMetricApplicable || !genericCashflowEvidenceKeys.has(item.key))
+      return item
+    return {
+      ...item,
+      status: 'missing' as const,
+      value: null,
+      applicability: 'not_applicable' as const,
+      source: `${financialSource.name} · ${financialIndustryLabel(financialIndustry(input))}通用现金流不适用`,
+      observedAt: latestFinancial?.reportDate ?? null,
+      detail: `${financialIndustryLabel(financialIndustry(input))}不使用通用自由现金流、利息覆盖和支付率口径，保留分红、股本和回购证据`,
+    }
+  })
+  const required = finalEvidenceItems.filter(item => !item.optional && item.applicability !== 'not_applicable')
   const passedCount = required.filter(item => item.status === 'pass').length
   const cautionCount = required.filter(item => item.status === 'caution').length
   const failedCount = required.filter(item => item.status === 'fail').length
@@ -750,13 +923,13 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
       : failedCount > 0 || cautionCount > 0
         ? 'wait-confirmation'
         : 'research-window'
-  const gaps = evidenceItems
-    .filter(item => item.status === 'missing' || item.status === 'caution')
+  const gaps = finalEvidenceItems
+    .filter(item => item.applicability !== 'not_applicable' && (item.status === 'missing' || item.status === 'caution'))
     .map(item => `${item.label}：${item.detail}`)
-  const risks = evidenceItems
-    .filter(item => item.status === 'fail')
+  const risks = finalEvidenceItems
+    .filter(item => item.applicability !== 'not_applicable' && item.status === 'fail')
     .map(item => `${item.label}：${item.detail}`)
-  const strengths = evidenceItems
+  const strengths = finalEvidenceItems
     .filter(item => item.status === 'pass')
     .map(item => `${item.label}：${item.detail}`)
   const nextActions = missingCount > 0
@@ -772,7 +945,7 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
       ? 'partial'
       : 'ready'
   const { factorModel, decision } = buildQuantDecisionProjection({
-    evidence: evidenceItems,
+    evidence: finalEvidenceItems,
     dailyBars: input.dailyBars,
     factorConfiguration: input.factorConfiguration,
   })
@@ -791,7 +964,7 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     risks: risks.slice(0, 6),
     gaps: gaps.slice(0, 8),
     nextActions,
-    evidence: evidenceItems,
+    evidence: finalEvidenceItems,
     sources: buildSources(input, latestTradeDate),
     factorModel,
     decision,
