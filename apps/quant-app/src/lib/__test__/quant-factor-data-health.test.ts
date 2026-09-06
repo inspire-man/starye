@@ -128,9 +128,41 @@ describe('buildQuantFactorDataHealth', () => {
       status: 'partial',
       evidenceCount: 2,
       usableEvidenceCount: 1,
-      missingEvidenceKeys: ['valuation-dividend'],
-      failedEvidenceKeys: ['valuation-pb'],
-      nextAction: '补齐证据：valuation-dividend',
+      missingEvidenceKeys: ['valuation-dividend', 'valuation-pb'],
+      failedEvidenceKeys: [],
+      nextAction: '补齐证据：valuation-dividend、valuation-pb',
+    })
+  })
+
+  it('counts finite threshold failures as covered fields without requesting a retry', () => {
+    const base = report()
+    const result = buildQuantFactorDataHealth({
+      ...base,
+      evidence: [{
+        ...base.evidence[0]!,
+        status: 'fail',
+        value: -5,
+        detail: '趋势未达到门槛。',
+      }],
+      factorModel: {
+        ...base.factorModel!,
+        factors: [{
+          ...base.factorModel!.factors[0]!,
+          key: 'trend',
+          label: '趋势',
+          sourceId: 'local-daily-bars',
+          source: '本地 Quant 日线库',
+          evidenceKeys: ['quality-roe'],
+          missingEvidenceKeys: [],
+        }, base.factorModel!.factors[1]!],
+      },
+    })
+
+    expect(result.items[0]).toMatchObject({
+      status: 'ready',
+      usableEvidenceCount: 1,
+      failedEvidenceKeys: ['quality-roe'],
+      nextAction: '原始字段已读取，先核对阈值风险：quality-roe',
     })
   })
 
@@ -172,6 +204,30 @@ describe('buildQuantFactorDataHealth', () => {
 
     expect(result).toMatchObject({ status: 'ready', sourceHealth: 'fallback' })
     expect(result.items[0]).toMatchObject({ status: 'ready', sourceHealth: 'fallback', nextAction: '字段已读取，复核回退来源与观察时间' })
+  })
+
+  it('marks an explicit provider error in evidence provenance as unavailable', () => {
+    const base = report()
+    const result = buildQuantFactorDataHealth({
+      ...base,
+      evidence: [{
+        ...base.evidence[0]!,
+        source: 'Eastmoney 财务报告，来源不可用：QUANT_PROVIDER_TIMEOUT',
+        value: null,
+        status: 'missing',
+      }],
+      factorModel: {
+        ...base.factorModel!,
+        factors: [{
+          ...base.factorModel!.factors[0]!,
+          status: 'missing',
+          evidenceKeys: ['quality-roe'],
+          missingEvidenceKeys: ['quality-roe'],
+        }, base.factorModel!.factors[1]!],
+      },
+    })
+
+    expect(result.items[0]).toMatchObject({ status: 'unavailable', sourceHealth: 'unavailable', nextAction: expect.stringContaining('检查') })
   })
 
   it('returns a missing summary when the report has no weighted factor model', () => {

@@ -11,6 +11,7 @@ export interface CandidateEvidenceDimension {
   coveredMetricCount: number
   totalMetricCount: number
   comparableMetricCount: number
+  notApplicableMetricCount?: number
   coveragePercent: number | null
   detail: string
 }
@@ -27,6 +28,7 @@ export interface CandidateEvidenceScore {
   missingDimensionCount: number
   dimensions: readonly CandidateEvidenceDimension[]
   missingReasons: readonly string[]
+  refreshable?: boolean
   summary: string
 }
 
@@ -58,6 +60,7 @@ function emptyDimension(
     coveredMetricCount: 0,
     totalMetricCount: 0,
     comparableMetricCount: 0,
+    notApplicableMetricCount: 0,
     coveragePercent: status === 'unavailable' ? null : 0,
     detail,
   }
@@ -77,12 +80,14 @@ function buildDimension(
     return emptyDimension(definition, 'missing', '价值质量结果没有返回该维度')
 
   const metrics = source.metrics
+  const applicableMetrics = metrics.filter(metric => metric.applicability !== 'not_applicable')
+  const notApplicableMetricCount = metrics.length - applicableMetrics.length
   const trendPending = definition.key === 'trend' && candidate.pendingSync
-  const coveredMetricCount = trendPending ? 0 : metrics.filter(metric => hasFiniteValue(metric.value)).length
+  const coveredMetricCount = trendPending ? 0 : applicableMetrics.filter(metric => hasFiniteValue(metric.value)).length
   const comparableMetricCount = trendPending
     ? 0
-    : metrics.filter(metric => hasFiniteValue(metric.value) && metric.sampleCount >= 2 && metric.favorablePercentile !== null).length
-  const totalMetricCount = metrics.length
+    : applicableMetrics.filter(metric => hasFiniteValue(metric.value) && metric.sampleCount >= 2 && metric.favorablePercentile !== null).length
+  const totalMetricCount = applicableMetrics.length
   const rawCoverageComplete = totalMetricCount > 0 && coveredMetricCount === totalMetricCount
   const status: CandidateEvidenceReadinessStatus = source.status === 'ready' && rawCoverageComplete && !trendPending
     ? 'ready'
@@ -91,7 +96,9 @@ function buildDimension(
       : 'missing'
 
   const coveragePercent = totalMetricCount > 0 ? roundPercent(coveredMetricCount / totalMetricCount * 100) : 0
-  let detail = `${coveredMetricCount} / ${totalMetricCount} 个原始字段已返回 · ${comparableMetricCount} 个可比`
+  let detail = `${coveredMetricCount} / ${totalMetricCount} 个适用原始字段已返回 · ${comparableMetricCount} 个可比`
+  if (notApplicableMetricCount)
+    detail += ` · ${notApplicableMetricCount} 个行业不适用`
   if (trendPending)
     detail = '日线尚未进入当前候选快照'
   else if (status === 'missing')
@@ -104,6 +111,7 @@ function buildDimension(
     coveredMetricCount,
     totalMetricCount,
     comparableMetricCount,
+    notApplicableMetricCount,
     coveragePercent,
     detail,
   }
@@ -122,6 +130,7 @@ function unavailableResult(candidate: CandidateItem, status: CandidateEvidenceRe
     missingDimensionCount: status === 'missing' ? DIMENSIONS.length : 0,
     dimensions: DIMENSIONS.map(definition => emptyDimension(definition, status, summary)),
     missingReasons: [summary],
+    refreshable: true,
     summary,
   }
 }
@@ -152,6 +161,8 @@ export function buildCandidateEvidenceScore(candidate: CandidateItem, valueQuali
     ...dimensions.filter(dimension => dimension.status !== 'ready').map(dimension => `${dimension.label}：${dimension.detail}`),
     ...valueQuality.missingFields,
   ].filter((reason, index, reasons) => reasons.indexOf(reason) === index).slice(0, 5)
+  const refreshable = dimensions.some(dimension => dimension.coveredMetricCount < dimension.totalMetricCount)
+    || valueQuality.missingFields.some(field => !field.includes('行业专用韧性指标暂无足够同业可比样本'))
   const summary = `${completeDimensionCount} / ${DIMENSIONS.length} 个维度完整 · ${partialDimensionCount} 个维度部分覆盖 · ${missingDimensionCount} 个维度待补`
 
   return {
@@ -166,6 +177,7 @@ export function buildCandidateEvidenceScore(candidate: CandidateItem, valueQuali
     missingDimensionCount,
     dimensions,
     missingReasons,
+    refreshable,
     summary,
   }
 }

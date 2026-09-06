@@ -5,10 +5,11 @@ import type { CurrentQuantCandidateSnapshot } from '../../../domain/quant/candid
 import type { AppEnv } from '../../../types'
 import { buildQuantCandidateBriefingFacts } from '../../../domain/quant/ai-candidate-briefing'
 import { QuantError } from '../../../domain/quant/errors'
-import { createEastmoneyFinancialProvider, createEastmoneyValuationProvider } from '../../../domain/quant/provider'
+import { createEastmoneyValuationProvider } from '../../../domain/quant/provider'
 import { listQuantResearchMarkers, normalizeTsCode } from '../../../domain/quant/repository'
 import { readQuantValueSelection } from '../../../domain/quant/value-selection-service'
 import { eastmoneyProviderOptions } from '../route-context'
+import { financialProvider } from './market-support'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -254,7 +255,7 @@ export async function readCandidateBriefingFacts(db: AppEnv['Variables']['db'], 
   const options = eastmoneyProviderOptions(env)
   const valueSelection = await readQuantValueSelection(db, userId, {
     valuation: createEastmoneyValuationProvider(options),
-    financial: createEastmoneyFinancialProvider(options),
+    financial: financialProvider(env),
   })
   const valueQualityByCode = new Map(valueSelection.items.map(item => [item.tsCode, {
     score: item.score,

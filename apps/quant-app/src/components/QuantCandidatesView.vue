@@ -228,7 +228,7 @@ function candidateEvidenceDetail(item: CandidateItem): string {
 
 function candidateEvidenceActionLabel(item: CandidateItem): string | null {
   const result = props.candidateEvidenceFor(item)
-  if (result.status === 'ready')
+  if (result.status === 'ready' || result.refreshable === false)
     return null
   return props.valueQualityLoading ? '读取中' : '去补齐'
 }

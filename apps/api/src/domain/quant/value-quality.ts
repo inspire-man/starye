@@ -1,4 +1,4 @@
-import type { QuantFinancialQualitySnapshot, QuantValuationSnapshot } from './provider'
+import type { QuantFinancialIndustry, QuantFinancialQualitySnapshot, QuantValuationSnapshot } from './provider'
 import type { DailyBar, MomentumCandidate } from './types'
 
 export const VALUE_QUALITY_FACTOR_VERSION = 'value-quality-v2' as const
@@ -24,6 +24,12 @@ export type ValueQualityMetricKey
     | 'interest_coverage'
     | 'cash_ratio'
     | 'interest_bearing_debt_ratio'
+    | 'insurance_solvency_ratio'
+    | 'insurance_net_investment_return'
+    | 'insurance_new_business_value_rate'
+    | 'bank_core_tier1_ratio'
+    | 'bank_net_interest_margin'
+    | 'bank_loan_provision_ratio'
     | 'return_60'
     | 'ma60_gap'
     | 'drawdown_60'
@@ -32,6 +38,7 @@ export interface ValueQualityMetric {
   readonly key: ValueQualityMetricKey
   readonly label: string
   readonly value: number | null
+  readonly applicability: 'applicable' | 'not_applicable'
   /** 0-100; higher means more favorable within the current watchlist. */
   readonly favorablePercentile: number | null
   readonly sampleCount: number
@@ -94,22 +101,42 @@ interface MetricDefinition {
   readonly direction: 'higher' | 'lower'
   readonly weight: number
   readonly read: (input: ValueQualityInput) => number | null
+  readonly applicable?: (input: ValueQualityInput) => boolean
+}
+
+function financialIndustry(input: ValueQualityInput): QuantFinancialIndustry {
+  return input.financialReports[0]?.industry ?? 'general'
+}
+
+function generalIndustry(input: ValueQualityInput): boolean {
+  return financialIndustry(input) === 'general'
+}
+
+function insuranceIndustry(input: ValueQualityInput): boolean {
+  return financialIndustry(input) === 'insurance'
+}
+
+function bankIndustry(input: ValueQualityInput): boolean {
+  return financialIndustry(input) === 'bank'
 }
 
 const VALUATION_METRICS: readonly MetricDefinition[] = [
   { key: 'pe_ttm', label: 'TTM PE', direction: 'lower', weight: 0.4, read: input => positive(input.valuation?.peTtm) },
   { key: 'pb', label: 'PB', direction: 'lower', weight: 0.3, read: input => positive(input.valuation?.pb) },
   { key: 'ps', label: 'PS', direction: 'lower', weight: 0.15, read: input => positive(input.valuation?.ps) },
-  { key: 'peg', label: 'PEG', direction: 'lower', weight: 0.15, read: input => positive(input.valuation?.peg) },
+  { key: 'peg', label: 'PEG', direction: 'lower', weight: 0.15, applicable: (input) => {
+    const raw = finite(input.valuation?.peg)
+    return raw === null || raw > 0
+  }, read: input => positive(input.valuation?.peg) },
 ]
 
 const QUALITY_METRICS: readonly MetricDefinition[] = [
   { key: 'roe', label: 'ROE 股东回报', direction: 'higher', weight: 0.25, read: input => finite(input.financialReports[0]?.roe) },
-  { key: 'roic', label: 'ROIC 投入资本回报', direction: 'higher', weight: 0.25, read: input => finite(input.financialReports[0]?.roic) },
-  { key: 'cashflow_to_revenue', label: '经营现金流 / 营收', direction: 'higher', weight: 0.2, read: input => finite(input.financialReports[0]?.operatingCashflowToRevenue) },
-  { key: 'gross_margin', label: '毛利率', direction: 'higher', weight: 0.1, read: input => finite(input.financialReports[0]?.grossMargin) },
+  { key: 'roic', label: 'ROIC 投入资本回报', direction: 'higher', weight: 0.25, applicable: generalIndustry, read: input => finite(input.financialReports[0]?.roic) },
+  { key: 'cashflow_to_revenue', label: '经营现金流 / 营收', direction: 'higher', applicable: generalIndustry, weight: 0.2, read: input => finite(input.financialReports[0]?.operatingCashflowToRevenue) },
+  { key: 'gross_margin', label: '毛利率', direction: 'higher', applicable: generalIndustry, weight: 0.1, read: input => finite(input.financialReports[0]?.grossMargin) },
   { key: 'net_margin', label: '净利率', direction: 'higher', weight: 0.1, read: input => finite(input.financialReports[0]?.netMargin) },
-  { key: 'debt_asset_ratio', label: '资产负债率', direction: 'lower', weight: 0.1, read: input => finite(input.financialReports[0]?.debtAssetRatio) },
+  { key: 'debt_asset_ratio', label: '资产负债率', direction: 'lower', applicable: generalIndustry, weight: 0.1, read: input => finite(input.financialReports[0]?.debtAssetRatio) },
 ]
 
 const GROWTH_METRICS: readonly MetricDefinition[] = [
@@ -117,13 +144,19 @@ const GROWTH_METRICS: readonly MetricDefinition[] = [
   { key: 'net_profit_yoy', label: '净利润同比', direction: 'higher', weight: 0.3, read: input => finite(input.financialReports[0]?.netProfitYoY) },
   { key: 'adjusted_net_profit_yoy', label: '扣非净利润同比', direction: 'higher', weight: 0.2, read: input => finite(input.financialReports[0]?.adjustedNetProfitYoY) },
   { key: 'growth_stability', label: '增长稳定性', direction: 'higher', weight: 0.1, read: input => calculateGrowthStability(input.financialReports) },
-  { key: 'cashflow_continuity', label: '现金流连续性', direction: 'higher', weight: 0.15, read: input => calculateCashflowContinuity(input.financialReports) },
+  { key: 'cashflow_continuity', label: '现金流连续性', direction: 'higher', applicable: generalIndustry, weight: 0.15, read: input => calculateCashflowContinuity(input.financialReports) },
 ]
 
 const RESILIENCE_METRICS: readonly MetricDefinition[] = [
-  { key: 'interest_coverage', label: '利息覆盖倍数', direction: 'higher', weight: 0.4, read: input => finite(input.financialReports[0]?.interestCoverage) },
-  { key: 'cash_ratio', label: '现金比率', direction: 'higher', weight: 0.3, read: input => finite(input.financialReports[0]?.cashRatio) },
-  { key: 'interest_bearing_debt_ratio', label: '带息负债率', direction: 'lower', weight: 0.3, read: input => finite(input.financialReports[0]?.interestBearingDebtRatio) },
+  { key: 'interest_coverage', label: '利息覆盖倍数', direction: 'higher', weight: 0.4, applicable: generalIndustry, read: input => finite(input.financialReports[0]?.interestCoverage) },
+  { key: 'cash_ratio', label: '现金比率', direction: 'higher', weight: 0.3, applicable: generalIndustry, read: input => finite(input.financialReports[0]?.cashRatio) },
+  { key: 'interest_bearing_debt_ratio', label: '带息负债率', direction: 'lower', weight: 0.3, applicable: generalIndustry, read: input => finite(input.financialReports[0]?.interestBearingDebtRatio) },
+  { key: 'insurance_solvency_ratio', label: '偿付能力充足率', direction: 'higher', weight: 0.4, applicable: insuranceIndustry, read: input => finite(input.financialReports[0]?.industryMetrics?.insuranceSolvencyRatio) },
+  { key: 'insurance_net_investment_return', label: '净投资收益率', direction: 'higher', weight: 0.3, applicable: insuranceIndustry, read: input => finite(input.financialReports[0]?.industryMetrics?.insuranceNetInvestmentReturn) },
+  { key: 'insurance_new_business_value_rate', label: '新业务价值率', direction: 'higher', weight: 0.3, applicable: insuranceIndustry, read: input => finite(input.financialReports[0]?.industryMetrics?.insuranceNewBusinessValueRate) },
+  { key: 'bank_core_tier1_ratio', label: '核心一级资本充足率', direction: 'higher', weight: 0.4, applicable: bankIndustry, read: input => finite(input.financialReports[0]?.industryMetrics?.bankCoreTier1CapitalAdequacyRatio) },
+  { key: 'bank_net_interest_margin', label: '净息差', direction: 'higher', weight: 0.3, applicable: bankIndustry, read: input => finite(input.financialReports[0]?.industryMetrics?.bankNetInterestMargin) },
+  { key: 'bank_loan_provision_ratio', label: '贷款拨备率', direction: 'higher', weight: 0.3, applicable: bankIndustry, read: input => finite(input.financialReports[0]?.industryMetrics?.bankLoanProvisionRatio) },
 ]
 
 const TREND_METRICS: readonly MetricDefinition[] = [
@@ -225,18 +258,21 @@ function createDimension(
   pool: readonly ValueQualityInput[],
 ): ValueQualityDimension {
   const metrics = definitions.map((definition) => {
-    const value = definition.read(target)
-    const samples = pool.map(definition.read).filter((sample): sample is number => sample !== null)
+    const applicable = definition.applicable?.(target) ?? true
+    const value = applicable ? definition.read(target) : null
+    const samples = applicable ? pool.filter(input => (definition.applicable?.(input) ?? true)).map(definition.read).filter((sample): sample is number => sample !== null) : []
     return {
       key: definition.key,
       label: definition.label,
       value,
+      applicability: applicable ? 'applicable' : 'not_applicable',
       favorablePercentile: value === null ? null : favorablePercentile(value, samples, definition.direction),
       sampleCount: samples.length,
     } satisfies ValueQualityMetric
   })
-  const scored = metrics.filter(metric => metric.favorablePercentile !== null)
-  const available = metrics.filter(metric => metric.value !== null)
+  const scored = metrics.filter(metric => metric.applicability === 'applicable' && metric.favorablePercentile !== null)
+  const available = metrics.filter(metric => metric.applicability === 'applicable' && metric.value !== null)
+  const applicableCount = metrics.filter(metric => metric.applicability === 'applicable').length
   const weightByKey = new Map(definitions.map(definition => [definition.key, definition.weight]))
   const totalWeight = scored.reduce((total, metric) => total + (weightByKey.get(metric.key) ?? 0), 0)
   const weightedPercentile = totalWeight > 0
@@ -248,7 +284,7 @@ function createDimension(
     label,
     score: weightedPercentile === null ? null : roundScore(weightedPercentile / 100 * maxScore),
     maxScore,
-    status: scored.length >= minimumMetrics ? 'ready' : available.length > 0 ? 'partial' : 'missing',
+    status: applicableCount === 0 ? 'missing' : scored.length >= minimumMetrics ? 'ready' : available.length > 0 ? 'partial' : 'missing',
     metrics,
   }
 }
@@ -344,9 +380,12 @@ export function buildValueQualityResult(input: ValueQualityInput, pool: readonly
   const risk = buildRisk(input, dimensions)
   const missingFields: string[] = []
   const qualityMetricCount = quality.metrics.filter(metric => metric.favorablePercentile !== null).length
+  const qualityMinimumMetrics = financialIndustry(input) === 'general' ? 3 : 2
   const growthMetricCount = growth.metrics.filter(metric => metric.favorablePercentile !== null).length
   const resilienceMetricCount = resilience.metrics.filter(metric => metric.favorablePercentile !== null).length
+  const resilienceAvailableMetricCount = resilience.metrics.filter(metric => metric.applicability === 'applicable' && metric.value !== null).length
   const cashflowContinuity = metricByKey(growth, 'cashflow_continuity')?.value ?? null
+  const cashflowApplicable = generalIndustry(input)
   const trendMetricCount = trend.metrics.filter(metric => metric.favorablePercentile !== null).length
   const hasLongTrendWindow = sortedBars(input.dailyBars).length >= 61
 
@@ -358,22 +397,28 @@ export function buildValueQualityResult(input: ValueQualityInput, pool: readonly
     addUnique(missingFields, `财务报告暂不可用（${input.financialErrorCode}）`)
   else if (!input.financialReports[0])
     addUnique(missingFields, '最近已披露财务报告')
-  if (qualityMetricCount < 3)
-    addUnique(missingFields, '盈利质量指标不足（至少需要 3 项）')
+  if (qualityMetricCount < qualityMinimumMetrics)
+    addUnique(missingFields, `盈利质量指标不足（至少需要 ${qualityMinimumMetrics} 项）`)
   if (input.financialReports.length < 2 || growthMetricCount < 2)
     addUnique(missingFields, '最近两期财务增长数据')
-  if (cashflowContinuity === null)
+  if (cashflowApplicable && cashflowContinuity === null)
     addUnique(missingFields, '至少两期经营现金流 / 营收数据')
-  if (resilienceMetricCount < 2)
-    addUnique(missingFields, '资产负债表韧性指标不足（至少需要 2 项）')
+  if (resilienceMetricCount < 2) {
+    addUnique(missingFields, resilienceAvailableMetricCount >= 2 && financialIndustry(input) !== 'general'
+      ? '行业专用韧性指标暂无足够同业可比样本'
+      : '资产负债表韧性指标不足（至少需要 2 项）')
+  }
   if (!hasLongTrendWindow || trendMetricCount < 2)
     addUnique(missingFields, '60 日趋势窗口')
 
+  const comparisonGapOnly = missingFields.length > 0 && missingFields.every(field => field === '行业专用韧性指标暂无足够同业可比样本')
   const status: ValueQualityStatus = missingFields.length === 0
     ? 'ready'
     : input.valuationErrorCode || input.financialErrorCode
       ? 'partial'
-      : 'insufficient_data'
+      : comparisonGapOnly
+        ? 'partial'
+        : 'insufficient_data'
   const rawScore = dimensions.reduce((total, dimension) => total + (dimension.score ?? 0), 0) - risk.deduction
 
   return {

@@ -34,6 +34,34 @@ export const TUSHARE_DIVIDEND_FIELDS = [
   'pay_date',
 ] as const
 
+export const TUSHARE_FINANCIAL_FIELDS = [
+  'ts_code',
+  'ann_date',
+  'end_date',
+  'roe',
+  'grossprofit_margin',
+  'netprofit_margin',
+  'debt_to_assets',
+  'ocf_to_or',
+  'ocfps',
+  'fcff',
+  'roic',
+  'cash_ratio',
+  'or_yoy',
+  'netprofit_yoy',
+  'q_sales_yoy',
+  'q_profit_yoy',
+] as const
+
+export const TUSHARE_CASHFLOW_FIELDS = [
+  'ts_code',
+  'ann_date',
+  'end_date',
+  'net_profit',
+  'n_cashflow_act',
+  'c_pay_acq_const_fiolta',
+] as const
+
 export type TushareProviderErrorCode
   = | 'UNKNOWN_API'
     | 'TOKEN_MISSING'
@@ -58,6 +86,7 @@ export interface TushareProviderOptions {
   readonly token?: string | null
   readonly baseUrl?: string
   readonly timeoutMs?: number
+  readonly now?: () => Date
   readonly fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 }
 
@@ -124,6 +153,11 @@ export interface QuantCashflowReport {
   readonly interestBearingDebt: number | null
   readonly interestBearingDebtComponents: QuantInterestBearingDebtComponents
   readonly interestBearingDebtProviderErrorCode: string | null
+  readonly provider?: QuantProviderName
+  readonly fallbackUsed?: boolean
+  readonly fallbackReason?: string | null
+  readonly supplementalProvider?: QuantProviderName
+  readonly supplementUsed?: boolean
 }
 
 export interface QuantCashflowRequest {
@@ -135,6 +169,25 @@ export interface QuantCashflowProvider {
   readonly name: QuantProviderName
   readonly isConfigured: boolean
   fetchCashflowHistory: (request: QuantCashflowRequest) => Promise<readonly QuantCashflowReport[]>
+}
+
+function emptyInterestBearingDebtComponents(): QuantInterestBearingDebtComponents {
+  return {
+    shortLoan: null,
+    shortBondPayable: null,
+    shortFinancePayable: null,
+    acceptDepositInterbank: null,
+    borrowFund: null,
+    loanPbc: null,
+    currentMaturityDebt: null,
+    amortizedCostFinancialLiability: null,
+    longLoan: null,
+    amortizedCostNoncurrentFinancialLiability: null,
+    bondPayable: null,
+    perpetualBond: null,
+    perpetualBondPayable: null,
+    leaseLiability: null,
+  }
 }
 
 export interface QuantCapitalStructureReport {
@@ -485,6 +538,337 @@ export function createTushareDividendProvider(options: TushareProviderOptions = 
   }
 }
 
+function reportTypeForDate(value: string): { readonly reportType: string, readonly reportDateName: string } {
+  const year = value.slice(0, 4)
+  const monthDay = value.slice(4)
+  const reportType = monthDay === '0331' ? '一季报' : monthDay === '0630' ? '中报' : monthDay === '0930' ? '三季报' : monthDay === '1231' ? '年报' : '定期报告'
+  return { reportType, reportDateName: `${year}${reportType}` }
+}
+
+function formatTushareDate(value: unknown, field: string): string | null {
+  const date = optionalTushareDate(value, field)
+  return date ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}` : null
+}
+
+function tushareFieldValue(fields: readonly string[], row: readonly unknown[], field: string): unknown {
+  return row[fields.indexOf(field)]
+}
+
+function firstTushareValue(fields: readonly string[], row: readonly unknown[], ...candidates: string[]): unknown {
+  for (const field of candidates) {
+    const value = tushareFieldValue(fields, row, field)
+    if (value !== null && value !== undefined && !(typeof value === 'string' && !value.trim()))
+      return value
+  }
+  return undefined
+}
+
+export function createTushareFinancialProvider(options: TushareProviderOptions = {}): QuantFinancialQualityProvider {
+  async function fetchFinancialQualityHistory(request: QuantFinancialQualityRequest): Promise<readonly QuantFinancialQualitySnapshot[]> {
+    const tsCode = request.tsCode.trim().toUpperCase()
+    if (!/^[A-Z0-9.-]{1,20}$/u.test(tsCode))
+      throw new TushareProviderError('UPSTREAM_ERROR', 'Invalid ts_code', 'fina_indicator')
+    const rows = await requestTushareRows(options, {
+      apiName: 'fina_indicator',
+      params: { ts_code: tsCode },
+      fields: TUSHARE_FINANCIAL_FIELDS,
+    })
+    const observedAt = (options.now ?? (() => new Date()))().toISOString()
+    const reports = rows.items.map((row) => {
+      const returnedCode = tushareFieldValue(rows.fields, row, 'ts_code')
+      const endDate = tushareFieldValue(rows.fields, row, 'end_date')
+      if (typeof returnedCode !== 'string' || returnedCode.trim().toUpperCase() !== tsCode || typeof endDate !== 'string')
+        throw new TushareProviderError('INVALID_RESPONSE', 'Tushare financial identity is missing or mismatched', 'fina_indicator')
+      const reportDate = normalizeDate(endDate, 'end_date')
+      const reportType = reportTypeForDate(reportDate)
+      const noticeDate = formatTushareDate(tushareFieldValue(rows.fields, row, 'ann_date'), 'ann_date')
+      return {
+        tsCode,
+        observedAt,
+        reportDate: `${reportDate.slice(0, 4)}-${reportDate.slice(4, 6)}-${reportDate.slice(6, 8)}`,
+        reportType: reportType.reportType,
+        reportDateName: reportType.reportDateName,
+        noticeDate,
+        revenue: null,
+        revenueYoY: optionalNumber(firstTushareValue(rows.fields, row, 'q_sales_yoy', 'or_yoy'), 'revenueYoY'),
+        netProfit: null,
+        netProfitYoY: optionalNumber(firstTushareValue(rows.fields, row, 'q_profit_yoy', 'netprofit_yoy'), 'netProfitYoY'),
+        adjustedNetProfit: null,
+        adjustedNetProfitYoY: null,
+        roe: optionalNumber(tushareFieldValue(rows.fields, row, 'roe'), 'roe'),
+        grossMargin: optionalNumber(tushareFieldValue(rows.fields, row, 'grossprofit_margin'), 'grossprofit_margin'),
+        netMargin: optionalNumber(tushareFieldValue(rows.fields, row, 'netprofit_margin'), 'netprofit_margin'),
+        debtAssetRatio: optionalNumber(tushareFieldValue(rows.fields, row, 'debt_to_assets'), 'debt_to_assets'),
+        operatingCashflowToRevenue: optionalNumber(tushareFieldValue(rows.fields, row, 'ocf_to_or'), 'ocf_to_or'),
+        operatingCashflowPerShare: optionalNumber(tushareFieldValue(rows.fields, row, 'ocfps'), 'ocfps'),
+        fcffBack: optionalNumber(tushareFieldValue(rows.fields, row, 'fcff'), 'fcff'),
+        fcffForward: null,
+        interestCoverage: null,
+        interestBearingDebtRatio: null,
+        cashRatio: optionalNumber(tushareFieldValue(rows.fields, row, 'cash_ratio'), 'cash_ratio'),
+        totalLiability: null,
+        roic: optionalNumber(tushareFieldValue(rows.fields, row, 'roic'), 'roic'),
+        provider: 'tushare' as const,
+      } satisfies QuantFinancialQualitySnapshot
+    })
+    const deduplicated = [...new Map(reports.map(report => [report.reportDate, report] as const)).values()]
+      .sort((left, right) => right.reportDate.localeCompare(left.reportDate))
+    if (!deduplicated.length)
+      throw new TushareProviderError('INVALID_RESPONSE', 'Tushare financial response has no reports', 'fina_indicator')
+    const rawLimit = request.limit ?? 4
+    const limit = Number.isInteger(rawLimit) ? Math.min(8, Math.max(1, rawLimit)) : 4
+    return deduplicated.slice(0, limit)
+  }
+
+  async function fetchFinancialQuality(request: QuantFinancialQualityRequest): Promise<QuantFinancialQualitySnapshot> {
+    const report = (await fetchFinancialQualityHistory({ ...request, limit: 1 }))[0]
+    if (!report)
+      throw new TushareProviderError('INVALID_RESPONSE', 'Tushare financial response has no reports', 'fina_indicator')
+    return report
+  }
+
+  return {
+    name: 'tushare',
+    isConfigured: cleanProviderString(options.token) !== null,
+    fetchFinancialQuality,
+    fetchFinancialQualityHistory,
+  }
+}
+
+export function createTushareCashflowProvider(options: TushareProviderOptions = {}): QuantCashflowProvider {
+  async function fetchCashflowHistory(request: QuantCashflowRequest): Promise<readonly QuantCashflowReport[]> {
+    const tsCode = request.tsCode.trim().toUpperCase()
+    if (!/^[A-Z0-9.-]{1,20}$/u.test(tsCode))
+      throw new TushareProviderError('UPSTREAM_ERROR', 'Invalid ts_code', 'cashflow')
+    const rows = await requestTushareRows(options, {
+      apiName: 'cashflow',
+      params: { ts_code: tsCode },
+      fields: TUSHARE_CASHFLOW_FIELDS,
+    })
+    const reports = rows.items.map((row) => {
+      const returnedCode = tushareFieldValue(rows.fields, row, 'ts_code')
+      const endDate = tushareFieldValue(rows.fields, row, 'end_date')
+      if (typeof returnedCode !== 'string' || returnedCode.trim().toUpperCase() !== tsCode || typeof endDate !== 'string')
+        throw new TushareProviderError('INVALID_RESPONSE', 'Tushare cashflow identity is missing or mismatched', 'cashflow')
+      const reportDate = normalizeDate(endDate, 'end_date')
+      const reportType = reportTypeForDate(reportDate)
+      return {
+        tsCode,
+        reportDate: `${reportDate.slice(0, 4)}-${reportDate.slice(4, 6)}-${reportDate.slice(6, 8)}`,
+        reportType: reportType.reportType,
+        reportDateName: reportType.reportDateName,
+        noticeDate: formatTushareDate(tushareFieldValue(rows.fields, row, 'ann_date'), 'ann_date'),
+        operatingCashflow: optionalNumber(tushareFieldValue(rows.fields, row, 'n_cashflow_act'), 'n_cashflow_act'),
+        capitalExpenditure: optionalNumber(tushareFieldValue(rows.fields, row, 'c_pay_acq_const_fiolta'), 'c_pay_acq_const_fiolta'),
+        netProfit: optionalNumber(tushareFieldValue(rows.fields, row, 'net_profit'), 'net_profit'),
+        cashDividendsPaid: null,
+        interestExpense: null,
+        interestExpenseSourceField: null,
+        interestExpenseProviderErrorCode: null,
+        interestBearingDebt: null,
+        interestBearingDebtComponents: emptyInterestBearingDebtComponents(),
+        interestBearingDebtProviderErrorCode: null,
+        provider: 'tushare' as const,
+      } satisfies QuantCashflowReport
+    })
+    const deduplicated = [...new Map(reports.map(report => [report.reportDate, report] as const)).values()]
+      .sort((left, right) => right.reportDate.localeCompare(left.reportDate))
+    const rawLimit = request.limit ?? 8
+    const limit = Number.isInteger(rawLimit) ? Math.min(8, Math.max(1, rawLimit)) : 8
+    return deduplicated.slice(0, limit)
+  }
+
+  return {
+    name: 'tushare',
+    isConfigured: cleanProviderString(options.token) !== null,
+    fetchCashflowHistory,
+  }
+}
+
+const CASHFLOW_CORE_FIELDS = ['operatingCashflow', 'capitalExpenditure', 'netProfit', 'cashDividendsPaid'] as const
+const CASHFLOW_SUPPLEMENT_FIELDS = ['operatingCashflow', 'capitalExpenditure', 'netProfit'] as const
+
+function needsCashflowSupplement(report: QuantCashflowReport): boolean {
+  return CASHFLOW_SUPPLEMENT_FIELDS.some(field => report[field] === null)
+}
+
+function mergeCashflowReport(primary: QuantCashflowReport, supplement: QuantCashflowReport): QuantCashflowReport {
+  const merged: QuantCashflowReport = {
+    ...primary,
+    operatingCashflow: primary.operatingCashflow ?? supplement.operatingCashflow,
+    capitalExpenditure: primary.capitalExpenditure ?? supplement.capitalExpenditure,
+    netProfit: primary.netProfit ?? supplement.netProfit,
+    cashDividendsPaid: primary.cashDividendsPaid ?? supplement.cashDividendsPaid,
+  }
+  const supplemented = CASHFLOW_CORE_FIELDS.some(field => primary[field] === null && supplement[field] !== null)
+  return supplemented
+    ? { ...merged, supplementalProvider: supplement.provider ?? 'eastmoney', supplementUsed: true }
+    : merged
+}
+
+function mergeCashflowReports(
+  primaryReports: readonly QuantCashflowReport[],
+  supplementReports: readonly QuantCashflowReport[],
+  limit: number,
+): readonly QuantCashflowReport[] {
+  const supplementByDate = new Map(supplementReports.map(report => [report.reportDate, report] as const))
+  const merged = primaryReports.map((primary) => {
+    const supplement = supplementByDate.get(primary.reportDate)
+    return supplement ? mergeCashflowReport(primary, supplement) : primary
+  })
+  const primaryDates = new Set(primaryReports.map(report => report.reportDate))
+  const additional = supplementReports
+    .filter(report => !primaryDates.has(report.reportDate))
+    .map(report => ({ ...report, supplementalProvider: report.provider ?? 'eastmoney', supplementUsed: true }))
+  return [...merged, ...additional]
+    .sort((left, right) => right.reportDate.localeCompare(left.reportDate))
+    .slice(0, limit)
+}
+
+export function createQuantCashflowProviderChain(primary: QuantCashflowProvider, fallback?: QuantCashflowProvider): QuantCashflowProvider {
+  function markFallback(reports: readonly QuantCashflowReport[], reason: string): readonly QuantCashflowReport[] {
+    return reports.map(report => ({
+      ...report,
+      provider: report.provider ?? fallback?.name ?? primary.name,
+      fallbackUsed: true,
+      fallbackReason: reason,
+    }))
+  }
+
+  async function fetchCashflowHistory(request: QuantCashflowRequest): Promise<readonly QuantCashflowReport[]> {
+    let primaryError: unknown = null
+    let primaryReports: readonly QuantCashflowReport[] | null = null
+    if (primary.isConfigured) {
+      try {
+        primaryReports = await primary.fetchCashflowHistory(request)
+      }
+      catch (error) {
+        primaryError = error
+      }
+    }
+    else {
+      primaryError = new TushareProviderError('TOKEN_MISSING', 'Primary cashflow provider is not configured', 'cashflow')
+    }
+
+    if (primaryReports && primaryReports.length > 0) {
+      if (!fallback?.isConfigured || !primaryReports.some(needsCashflowSupplement))
+        return primaryReports
+      try {
+        const supplementReports = await fallback.fetchCashflowHistory(request)
+        const rawLimit = request.limit ?? 8
+        const limit = Number.isInteger(rawLimit) ? Math.min(8, Math.max(1, rawLimit)) : 8
+        return mergeCashflowReports(primaryReports, supplementReports, limit)
+      }
+      catch {
+        return primaryReports
+      }
+    }
+
+    if (!fallback?.isConfigured) {
+      if (primaryError)
+        throw primaryError
+      return primaryReports ?? []
+    }
+
+    try {
+      const fallbackReports = await fallback.fetchCashflowHistory(request)
+      if (!fallbackReports.length) {
+        if (primaryError)
+          throw primaryError
+        return []
+      }
+      return markFallback(fallbackReports, primaryError ? mapQuantProviderError(primaryError).code : 'QUANT_PROVIDER_EMPTY')
+    }
+    catch (fallbackError) {
+      throw primaryError ?? fallbackError
+    }
+  }
+
+  return {
+    name: primary.name,
+    isConfigured: primary.isConfigured || Boolean(fallback?.isConfigured),
+    fetchCashflowHistory,
+  }
+}
+
+export function createQuantFinancialProviderChain(primary: QuantFinancialQualityProvider, fallback?: QuantFinancialQualityProvider): QuantFinancialQualityProvider {
+  const providers = [primary, fallback].filter((provider): provider is QuantFinancialQualityProvider => provider !== undefined)
+
+  function fallbackReason(error: unknown): string {
+    return mapQuantProviderError(error).code
+  }
+
+  function markFallback(report: QuantFinancialQualitySnapshot, error: unknown): QuantFinancialQualitySnapshot {
+    return {
+      ...report,
+      provider: report.provider ?? fallback?.name ?? primary.name,
+      fallbackUsed: true,
+      fallbackReason: fallbackReason(error),
+    }
+  }
+
+  async function fetchHistory(currentRequest: QuantFinancialQualityRequest): Promise<readonly QuantFinancialQualitySnapshot[]> {
+    const configuredProviders = providers.filter(provider => provider.isConfigured)
+    if (!configuredProviders.length)
+      throw new TushareProviderError('TOKEN_MISSING', 'No financial provider is configured', 'fina_indicator')
+
+    let primaryError: unknown = null
+    let primaryReports: readonly QuantFinancialQualitySnapshot[] | null = null
+    try {
+      primaryReports = await primary.fetchFinancialQualityHistory(currentRequest)
+    }
+    catch (error) {
+      primaryError = error
+    }
+
+    if (primaryReports && primaryReports.length > 0) {
+      if (!fallback?.isConfigured || !primaryReports.some(needsFinancialSupplement))
+        return primaryReports
+      try {
+        const supplementReports = await fallback.fetchFinancialQualityHistory(currentRequest)
+        const rawLimit = currentRequest.limit ?? 4
+        const limit = Number.isInteger(rawLimit) ? Math.min(8, Math.max(1, rawLimit)) : 4
+        return mergeFinancialReports(primaryReports, supplementReports, limit)
+      }
+      catch {
+        return primaryReports
+      }
+    }
+
+    const fallbackProvider = fallback?.isConfigured ? fallback : configuredProviders.find(provider => provider !== primary)
+    if (!fallbackProvider)
+      throw primaryError ?? new TushareProviderError('INVALID_RESPONSE', 'Financial provider returned no reports', primary.name)
+    try {
+      const reports = await fallbackProvider.fetchFinancialQualityHistory(currentRequest)
+      if (!reports.length)
+        throw new TushareProviderError('INVALID_RESPONSE', 'Financial provider returned no reports', fallbackProvider.name)
+      return reports.map(report => markFallback(report, primaryError ?? new Error('primary provider unavailable')))
+    }
+    catch (fallbackError) {
+      throw primaryError ?? fallbackError
+    }
+  }
+
+  async function fetchFinancialQualityHistory(request: QuantFinancialQualityRequest): Promise<readonly QuantFinancialQualitySnapshot[]> {
+    return fetchHistory(request)
+  }
+
+  async function fetchFinancialQuality(request: QuantFinancialQualityRequest): Promise<QuantFinancialQualitySnapshot> {
+    const reports = await fetchFinancialQualityHistory({ ...request, limit: 1 })
+    const report = reports[0]
+    if (!report)
+      throw new TushareProviderError('INVALID_RESPONSE', 'Financial provider returned no reports', primary.name)
+    return report
+  }
+
+  return {
+    name: primary.name,
+    isConfigured: providers.some(provider => provider.isConfigured),
+    fetchFinancialQuality,
+    fetchFinancialQualityHistory,
+  }
+}
+
 export type EastmoneyProviderErrorCode = 'TIMEOUT' | 'UPSTREAM_ERROR' | 'INVALID_RESPONSE'
 
 export class EastmoneyProviderError extends Error {
@@ -582,6 +966,28 @@ export interface QuantFinancialQualitySnapshot {
   readonly cashRatio: number | null
   readonly totalLiability: number | null
   readonly roic: number | null
+  /** Present when a fallback provider supplied the report. */
+  readonly provider?: QuantProviderName
+  readonly fallbackUsed?: boolean
+  readonly fallbackReason?: string | null
+  /** Present when the primary report was supplemented field-by-field. */
+  readonly supplementalProvider?: QuantProviderName
+  readonly supplementUsed?: boolean
+  /** Present when Eastmoney exposes a sector-specific financial statement profile. */
+  readonly industry?: QuantFinancialIndustry
+  /** Raw sector-specific fields; generic value-quality metrics must not reinterpret them. */
+  readonly industryMetrics?: QuantFinancialIndustryMetrics
+}
+
+export type QuantFinancialIndustry = 'general' | 'bank' | 'insurance' | 'securities' | 'other'
+
+export interface QuantFinancialIndustryMetrics {
+  readonly insuranceSolvencyRatio: number | null
+  readonly insuranceNetInvestmentReturn: number | null
+  readonly insuranceNewBusinessValueRate: number | null
+  readonly bankCoreTier1CapitalAdequacyRatio: number | null
+  readonly bankNetInterestMargin: number | null
+  readonly bankLoanProvisionRatio: number | null
 }
 
 export interface QuantFinancialQualityRequest {
@@ -594,6 +1000,103 @@ export interface QuantFinancialQualityProvider {
   readonly isConfigured: boolean
   fetchFinancialQuality: (request: QuantFinancialQualityRequest) => Promise<QuantFinancialQualitySnapshot>
   fetchFinancialQualityHistory: (request: QuantFinancialQualityRequest) => Promise<readonly QuantFinancialQualitySnapshot[]>
+}
+
+const FINANCIAL_NUMERIC_FIELDS = [
+  'revenue',
+  'revenueYoY',
+  'netProfit',
+  'netProfitYoY',
+  'adjustedNetProfit',
+  'adjustedNetProfitYoY',
+  'roe',
+  'grossMargin',
+  'netMargin',
+  'debtAssetRatio',
+  'operatingCashflowToRevenue',
+  'operatingCashflowPerShare',
+  'fcffBack',
+  'fcffForward',
+  'interestCoverage',
+  'interestBearingDebtRatio',
+  'cashRatio',
+  'totalLiability',
+  'roic',
+] as const satisfies readonly (keyof QuantFinancialQualitySnapshot)[]
+
+type FinancialNumericField = typeof FINANCIAL_NUMERIC_FIELDS[number]
+
+function needsFinancialSupplement(report: QuantFinancialQualitySnapshot): boolean {
+  return FINANCIAL_NUMERIC_FIELDS.some(field => report[field] === null)
+    || (report.provider === 'tushare' && report.industry === undefined)
+    || ((report.industry === 'bank' || report.industry === 'insurance') && report.industryMetrics === undefined)
+}
+
+function mergeFinancialIndustryMetrics(
+  primary: QuantFinancialQualitySnapshot['industryMetrics'],
+  supplement: QuantFinancialQualitySnapshot['industryMetrics'],
+): QuantFinancialQualitySnapshot['industryMetrics'] {
+  if (!primary && !supplement)
+    return undefined
+  const primaryMetrics = primary ?? {
+    insuranceSolvencyRatio: null,
+    insuranceNetInvestmentReturn: null,
+    insuranceNewBusinessValueRate: null,
+    bankCoreTier1CapitalAdequacyRatio: null,
+    bankNetInterestMargin: null,
+    bankLoanProvisionRatio: null,
+  }
+  const supplementMetrics = supplement ?? {
+    insuranceSolvencyRatio: null,
+    insuranceNetInvestmentReturn: null,
+    insuranceNewBusinessValueRate: null,
+    bankCoreTier1CapitalAdequacyRatio: null,
+    bankNetInterestMargin: null,
+    bankLoanProvisionRatio: null,
+  }
+  return {
+    insuranceSolvencyRatio: primaryMetrics.insuranceSolvencyRatio ?? supplementMetrics.insuranceSolvencyRatio ?? null,
+    insuranceNetInvestmentReturn: primaryMetrics.insuranceNetInvestmentReturn ?? supplementMetrics.insuranceNetInvestmentReturn ?? null,
+    insuranceNewBusinessValueRate: primaryMetrics.insuranceNewBusinessValueRate ?? supplementMetrics.insuranceNewBusinessValueRate ?? null,
+    bankCoreTier1CapitalAdequacyRatio: primaryMetrics.bankCoreTier1CapitalAdequacyRatio ?? supplementMetrics.bankCoreTier1CapitalAdequacyRatio ?? null,
+    bankNetInterestMargin: primaryMetrics.bankNetInterestMargin ?? supplementMetrics.bankNetInterestMargin ?? null,
+    bankLoanProvisionRatio: primaryMetrics.bankLoanProvisionRatio ?? supplementMetrics.bankLoanProvisionRatio ?? null,
+  }
+}
+
+function mergeFinancialReport(primary: QuantFinancialQualitySnapshot, supplement: QuantFinancialQualitySnapshot): QuantFinancialQualitySnapshot {
+  const merged: QuantFinancialQualitySnapshot = {
+    ...primary,
+    ...Object.fromEntries(FINANCIAL_NUMERIC_FIELDS.map(field => [field, primary[field] ?? supplement[field]])) as Pick<QuantFinancialQualitySnapshot, FinancialNumericField>,
+    industry: primary.industry ?? supplement.industry,
+    industryMetrics: mergeFinancialIndustryMetrics(primary.industryMetrics, supplement.industryMetrics),
+  }
+  const supplemented = FINANCIAL_NUMERIC_FIELDS.some(field => primary[field] === null && supplement[field] !== null)
+    || (primary.industry === undefined && supplement.industry !== undefined)
+    || (primary.industryMetrics === undefined && supplement.industryMetrics !== undefined)
+    || Boolean(primary.industryMetrics && supplement.industryMetrics && JSON.stringify(primary.industryMetrics) !== JSON.stringify(merged.industryMetrics))
+  return supplemented
+    ? { ...merged, supplementalProvider: supplement.provider ?? 'eastmoney', supplementUsed: true }
+    : merged
+}
+
+function mergeFinancialReports(
+  primaryReports: readonly QuantFinancialQualitySnapshot[],
+  supplementReports: readonly QuantFinancialQualitySnapshot[],
+  limit: number,
+): readonly QuantFinancialQualitySnapshot[] {
+  const supplementByDate = new Map(supplementReports.map(report => [report.reportDate, report] as const))
+  const merged = primaryReports.map((primary) => {
+    const supplement = supplementByDate.get(primary.reportDate)
+    return supplement ? mergeFinancialReport(primary, supplement) : primary
+  })
+  const primaryDates = new Set(primaryReports.map(report => report.reportDate))
+  const additional = supplementReports
+    .filter(report => !primaryDates.has(report.reportDate))
+    .map(report => ({ ...report, supplementalProvider: report.provider ?? 'eastmoney', supplementUsed: true }))
+  return [...merged, ...additional]
+    .sort((left, right) => right.reportDate.localeCompare(left.reportDate))
+    .slice(0, limit)
 }
 
 const EastmoneyResponseSchema = v.object({
@@ -1128,10 +1631,10 @@ export function createEastmoneyValuationProvider(options: EastmoneyProviderOptio
   async function fetchFallbackValuation(tsCode: string): Promise<QuantValuationSnapshot> {
     const code = tsCode.split('.')[0]
     const url = new URL('/api/data/v1/get', valuationFallbackBaseUrl)
-    url.searchParams.set('reportName', 'RPT_VALUE_ANALYSIS')
-    url.searchParams.set('columns', 'SECUCODE,SECURITY_CODE,PETTM,PBMRQ,PSTTM,REPORT_DATE')
+    url.searchParams.set('reportName', 'RPT_VALUEANALYSIS_DET')
+    url.searchParams.set('columns', 'SECUCODE,SECURITY_CODE,PE_TTM,PE_LAR,PB_MRQ,PS_TTM,PEG_CAR,TOTAL_MARKET_CAP,TRADE_DATE')
     url.searchParams.set('filter', `(SECURITY_CODE="${code}")`)
-    url.searchParams.set('sortColumns', 'REPORT_DATE')
+    url.searchParams.set('sortColumns', 'TRADE_DATE')
     url.searchParams.set('sortTypes', '-1')
     url.searchParams.set('pageNumber', '1')
     url.searchParams.set('pageSize', '1')
@@ -1177,13 +1680,26 @@ export function createEastmoneyValuationProvider(options: EastmoneyProviderOptio
     return {
       tsCode,
       observedAt: now().toISOString(),
-      dynamicPe: null,
-      peTtm: eastmoneyQuoteNumber(row.PETTM, 'peTtm'),
-      peStatic: null,
-      pb: eastmoneyQuoteNumber(row.PBMRQ, 'pb'),
-      ps: eastmoneyQuoteNumber(row.PSTTM, 'ps'),
-      peg: null,
-      marketCap: null,
+      dynamicPe: eastmoneyQuoteNumber(row.PE_DYNAMIC ?? row.PE, 'dynamicPe'),
+      peTtm: eastmoneyQuoteNumber(row.PE_TTM ?? row.PETTM, 'peTtm'),
+      peStatic: eastmoneyQuoteNumber(row.PE_LAR ?? row.PE_STATIC, 'peStatic'),
+      pb: eastmoneyQuoteNumber(row.PB_MRQ ?? row.PBMRQ, 'pb'),
+      ps: eastmoneyQuoteNumber(row.PS_TTM ?? row.PSTTM, 'ps'),
+      peg: eastmoneyQuoteNumber(row.PEG_CAR ?? row.PEG, 'peg'),
+      marketCap: eastmoneyQuoteNumber(row.TOTAL_MARKET_CAP ?? row.MARKET_CAP, 'marketCap'),
+    }
+  }
+
+  function mergeValuation(primary: QuantValuationSnapshot, supplement: QuantValuationSnapshot): QuantValuationSnapshot {
+    return {
+      ...primary,
+      dynamicPe: primary.dynamicPe ?? supplement.dynamicPe,
+      peTtm: primary.peTtm ?? supplement.peTtm,
+      peStatic: primary.peStatic ?? supplement.peStatic,
+      pb: primary.pb ?? supplement.pb,
+      ps: primary.ps ?? supplement.ps,
+      peg: primary.peg ?? supplement.peg,
+      marketCap: primary.marketCap ?? supplement.marketCap,
     }
   }
 
@@ -1191,7 +1707,15 @@ export function createEastmoneyValuationProvider(options: EastmoneyProviderOptio
     const tsCode = request.tsCode.trim().toUpperCase()
     eastmoneyMarket(tsCode)
     try {
-      return await fetchPrimaryValuation(tsCode)
+      const primary = await fetchPrimaryValuation(tsCode)
+      if ([primary.dynamicPe, primary.peTtm, primary.peStatic, primary.pb, primary.ps, primary.peg, primary.marketCap].every(value => value !== null))
+        return primary
+      try {
+        return mergeValuation(primary, await fetchFallbackValuation(tsCode))
+      }
+      catch {
+        return primary
+      }
     }
     catch (primaryError) {
       try {
@@ -1213,6 +1737,35 @@ export function createEastmoneyValuationProvider(options: EastmoneyProviderOptio
 function financialString(record: Record<string, unknown>, field: string): string | null {
   const value = record[field]
   return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function normalizeFinancialIndustry(value: string | null): QuantFinancialIndustry {
+  if (!value)
+    return 'general'
+  if (/保险/u.test(value))
+    return 'insurance'
+  if (/银行/u.test(value))
+    return 'bank'
+  if (/证券|券商/u.test(value))
+    return 'securities'
+  if (/通用|一般/u.test(value))
+    return 'general'
+  return 'other'
+}
+
+function normalizeFinancialIndustryMetrics(record: Record<string, unknown>): QuantFinancialIndustryMetrics {
+  return {
+    insuranceSolvencyRatio: eastmoneyQuoteNumber(record.SOLVENCY_AR, 'insuranceSolvencyRatio'),
+    insuranceNetInvestmentReturn: eastmoneyQuoteNumber(record.NET_ROI, 'insuranceNetInvestmentReturn'),
+    insuranceNewBusinessValueRate: eastmoneyQuoteNumber(record.NBV_RATE, 'insuranceNewBusinessValueRate'),
+    bankCoreTier1CapitalAdequacyRatio: eastmoneyQuoteNumber(record.FIRST_ADEQUACY_RATIO, 'bankCoreTier1CapitalAdequacyRatio'),
+    bankNetInterestMargin: eastmoneyQuoteNumber(record.NET_INTEREST_MARGIN, 'bankNetInterestMargin'),
+    bankLoanProvisionRatio: eastmoneyQuoteNumber(record.LOAN_PROVISION_RATIO, 'bankLoanProvisionRatio'),
+  }
+}
+
+function hasFinancialIndustryMetric(metrics: QuantFinancialIndustryMetrics): boolean {
+  return Object.values(metrics).some(value => value !== null)
 }
 
 function normalizeFinancialDate(value: unknown, field: string, required: boolean): string | null {
@@ -1243,9 +1796,13 @@ function normalizeFinancialReport(tsCode: string, record: Record<string, unknown
   if (!reportDate)
     throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney financial report date is missing')
 
+  const industry = normalizeFinancialIndustry(financialString(record, 'ORG_TYPE'))
+  const industryMetrics = normalizeFinancialIndustryMetrics(record)
+
   return {
     tsCode,
     observedAt,
+    provider: 'eastmoney',
     reportDate,
     reportType: financialString(record, 'REPORT_TYPE'),
     reportDateName: financialString(record, 'REPORT_DATE_NAME'),
@@ -1269,6 +1826,7 @@ function normalizeFinancialReport(tsCode: string, record: Record<string, unknown
     cashRatio: eastmoneyQuoteNumber(record.CASH_RATIO, 'cashRatio'),
     totalLiability: eastmoneyQuoteNumber(record.LIABILITY, 'totalLiability'),
     roic: eastmoneyQuoteNumber(record.ROIC, 'roic'),
+    ...(industry !== 'general' || hasFinancialIndustryMetric(industryMetrics) ? { industry, industryMetrics } : {}),
   }
 }
 
@@ -1358,6 +1916,7 @@ function normalizeEastmoneyCashflowReport(
   const interestBearingDebtComponents = normalizeEastmoneyInterestBearingDebtComponents(balanceRecord)
   return {
     tsCode,
+    provider: 'eastmoney',
     reportDate,
     reportType: financialString(record, 'REPORT_TYPE'),
     reportDateName: financialString(record, 'REPORT_DATE_NAME'),
@@ -1541,8 +2100,15 @@ export function createEastmoneyCashflowProvider(options: EastmoneyProviderOption
     }
 
     const parsed = v.safeParse(EastmoneyFinancialResponseSchema, payload)
-    if (!parsed.success)
+    if (!parsed.success) {
+      const emptyDatePayload = statement === 'cashflow dates'
+        && (payload === null
+          || (isRecord(payload) && (payload.data === null
+            || (Object.keys(payload).length > 0 && Object.keys(payload).every(key => key === '$type' || key === '$types')))))
+      if (emptyDatePayload)
+        return []
       throw new EastmoneyProviderError('INVALID_RESPONSE', `Eastmoney ${statement} response schema is invalid`)
+    }
 
     return parsed.output.data.map((value) => {
       if (!isRecord(value))
@@ -1561,7 +2127,7 @@ export function createEastmoneyCashflowProvider(options: EastmoneyProviderOption
     dateUrl.searchParams.set('companyType', '4')
     dateUrl.searchParams.set('reportDateType', '0')
     dateUrl.searchParams.set('code', tsCode)
-    const dateRows = await fetchRows(dateUrl)
+    const dateRows = await fetchRows(dateUrl, 'cashflow dates')
     const dates = dateRows.slice(0, limit).map((record) => {
       if (typeof record.REPORT_DATE !== 'string' || !record.REPORT_DATE.trim())
         throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney cashflow report date is missing')

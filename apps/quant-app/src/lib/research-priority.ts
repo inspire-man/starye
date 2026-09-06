@@ -15,6 +15,7 @@ export interface ResearchPriorityValueQuality {
   score: number | null
   status: ResearchPriorityValueQualityStatus
   riskDeduction: number
+  comparisonOnlyGap?: boolean
 }
 
 export interface ResearchPriorityBreakdown {
@@ -159,6 +160,8 @@ function valueQualityReason(valueQuality: ResearchPriorityValueQuality | null | 
     return { concern: false, reason: null, points: 0 }
   if (valueQuality === null)
     return { concern: true, reason: '价值质量尚未形成可比较结果', points: 14 }
+  if (valueQuality.comparisonOnlyGap)
+    return { concern: false, reason: '行业专用指标已返回，当前暂无足够同业可比样本', points: 0 }
   if (valueQuality.status !== 'ready' || valueQuality.score === null)
     return { concern: true, reason: '价值质量数据不完整，先补看估值和财务字段', points: 14 }
   if (valueQuality.score < 50)

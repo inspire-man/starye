@@ -93,7 +93,7 @@ export interface QuantResearchRunSectionProps {
   researchRunStatusLabel: (status: QuantResearchRun['status']) => string
   researchRunStatusClass: (status: QuantResearchRun['status']) => string
   researchRunActionLabel: (action: QuantResearchRun['report']['action']) => string
-  researchEvidenceStatusLabel: (status: QuantResearchEvidence['status']) => string
+  researchEvidenceStatusLabel: (item: QuantResearchEvidence) => string
   researchEvidenceStatusClass: (status: QuantResearchEvidence['status']) => string
   researchEvidenceChangeClass: (kind: ResearchEvidenceChange['kind']) => string
   researchRunTimelineScoreClass: (direction: ResearchRunScoreDirection) => string
@@ -422,7 +422,7 @@ defineExpose({ useQuestionPrompt })
               <div class="research-run-evidence-main">
                 <div class="research-run-evidence-title">
                   <strong>{{ item.label }}</strong>
-                  <span>{{ researchEvidenceStatusLabel(item.status) }}</span>
+                  <span>{{ researchEvidenceStatusLabel(item) }}</span>
                   <small v-if="item.optional">可选证据</small>
                 </div>
                 <p>{{ item.detail }}</p>

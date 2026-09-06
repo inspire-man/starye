@@ -400,6 +400,7 @@ const filteredCandidateItems = computed(() => filterAndSortCandidates(candidateI
               status: value.status,
               score: value.score,
               riskDeduction: value.riskDeduction,
+              comparisonOnlyGap: value.missingFields.length > 0 && value.missingFields.every(field => field === '行业专用韧性指标暂无足够同业可比样本'),
             }
           : null]
       }))
@@ -484,7 +485,19 @@ const researchPriorityMap = computed<Map<string, ResearchPriority>>(() => new Ma
   return [item.tsCode, buildResearchPriority({
     candidate: item,
     metadata: marker ? { status: marker.status, reviewDate: marker.reviewDate } : undefined,
-    valueQuality: valueQualityResultsLoaded.value ? valueQualityMap.value.get(item.tsCode) || null : undefined,
+    valueQuality: valueQualityResultsLoaded.value
+      ? (() => {
+          const value = valueQualityMap.value.get(item.tsCode)
+          return value
+            ? {
+                status: value.status,
+                score: value.score,
+                riskDeduction: value.riskDeduction,
+                comparisonOnlyGap: value.missingFields.length > 0 && value.missingFields.every(field => field === '行业专用韧性指标暂无足够同业可比样本'),
+              }
+            : null
+        })()
+      : undefined,
     today: todayDate.value,
   })]
 })))
@@ -645,7 +658,7 @@ const hasValuationData = computed(() => Boolean(valuation.value && [
   valuation.value.ps,
   valuation.value.peg,
   valuation.value.marketCap,
-].some(value => value !== null)))
+].some(value => value !== null && value !== undefined)))
 const hasFinancialData = computed(() => Boolean(financialQuality.value && [
   financialQuality.value.revenue,
   financialQuality.value.revenueYoY,
@@ -664,6 +677,12 @@ const hasFinancialData = computed(() => Boolean(financialQuality.value && [
   financialQuality.value.cashRatio,
   financialQuality.value.totalLiability,
   financialQuality.value.roic,
+  financialQuality.value.industryMetrics?.insuranceSolvencyRatio,
+  financialQuality.value.industryMetrics?.insuranceNetInvestmentReturn,
+  financialQuality.value.industryMetrics?.insuranceNewBusinessValueRate,
+  financialQuality.value.industryMetrics?.bankCoreTier1CapitalAdequacyRatio,
+  financialQuality.value.industryMetrics?.bankNetInterestMargin,
+  financialQuality.value.industryMetrics?.bankLoanProvisionRatio,
 ].some(value => value !== null)))
 
 type FinancialTrendTone = 'positive' | 'negative' | 'neutral'
@@ -702,7 +721,9 @@ const financialTrendItems = computed<FinancialTrendItem[]>(() => {
     { key: 'revenueYoY', label: '营收增速', current: latest.revenueYoY, previous: previous.revenueYoY, format: 'growth' as const },
     { key: 'netProfitYoY', label: '净利润增速', current: latest.netProfitYoY, previous: previous.netProfitYoY, format: 'growth' as const },
     { key: 'roe', label: 'ROE 回报', current: latest.roe, previous: previous.roe, format: 'metric' as const },
-    { key: 'debtAssetRatio', label: '资产负债率', current: latest.debtAssetRatio, previous: previous.debtAssetRatio, format: 'metric' as const, inverse: true },
+    ...(latest.industry === undefined || latest.industry === 'general'
+      ? [{ key: 'debtAssetRatio', label: '资产负债率', current: latest.debtAssetRatio, previous: previous.debtAssetRatio, format: 'metric' as const, inverse: true }]
+      : []),
   ]
 
   return entries.map((entry) => {
@@ -1003,8 +1024,10 @@ function researchRunActionLabel(action: QuantResearchRun['report']['action']): s
   }[action]
 }
 
-function researchEvidenceStatusLabel(status: QuantResearchEvidence['status']): string {
-  return { pass: '通过', caution: '注意', fail: '未通过', missing: '数据不足' }[status]
+function researchEvidenceStatusLabel(item: QuantResearchEvidence): string {
+  if (item.applicability === 'not_applicable')
+    return '行业不适用'
+  return { pass: '通过', caution: '注意', fail: '未通过', missing: '数据不足' }[item.status]
 }
 
 function researchEvidenceStatusClass(status: QuantResearchEvidence['status']): string {
@@ -1085,7 +1108,7 @@ function researchEvidenceHistoryValue(change: ResearchEvidenceChange, current: b
 
 function researchEvidenceHistoryStatus(change: ResearchEvidenceChange, current: boolean): string {
   const item = current ? change.current : change.previous
-  return item ? researchEvidenceStatusLabel(item.status) : current ? '本次未返回' : '无历史记录'
+  return item ? researchEvidenceStatusLabel(item) : current ? '本次未返回' : '无历史记录'
 }
 
 function researchRunTimelineScoreClass(direction: ResearchRunScoreDirection): string {

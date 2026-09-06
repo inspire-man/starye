@@ -9,7 +9,7 @@ import { generateQuantAiQuestion } from '../../../domain/quant/ai-question'
 import { createQuantAkshareBridge } from '../../../domain/quant/akshare-bridge'
 import { QuantError } from '../../../domain/quant/errors'
 import { screenMomentum } from '../../../domain/quant/factor'
-import { createEastmoneyFinancialProvider, createEastmoneyValuationProvider, mapQuantProviderError } from '../../../domain/quant/provider'
+import { createEastmoneyValuationProvider, mapQuantProviderError } from '../../../domain/quant/provider'
 import {
   createQuantResearchRun,
   ensureQuantStarterWatchlist,
@@ -40,7 +40,7 @@ import {
 } from '../../../schemas/quant'
 import { quantRouteDocs } from '../contract-docs'
 import { currentQuantUserId, eastmoneyProviderOptions } from '../route-context'
-import { capitalStructureProvider, cashflowProvider, dividendProvider, repurchaseProvider } from './market-support'
+import { capitalStructureProvider, cashflowProvider, dividendProvider, financialProvider, repurchaseProvider } from './market-support'
 import {
   isComparableResearchReport,
   parseResearchReport,
@@ -96,13 +96,13 @@ quantResearchRoutes.post('/research/runs', quantRouteDocs('research.runs.create'
   const candidate = screenMomentum({ [tsCode]: dailyBars }).find(item => item.tsCode === tsCode) ?? null
   const factorConfiguration = await getQuantFactorConfiguration(c.get('db'), userId)
   const valuationProvider = createEastmoneyValuationProvider(eastmoneyProviderOptions(c.env))
-  const financialProvider = createEastmoneyFinancialProvider(eastmoneyProviderOptions(c.env))
+  const financialSourceProvider = financialProvider(c.env)
   const dividendSourceProvider = dividendProvider(c.env)
   const cashflowSourceProvider = cashflowProvider(c.env)
   const akshareBridge = createQuantAkshareBridge(akshareBridgeOptions(c.env))
   const [valuationResult, financialResult, shareholderResult, akshareResult] = await Promise.allSettled([
     valuationProvider.fetchValuation({ tsCode }),
-    financialProvider.fetchFinancialQualityHistory({ tsCode, limit: 4 }),
+    financialSourceProvider.fetchFinancialQualityHistory({ tsCode, limit: 4 }),
     readQuantShareholderReturn(c.get('db'), userId, tsCode, dividendSourceProvider, cashflowSourceProvider, capitalStructureProvider(c.env), repurchaseProvider(c.env)),
     akshareBridge.isConfigured ? akshareBridge.fetchEvidence({ tsCode }) : Promise.resolve(null),
   ])

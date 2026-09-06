@@ -10,9 +10,11 @@ export interface QuantFactorDataHealthEvidence {
   readonly key: string
   readonly label: string
   readonly status: QuantResearchEvidenceStatus | 'unavailable'
+  readonly value: number | null
   readonly source: string
   readonly observedAt: string | null
   readonly detail: string
+  readonly applicability?: 'applicable' | 'not_applicable'
 }
 
 export interface QuantFactorDataHealthItem {
@@ -27,6 +29,7 @@ export interface QuantFactorDataHealthItem {
   readonly observedAt: string | null
   readonly evidenceCount: number
   readonly usableEvidenceCount: number
+  readonly notApplicableEvidenceKeys: readonly string[]
   readonly evidence: readonly QuantFactorDataHealthEvidence[]
   readonly missingEvidenceKeys: readonly string[]
   readonly failedEvidenceKeys: readonly string[]
@@ -56,19 +59,22 @@ function round(value: number, digits = 4): number {
 function sourceHealth(value: string): QuantFactorSourceHealth {
   if (!value.trim())
     return 'unknown'
+  if (/回退链|回退|fallback|quota|配额/iu.test(value))
+    return 'fallback'
   if (/不可用|失败|error|unavailable/iu.test(value))
     return 'unavailable'
-  if (/回退|fallback|quota|配额/iu.test(value))
-    return 'fallback'
   return 'primary'
 }
 
 function evidenceSourceHealth(evidence: readonly QuantFactorDataHealthEvidence[]): QuantFactorSourceHealth {
   if (!evidence.length)
     return 'unknown'
-  if (evidence.some(item => item.status === 'unavailable' || sourceHealth(item.source) === 'unavailable'))
+  if (evidence.some(item => item.status === 'unavailable'
+    || sourceHealth(item.source) === 'unavailable'
+    || /来源.*不可用|来源.*失败|来源.*未配置|来源.*error|来源.*unavailable|provider.*不可用|provider.*失败|provider.*未配置|provider.*error|provider.*unavailable/iu.test(item.detail))) {
     return 'unavailable'
-  if (evidence.some(item => sourceHealth(item.source) === 'fallback'))
+  }
+  if (evidence.some(item => sourceHealth(item.source) === 'fallback' || /回退|fallback|quota|配额/iu.test(item.detail)))
     return 'fallback'
   return 'primary'
 }
@@ -104,7 +110,7 @@ function nextAction(
   if (missingEvidenceKeys.length)
     return `补齐证据：${missingEvidenceKeys.join('、')}`
   if (failedEvidenceKeys.length)
-    return `重试来源：${failedEvidenceKeys.join('、')}`
+    return `原始字段已读取，先核对阈值风险：${failedEvidenceKeys.join('、')}`
   if (sourceHealthValue === 'fallback')
     return '字段已读取，复核回退来源与观察时间'
   return '已具备原始证据，可进入因子复核'
@@ -119,27 +125,33 @@ function itemForFactor(factor: QuantResearchFactor, evidenceByKey: ReadonlyMap<s
       key: item.key,
       label: item.label,
       status: item.status,
+      value: finite(item.value),
       source: item.source,
       observedAt: item.observedAt,
       detail: item.detail,
+      ...(item.applicability ? { applicability: item.applicability } : {}),
     }]
   })
   const evidenceKeys = new Set(factor.evidenceKeys)
-  const missingEvidenceKeys = [...new Set([
-    ...factor.missingEvidenceKeys,
-    ...factor.evidenceKeys.filter(key => !evidenceByKey.has(key)),
-    ...evidence.filter(item => item.status === 'missing').map(item => item.key),
+  const notApplicableEvidenceKeys = [...new Set([
+    ...(factor.notApplicableEvidenceKeys ?? []),
+    ...evidence.filter(item => item.applicability === 'not_applicable').map(item => item.key),
   ])]
-  const failedEvidenceKeys = [...new Set(evidence.filter(item => item.status === 'fail').map(item => item.key))]
+  const missingEvidenceKeys = [...new Set([
+    ...factor.missingEvidenceKeys.filter(key => !notApplicableEvidenceKeys.includes(key) && !evidence.some(item => item.key === key && item.value !== null)),
+    ...factor.evidenceKeys.filter(key => !notApplicableEvidenceKeys.includes(key) && !evidenceByKey.has(key)),
+    ...evidence.filter(item => item.applicability !== 'not_applicable' && (item.status === 'missing' || item.value === null)).map(item => item.key),
+  ])]
+  const failedEvidenceKeys = [...new Set(evidence.filter(item => item.applicability !== 'not_applicable' && item.status === 'fail' && item.value !== null).map(item => item.key))]
   const freshness = buildQuantFactorFreshness(factor, [...evidenceByKey.values()], evaluatedAt)
-  const usableEvidenceCount = evidence.filter(item => item.status === 'pass' || item.status === 'caution').length
   const factorSourceHealth = sourceHealth(factor.source)
   const sourceHealthValue = mergeSourceHealth(factorSourceHealth, evidenceSourceHealth(evidence))
+  const usableEvidenceCount = evidence.filter(item => item.applicability !== 'not_applicable' && item.value !== null && item.status !== 'unavailable' && sourceHealth(item.source) !== 'unavailable').length
   const status: QuantFactorDataHealthStatus = factor.status === 'unavailable' || sourceHealthValue === 'unavailable'
     ? 'unavailable'
     : !evidenceKeys.size || usableEvidenceCount === 0
         ? 'missing'
-        : factor.status === 'ready' && missingEvidenceKeys.length === 0 && failedEvidenceKeys.length === 0
+        : factor.status === 'ready' && missingEvidenceKeys.length === 0
           ? 'ready'
           : 'partial'
 
@@ -155,6 +167,7 @@ function itemForFactor(factor: QuantResearchFactor, evidenceByKey: ReadonlyMap<s
     observedAt: latestObservedAt(evidence.map(item => item.observedAt)),
     evidenceCount: evidence.length,
     usableEvidenceCount,
+    notApplicableEvidenceKeys,
     evidence,
     missingEvidenceKeys,
     failedEvidenceKeys,

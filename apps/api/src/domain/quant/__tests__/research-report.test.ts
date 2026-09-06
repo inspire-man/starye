@@ -267,6 +267,66 @@ describe('quant research report', () => {
     expect(report.decision?.recommendation).toBe('watch')
   })
 
+  it('does not turn insurance-only generic fields into research gaps', () => {
+    const industryFinancial = {
+      ...financial,
+      industry: 'insurance' as const,
+      grossMargin: null,
+      debtAssetRatio: 89.8,
+      industryMetrics: {
+        insuranceSolvencyRatio: 198.1,
+        insuranceNetInvestmentReturn: 2.8,
+        insuranceNewBusinessValueRate: 29,
+        bankCoreTier1CapitalAdequacyRatio: null,
+        bankNetInterestMargin: null,
+        bankLoanProvisionRatio: null,
+      },
+    }
+    const report = buildQuantResearchReport({
+      tsCode: '601318.SH',
+      name: '中国平安',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-insurance',
+      candidate,
+      dailyBars: bars(80),
+      valuation,
+      financialReports: [industryFinancial, { ...industryFinancial, reportDate: '2025-12-31' }],
+      shareholderReturn,
+    })
+
+    expect(report).toMatchObject({ status: 'ready', action: 'research-window' })
+    expect(report.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'quality-gross-margin', applicability: 'not_applicable', status: 'missing', value: null }),
+      expect.objectContaining({ key: 'quality-debt-asset', applicability: 'not_applicable', status: 'missing', value: null }),
+      expect.objectContaining({ key: 'quality-insurance-solvency', value: 198.1, optional: true }),
+    ]))
+    expect(report.factorModel?.factors.find(factor => factor.key === 'quality')).toMatchObject({ status: 'ready', missingEvidenceKeys: [], notApplicableEvidenceKeys: ['quality-gross-margin', 'quality-cashflow', 'quality-debt-asset'] })
+  })
+
+  it('keeps a negative PEG as a non-comparable source fact', () => {
+    const report = buildQuantResearchReport({
+      tsCode: '601857.SH',
+      name: '中国石油',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-negative-peg',
+      candidate,
+      dailyBars: bars(80),
+      valuation: { ...valuation, peg: -1.27 },
+      financialReports: [financial, { ...financial, reportDate: '2025-12-31' }],
+      shareholderReturn,
+    })
+
+    expect(report.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: 'valuation-peg',
+        status: 'fail',
+        value: -1.27,
+        detail: expect.stringContaining('不满足正值比较'),
+      }),
+    ]))
+    expect(report.factorModel?.factors.find(factor => factor.key === 'valuation')).toMatchObject({ status: 'ready', missingEvidenceKeys: [] })
+  })
+
   it('keeps AkShare factors optional and makes cross-source differences explicit', () => {
     const report = buildQuantResearchReport({
       tsCode: '601899.SH',

@@ -167,7 +167,7 @@ export interface QuantResearchDetailProps {
   researchRunStatusLabel: (status: QuantResearchRun['status']) => string
   researchRunStatusClass: (status: QuantResearchRun['status']) => string
   researchRunActionLabel: (action: QuantResearchRun['report']['action']) => string
-  researchEvidenceStatusLabel: (status: QuantResearchEvidence['status']) => string
+  researchEvidenceStatusLabel: (item: QuantResearchEvidence) => string
   researchEvidenceStatusClass: (status: QuantResearchEvidence['status']) => string
   formatResearchEvidenceValue: (item: QuantResearchEvidence) => string
   researchEvidenceChangeClass: (kind: ResearchEvidenceChange['kind']) => string
@@ -628,6 +628,7 @@ defineExpose({ useQuestionPrompt })
     />
     <QuantShareholderReturnsSection
       :selected-shareholder-return="selectedShareholderReturn"
+      :financial-industry="financialQuality?.industry ?? null"
       :loading="loading"
       :errors="errors"
       :format-number="formatNumber"
