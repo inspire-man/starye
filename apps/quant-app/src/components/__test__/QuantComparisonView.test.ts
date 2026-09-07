@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { CandidateItem } from '../../lib/quant-view-models'
+import type { TimingHistory } from '../../lib/timing-history'
 import type { QuantComparisonViewProps } from '../QuantComparisonView.vue'
 import { shallowMount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
@@ -27,6 +28,90 @@ const candidate: CandidateItem = {
   quality: 'ready',
 }
 
+const tbeaCandidate: CandidateItem = {
+  ...candidate,
+  id: 'candidate-2',
+  tsCode: '600089.SH',
+  name: '特变电工',
+  score: 4,
+}
+
+const timingHistory: TimingHistory = {
+  availableBars: 482,
+  evaluatedWindows: 21,
+  forwardDays: 20,
+  samplingInterval: 20,
+  minimumReliableSampleSize: 6,
+  dataStartDate: '20240909',
+  dataEndDate: '20260904',
+  evaluationStartDate: '20241203',
+  evaluationEndDate: '20260806',
+  currentState: 'weak',
+  currentLabel: '趋势走弱',
+  observations: [],
+  baseline: {
+    sampleSize: 21,
+    positiveCount: 13,
+    positiveRate: 13 / 21,
+    positiveRateLower: 0.37,
+    positiveRateUpper: 0.85,
+    averageForwardReturn20: 0.01,
+    medianForwardReturn20: 0.02,
+  },
+  buckets: [{
+    state: 'weak',
+    label: '趋势走弱',
+    sampleSize: 9,
+    positiveCount: 6,
+    positiveRate: 2 / 3,
+    positiveRateLower: 0.3,
+    positiveRateUpper: 0.9,
+    positiveRateLift: 0.0476,
+    averageForwardReturn20: -0.005,
+    averageForwardReturn20Delta: -0.015,
+    medianForwardReturn20: 0.0336,
+    medianForwardReturn20Delta: 0.0136,
+    bestForwardReturn20: 0.08,
+    worstForwardReturn20: -0.14,
+    sampleQuality: 'limited',
+  }],
+}
+
+const insufficientTimingHistory: TimingHistory = {
+  ...timingHistory,
+  availableBars: 79,
+  evaluatedWindows: 0,
+  currentState: 'insufficient',
+  currentLabel: '数据不足',
+  evaluationStartDate: null,
+  evaluationEndDate: null,
+  observations: [],
+  baseline: {
+    sampleSize: 0,
+    positiveCount: 0,
+    positiveRate: null,
+    positiveRateLower: null,
+    positiveRateUpper: null,
+    averageForwardReturn20: null,
+    medianForwardReturn20: null,
+  },
+  buckets: [],
+}
+
+const insufficientSampleTimingHistory: TimingHistory = {
+  ...timingHistory,
+  buckets: [{
+    ...timingHistory.buckets[0]!,
+    sampleSize: 5,
+    positiveCount: 4,
+    positiveRate: 0.8,
+    positiveRateLower: 0.38,
+    positiveRateUpper: 0.96,
+    positiveRateLift: 0.18,
+    sampleQuality: 'insufficient',
+  }],
+}
+
 function baseProps(overrides: Partial<QuantComparisonViewProps> = {}): QuantComparisonViewProps {
   const noop = () => {}
   return {
@@ -35,6 +120,9 @@ function baseProps(overrides: Partial<QuantComparisonViewProps> = {}): QuantComp
     comparisonValuations: {},
     comparisonFinancials: {},
     comparisonErrors: {},
+    comparisonTimingHistories: { [candidate.tsCode]: timingHistory },
+    comparisonDailyLoading: { [candidate.tsCode]: false },
+    comparisonDailyErrors: { [candidate.tsCode]: false },
     comparisonResearchButtonLabel: '批量生成研究',
     canCompareCandidates: true,
     comparisonResearchRunning: false,
@@ -104,6 +192,8 @@ function baseProps(overrides: Partial<QuantComparisonViewProps> = {}): QuantComp
     formatPercent: value => value === null ? '--' : `${value.toFixed(2)}%`,
     formatSignalScore: value => value === null ? '--' : `${value} / 6`,
     formatMetricPercent: value => value === null ? '--' : `${value.toFixed(2)}%`,
+    formatTimingHistoryRate: value => value === null ? '--' : `${Math.round(value * 100)}%`,
+    formatTimingHistoryPercent: value => value === null ? '--' : `${value >= 0 ? '+' : ''}${(value * 100).toFixed(2)}%`,
     formatDateTime: value => value || '--',
     startBatchResearch: noop,
     downloadComparisonResearchReports: noop,
@@ -139,5 +229,70 @@ describe('quant comparison view', () => {
 
     await wrapper.get('.comparison-ai-inline-citation').trigger('click')
     expect(openComparisonAiCitation).toHaveBeenCalledWith({ tsCode: candidate.tsCode, evidenceKey: 'quality-cashflow' })
+  })
+
+  it('shows independent historical timing evidence in the comparison table', () => {
+    const wrapper = shallowMount(QuantComparisonView, {
+      props: baseProps(),
+    })
+
+    expect(wrapper.text()).toContain('历史时机回看')
+    expect(wrapper.text()).toContain('482 根 · 21 截点')
+    expect(wrapper.text()).toContain('趋势走弱')
+    expect(wrapper.text()).toContain('67% / +4.76%')
+    expect(wrapper.text()).toContain('有限参考')
+  })
+
+  it('keeps timing history independent for the selected target columns', () => {
+    const wrapper = shallowMount(QuantComparisonView, {
+      props: baseProps({
+        selectedCandidateItems: [candidate, tbeaCandidate],
+        comparisonTimingHistories: {
+          [candidate.tsCode]: timingHistory,
+          [tbeaCandidate.tsCode]: { ...timingHistory, currentState: 'pullback_watch', currentLabel: '回撤观察' },
+        },
+        comparisonDailyLoading: { [candidate.tsCode]: false, [tbeaCandidate.tsCode]: false },
+        comparisonDailyErrors: { [candidate.tsCode]: false, [tbeaCandidate.tsCode]: false },
+      }),
+    })
+
+    expect(wrapper.text()).toContain('特变电工')
+    expect(wrapper.text()).toContain('测试股票')
+    expect(wrapper.text()).toContain('趋势走弱')
+    expect(wrapper.text()).toContain('回撤观察')
+  })
+
+  it('keeps loading and source failure visible without filling missing values', () => {
+    const loading = shallowMount(QuantComparisonView, {
+      props: baseProps({
+        comparisonTimingHistories: {},
+        comparisonDailyLoading: { [candidate.tsCode]: true },
+      }),
+    })
+    expect(loading.text()).toContain('读取中')
+
+    const failed = shallowMount(QuantComparisonView, {
+      props: baseProps({
+        comparisonTimingHistories: {},
+        comparisonDailyErrors: { [candidate.tsCode]: true },
+      }),
+    })
+    expect(failed.text()).toContain('来源不可用')
+    expect(failed.text()).toContain('全体上涨比例')
+    expect(failed.text()).toContain('--')
+  })
+
+  it('labels insufficient history and small state samples separately', () => {
+    const insufficient = shallowMount(QuantComparisonView, {
+      props: baseProps({ comparisonTimingHistories: { [candidate.tsCode]: insufficientTimingHistory } }),
+    })
+    expect(insufficient.text()).toContain('数据不足')
+    expect(insufficient.text()).toContain('79 根')
+
+    const smallSample = shallowMount(QuantComparisonView, {
+      props: baseProps({ comparisonTimingHistories: { [candidate.tsCode]: insufficientSampleTimingHistory } }),
+    })
+    expect(smallSample.text()).toContain('5 · 样本不足')
+    expect(smallSample.text()).toContain('80% / +18.00%')
   })
 })

@@ -9,6 +9,7 @@ import type {
 } from '../lib/quant-view-models'
 import type { BatchAiSummaryState } from '../lib/research-batch-ai-summary'
 import type { BatchResearchFollowUpState, BatchResearchItemAction } from '../lib/research-batch-follow-up'
+import type { TimingHistory, TimingHistoryBucket } from '../lib/timing-history'
 import { BrainCircuit, Copy, Download, Eye, RefreshCw, RotateCcw, Sparkles } from 'lucide-vue-next'
 
 interface ComparisonResearchSummary {
@@ -34,6 +35,9 @@ export interface QuantComparisonViewProps {
   comparisonValuations: Record<string, QuantValuationSnapshot | null>
   comparisonFinancials: Record<string, QuantFinancialQualitySnapshot | null>
   comparisonErrors: Record<string, ComparisonErrors>
+  comparisonTimingHistories: Record<string, TimingHistory | null>
+  comparisonDailyLoading: Record<string, boolean>
+  comparisonDailyErrors: Record<string, boolean>
   comparisonResearchButtonLabel: string
   canCompareCandidates: boolean
   comparisonResearchRunning: boolean
@@ -82,6 +86,8 @@ export interface QuantComparisonViewProps {
   formatPercent: (value: number | null) => string
   formatSignalScore: (value: number | null) => string
   formatMetricPercent: (value: number | null) => string
+  formatTimingHistoryRate: (value: number | null) => string
+  formatTimingHistoryPercent: (value: number | null) => string
   formatDateTime: (value: string | null) => string
   startBatchResearch: () => void | Promise<void>
   downloadComparisonResearchReports: () => void
@@ -104,6 +110,9 @@ const {
   comparisonValuations,
   comparisonFinancials,
   comparisonErrors,
+  comparisonTimingHistories,
+  comparisonDailyLoading,
+  comparisonDailyErrors,
   comparisonResearchButtonLabel,
   canCompareCandidates,
   comparisonResearchRunning,
@@ -152,6 +161,8 @@ const {
   formatPercent,
   formatSignalScore,
   formatMetricPercent,
+  formatTimingHistoryRate,
+  formatTimingHistoryPercent,
   formatDateTime,
   startBatchResearch,
   downloadComparisonResearchReports,
@@ -167,6 +178,23 @@ const {
   openComparisonAiCitation,
   useComparisonAiNextCheck,
 } = defineProps<QuantComparisonViewProps>()
+
+function timingHistoryFor(item: CandidateItem): TimingHistory | null {
+  return comparisonTimingHistories[item.tsCode] || null
+}
+
+function timingHistoryBucketFor(item: CandidateItem): TimingHistoryBucket | null {
+  const history = timingHistoryFor(item)
+  if (!history || history.currentState === 'insufficient')
+    return null
+  return history.buckets.find(bucket => bucket.state === history.currentState) || null
+}
+
+function timingHistorySampleQualityLabel(bucket: TimingHistoryBucket | null): string {
+  if (!bucket)
+    return '数据不足'
+  return bucket.sampleQuality === 'usable' ? '可参考' : bucket.sampleQuality === 'limited' ? '有限参考' : '样本不足'
+}
 </script>
 
 <template>
@@ -261,6 +289,46 @@ const {
           <tr>
             <th>资产负债率</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-debt`">
               {{ comparisonErrors[item.tsCode]?.financial ? '暂不可用' : formatMetricPercent(comparisonFinancials[item.tsCode]?.debtAssetRatio ?? null) }}
+            </td>
+          </tr>
+          <tr class="comparison-group-row">
+            <th :colspan="selectedCandidateItems.length + 1">
+              历史时机回看
+            </th>
+          </tr>
+          <tr>
+            <th>历史数据</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-timing-history-data`">
+              <span v-if="comparisonDailyLoading[item.tsCode]">读取中</span>
+              <span v-else-if="comparisonDailyErrors[item.tsCode]" class="text-status-danger">来源不可用</span>
+              <span v-else-if="timingHistoryFor(item) && !timingHistoryFor(item)?.evaluatedWindows" class="text-status-neutral">数据不足（{{ timingHistoryFor(item)?.availableBars }} 根）</span>
+              <span v-else-if="!timingHistoryFor(item)" class="text-status-neutral">--</span>
+              <span v-else>{{ timingHistoryFor(item)?.availableBars }} 根 · {{ timingHistoryFor(item)?.evaluatedWindows }} 截点</span>
+            </td>
+          </tr>
+          <tr>
+            <th>当前状态</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-timing-history-state`">
+              {{ timingHistoryFor(item)?.currentLabel || (comparisonDailyLoading[item.tsCode] ? '读取中' : '--') }}
+            </td>
+          </tr>
+          <tr>
+            <th>全体上涨比例</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-timing-history-baseline`">
+              {{ formatTimingHistoryRate(timingHistoryFor(item)?.baseline.positiveRate ?? null) }}
+            </td>
+          </tr>
+          <tr>
+            <th>当前状态样本</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-timing-history-sample`">
+              <template v-if="timingHistoryBucketFor(item)">
+                {{ timingHistoryBucketFor(item)?.sampleSize }} · {{ timingHistorySampleQualityLabel(timingHistoryBucketFor(item)) }}
+              </template>
+              <span v-else class="text-status-neutral">--</span>
+            </td>
+          </tr>
+          <tr>
+            <th>上涨比例 / 相对基准</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-timing-history-lift`">
+              <template v-if="timingHistoryBucketFor(item)">
+                {{ formatTimingHistoryRate(timingHistoryBucketFor(item)?.positiveRate ?? null) }} / {{ formatTimingHistoryPercent(timingHistoryBucketFor(item)?.positiveRateLift ?? null) }}
+              </template>
+              <span v-else class="text-status-neutral">--</span>
             </td>
           </tr>
         </tbody>
