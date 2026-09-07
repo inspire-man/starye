@@ -284,7 +284,7 @@
 
 .timing-history-current-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
   margin-top: 0.8rem;
 }
@@ -352,6 +352,14 @@
 .timing-history-table-row strong {
   color: hsl(var(--foreground));
   font-weight: 720;
+}
+
+.timing-history-table-subtext {
+  display: block;
+  margin-top: 0.1rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.5625rem;
+  line-height: 1.25;
 }
 
 .timing-history-empty {

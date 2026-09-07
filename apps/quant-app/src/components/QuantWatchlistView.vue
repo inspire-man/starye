@@ -161,7 +161,7 @@ function syncStatusClass(status: SyncResult['status']): string {
           <span>股票</span><strong>{{ props.watchlist.length }} 只</strong>
         </div>
         <div class="sync-window">
-          <span>历史范围</span><strong>最近 120 个交易日</strong>
+          <span>历史范围</span><strong>约两年，最多 520 根日线</strong>
         </div>
         <div class="sync-window">
           <span>数据截至</span><strong>{{ props.latestWatchlistDate }}</strong>

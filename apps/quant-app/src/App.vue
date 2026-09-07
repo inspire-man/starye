@@ -831,6 +831,8 @@ const dailyColumns: Column<DailyBar>[] = [
   { key: 'amount', label: '成交额', width: '110px', render: item => formatCompact(item.amount) },
 ]
 
+const DAILY_HISTORY_LIMIT = 520
+
 const chartBars = computed(() => {
   const values = dailyBars.value.slice(-42).filter(item => item.close !== null)
   if (!values.length)
@@ -1169,7 +1171,8 @@ function formatTimingHistoryPercent(value: number | null): string {
 }
 
 function timingHistoryBucketTitle(bucket: TimingHistoryBucket): string {
-  return `${bucket.label}：${bucket.sampleSize} 个历史截点，未来 20 日上涨比例 ${formatTimingHistoryRate(bucket.positiveRate)}`
+  const quality = bucket.sampleQuality === 'usable' ? '可参考' : bucket.sampleQuality === 'limited' ? '有限参考' : '样本不足'
+  return `${bucket.label}：${bucket.sampleSize} 个非重叠截点，未来 20 日上涨比例 ${formatTimingHistoryRate(bucket.positiveRate)}（Wilson 95% ${formatTimingHistoryRate(bucket.positiveRateLower)} - ${formatTimingHistoryRate(bucket.positiveRateUpper)}），相对全体 ${formatTimingHistoryPercent(bucket.positiveRateLift)}，${quality}`
 }
 
 function formatEvidenceDate(value: string | null): string {
@@ -2207,7 +2210,7 @@ async function loadDailyBars(tsCode: string) {
   loading.daily = true
   errors.daily = null
   try {
-    dailyBars.value = await quantApi.getDailyBars(tsCode, { limit: 120 })
+    dailyBars.value = await quantApi.getDailyBars(tsCode, { limit: DAILY_HISTORY_LIMIT })
   }
   catch (error) {
     errors.daily = error

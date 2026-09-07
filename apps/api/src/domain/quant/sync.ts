@@ -18,9 +18,10 @@ import {
   saveQuantSyncState,
   upsertQuantDailyBars,
 } from './repository'
+import { QUANT_DAILY_HISTORY_LIMIT } from './types'
 
-const DEFAULT_CALENDAR_WINDOW_DAYS = 180
-const MAX_DAILY_BARS_PER_CODE = 120
+const DEFAULT_CALENDAR_WINDOW_DAYS = 730
+const MAX_DAILY_BARS_PER_CODE = QUANT_DAILY_HISTORY_LIMIT
 export const QUANT_SYNC_PROVIDER_CONCURRENCY = 4
 export const QUANT_SYNC_PROVIDER_TIMEOUT_MS = 10_000
 export const QUANT_SYNC_TOTAL_DEADLINE_MS = 120_000

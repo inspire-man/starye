@@ -25,20 +25,38 @@ describe('buildTimingHistory', () => {
 
     expect(result).toMatchObject({
       availableBars: 120,
-      evaluatedWindows: 41,
+      evaluatedWindows: 3,
       forwardDays: 20,
       evaluationStartDate: '20260060',
       evaluationEndDate: '20260100',
     })
-    expect(result.buckets.reduce((sum, bucket) => sum + bucket.sampleSize, 0)).toBe(41)
-    expect(result.observations).toHaveLength(41)
+    expect(result.samplingInterval).toBe(20)
+    expect(result.baseline.sampleSize).toBe(3)
+    expect(result.buckets.reduce((sum, bucket) => sum + bucket.sampleSize, 0)).toBe(3)
+    expect(result.observations).toHaveLength(3)
     expect(result.buckets.find(bucket => bucket.sampleSize > 0)?.positiveRate).toBe(1)
+  })
+
+  it('compares each state with the non-overlapping all-sample baseline', () => {
+    const result = buildTimingHistory(bars(Array.from({ length: 520 }, (_, index) => 100 + index)))
+    const bucket = result.buckets.find(item => item.sampleSize > 0)
+
+    expect(result.baseline.sampleSize).toBe(result.evaluatedWindows)
+    expect(result.evaluatedWindows).toBe(23)
+    expect(bucket).toMatchObject({
+      positiveRate: 1,
+      positiveRateLift: 0,
+      sampleQuality: 'usable',
+    })
+    expect(bucket?.positiveRateLower).toBeGreaterThan(0.8)
+    expect(bucket?.positiveRateUpper).toBe(1)
   })
 
   it('keeps all outcome metrics null when the forward window is unavailable', () => {
     const result = buildTimingHistory(bars(Array.from({ length: 79 }, (_, index) => 100 + index)))
 
     expect(result).toMatchObject({ availableBars: 79, evaluatedWindows: 0, evaluationStartDate: null, evaluationEndDate: null })
+    expect(result.baseline).toMatchObject({ sampleSize: 0, positiveRate: null, positiveRateLower: null, positiveRateUpper: null })
     expect(result.buckets.every(bucket => bucket.sampleSize === 0 && bucket.positiveRate === null && bucket.medianForwardReturn20 === null)).toBe(true)
   })
 

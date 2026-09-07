@@ -1,4 +1,5 @@
 export const QUANT_FACTOR_VERSION = 'momentum-v1' as const
+export const QUANT_DAILY_HISTORY_LIMIT = 520 as const
 
 export type QuantCapabilityName = 'daily' | 'stock_basic' | 'trade_cal' | 'daily_basic'
 
