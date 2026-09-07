@@ -195,6 +195,12 @@ function timingHistorySampleQualityLabel(bucket: TimingHistoryBucket | null): st
     return '数据不足'
   return bucket.sampleQuality === 'usable' ? '可参考' : bucket.sampleQuality === 'limited' ? '有限参考' : '样本不足'
 }
+
+function timingHistoryEdgeAssessmentLabel(bucket: TimingHistoryBucket | null): string {
+  if (!bucket)
+    return '数据不足'
+  return bucket.edgeAssessment === 'supported' ? '相对基准有稳定支持' : bucket.edgeAssessment === 'weaker' ? '相对基准偏弱' : bucket.edgeAssessment === 'indeterminate' ? '区间重叠' : '样本不足'
+}
 </script>
 
 <template>
@@ -321,6 +327,11 @@ function timingHistorySampleQualityLabel(bucket: TimingHistoryBucket | null): st
                 {{ timingHistoryBucketFor(item)?.sampleSize }} · {{ timingHistorySampleQualityLabel(timingHistoryBucketFor(item)) }}
               </template>
               <span v-else class="text-status-neutral">--</span>
+            </td>
+          </tr>
+          <tr>
+            <th>基准区间结论</th><td v-for="item in selectedCandidateItems" :key="`${item.id}-timing-history-edge`">
+              {{ timingHistoryEdgeAssessmentLabel(timingHistoryBucketFor(item)) }}
             </td>
           </tr>
           <tr>

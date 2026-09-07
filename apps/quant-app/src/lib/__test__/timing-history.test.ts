@@ -1,6 +1,6 @@
 import type { DailyBar } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
-import { buildTimingHistory } from '../timing-history'
+import { buildTimingHistory, classifyTimingHistoryEdge } from '../timing-history'
 
 function bars(closes: readonly number[]): DailyBar[] {
   return closes.map((close, index) => ({
@@ -47,6 +47,7 @@ describe('buildTimingHistory', () => {
       positiveRate: 1,
       positiveRateLift: 0,
       sampleQuality: 'usable',
+      edgeAssessment: 'indeterminate',
     })
     expect(bucket?.positiveRateLower).toBeGreaterThan(0.8)
     expect(bucket?.positiveRateUpper).toBe(1)
@@ -58,6 +59,15 @@ describe('buildTimingHistory', () => {
     expect(result).toMatchObject({ availableBars: 79, evaluatedWindows: 0, evaluationStartDate: null, evaluationEndDate: null })
     expect(result.baseline).toMatchObject({ sampleSize: 0, positiveRate: null, positiveRateLower: null, positiveRateUpper: null })
     expect(result.buckets.every(bucket => bucket.sampleSize === 0 && bucket.positiveRate === null && bucket.medianForwardReturn20 === null)).toBe(true)
+  })
+
+  it('classifies interval separation separately from sample quality', () => {
+    const baseline = { positiveRateLower: 0.4, positiveRateUpper: 0.6 }
+
+    expect(classifyTimingHistoryEdge({ sampleSize: 5, positiveRateLower: 0.7, positiveRateUpper: 1 }, baseline)).toBe('insufficient')
+    expect(classifyTimingHistoryEdge({ sampleSize: 12, positiveRateLower: 0.61, positiveRateUpper: 0.9 }, baseline)).toBe('supported')
+    expect(classifyTimingHistoryEdge({ sampleSize: 12, positiveRateLower: 0.1, positiveRateUpper: 0.39 }, baseline)).toBe('weaker')
+    expect(classifyTimingHistoryEdge({ sampleSize: 12, positiveRateLower: 0.3, positiveRateUpper: 0.7 }, baseline)).toBe('indeterminate')
   })
 
   it('does not let future prices change a historical state', () => {

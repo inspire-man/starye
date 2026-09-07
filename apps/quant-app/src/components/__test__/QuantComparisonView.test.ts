@@ -74,6 +74,7 @@ const timingHistory: TimingHistory = {
     bestForwardReturn20: 0.08,
     worstForwardReturn20: -0.14,
     sampleQuality: 'limited',
+    edgeAssessment: 'indeterminate',
   }],
 }
 
@@ -109,6 +110,7 @@ const insufficientSampleTimingHistory: TimingHistory = {
     positiveRateUpper: 0.96,
     positiveRateLift: 0.18,
     sampleQuality: 'insufficient',
+    edgeAssessment: 'insufficient',
   }],
 }
 
@@ -241,6 +243,7 @@ describe('quant comparison view', () => {
     expect(wrapper.text()).toContain('趋势走弱')
     expect(wrapper.text()).toContain('67% / +4.76%')
     expect(wrapper.text()).toContain('有限参考')
+    expect(wrapper.text()).toContain('区间重叠')
   })
 
   it('keeps timing history independent for the selected target columns', () => {
@@ -294,5 +297,6 @@ describe('quant comparison view', () => {
     })
     expect(smallSample.text()).toContain('5 · 样本不足')
     expect(smallSample.text()).toContain('80% / +18.00%')
+    expect(smallSample.text()).toContain('基准区间结论')
   })
 })

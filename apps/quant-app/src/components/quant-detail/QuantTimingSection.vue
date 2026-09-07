@@ -39,6 +39,10 @@ const {
 function timingHistorySampleQualityLabel(value: TimingHistory['buckets'][number]['sampleQuality']): string {
   return value === 'usable' ? '可参考' : value === 'limited' ? '有限参考' : '样本不足'
 }
+
+function timingHistoryEdgeAssessmentLabel(value: TimingHistory['buckets'][number]['edgeAssessment']): string {
+  return value === 'supported' ? '相对基准有稳定支持' : value === 'weaker' ? '相对基准偏弱' : value === 'indeterminate' ? '区间重叠' : '样本不足'
+}
 </script>
 
 <template>
@@ -104,6 +108,11 @@ function timingHistorySampleQualityLabel(value: TimingHistory['buckets'][number]
         <span>相对全体上涨比例</span>
         <strong :class="timingHistoryCurrentBucket.positiveRateLift === null ? 'text-status-neutral' : timingHistoryCurrentBucket.positiveRateLift >= 0 ? 'text-status-success' : 'text-status-danger'">{{ formatTimingHistoryPercent(timingHistoryCurrentBucket.positiveRateLift) }}</strong>
         <small>状态 - 全体基准</small>
+      </div>
+      <div>
+        <span>基准区间结论</span>
+        <strong>{{ timingHistoryEdgeAssessmentLabel(timingHistoryCurrentBucket.edgeAssessment) }}</strong>
+        <small>状态与全体 Wilson 95% 区间</small>
       </div>
       <div>
         <span>上涨比例 95% 区间</span>
