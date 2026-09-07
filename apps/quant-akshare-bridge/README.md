@@ -28,6 +28,7 @@ The default listener is `http://127.0.0.1:8091`. Configure `QUANT_AKSHARE_BRIDGE
 - When a cashflow row has no `net_profit`, a same-report-date normalized profit statement value may fill that field; no cashflow formula is used to infer it.
 - Company capital history uses `stock_share_change_cninfo` for `变动日期`, `总股本`, and `变动原因`; shareholder holding-change endpoints are not treated as company capital events.
 - Working-capital context maps same-period balance-sheet `应收账款`, `存货`, and `合同负债` to `accounts_receivable`, `inventory`, and `contract_liabilities` in yuan; missing fields remain `null` and do not infer orders, volume, price, or profit.
+- Business segment context maps `stock_zygc_em` product, industry, and region rows to same-period `business_segments` with raw revenue, revenue ratio, and source-reported gross margin; non-finite fields remain `null` and do not infer orders, volume, or realized price.
 - Profit forecast history uses `stock_profit_forecast_ths` for annual EPS and annual net-profit forecast ranges in `100m CNY`; Eastmoney `stock_profit_forecast_em` is a short-lived full-market fallback for EPS only. Forecast values remain separate from actual financial statements.
 - To enable it in the API, configure both `QUANT_AKSHARE_BRIDGE_URL` and `QUANT_AKSHARE_BRIDGE_TOKEN`; an unconfigured bridge is skipped and does not replace the existing Eastmoney/Tushare result.
 

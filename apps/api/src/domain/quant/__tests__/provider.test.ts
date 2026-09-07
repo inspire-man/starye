@@ -304,57 +304,61 @@ describe('quant daily providers', () => {
   })
 
   it('normalizes the latest Eastmoney financial report and preserves nullable metrics', async () => {
-    const fetchImpl = vi.fn().mockImplementation(async () => new Response(JSON.stringify({
-      pages: 2,
-      data: [
-        {
-          SECURITY_CODE: '601899',
-          REPORT_DATE: '2025-12-31 00:00:00',
-          REPORT_TYPE: '年报',
-          REPORT_DATE_NAME: '2025年报',
-          NOTICE_DATE: '2026-03-21 00:00:00',
-          TOTALOPERATEREVE: 303639957153,
-          TOTALOPERATEREVETZ: 3.48,
-          PARENTNETPROFIT: 32050602437,
-          PARENTNETPROFITTZ: 51.75,
-          KCFJCXSYJLR: 31692529659,
-          KCFJCXSYJLRTZ: 46.61,
-          ROEJQ: 25.89,
-          XSMLL: 20.37,
-          XSJLL: 12.97,
-          ZCFZL: 55.18,
-          JYXJLYYSR: 0.16,
-          ROIC: '-',
-        },
-        {
-          SECURITY_CODE: '601899',
-          REPORT_DATE: '2026-06-30 00:00:00',
-          REPORT_TYPE: '中报',
-          REPORT_DATE_NAME: '2026中报',
-          NOTICE_DATE: '2026-08-30 00:00:00',
-          TOTALOPERATEREVE: '350000000000',
-          TOTALOPERATEREVETZ: '15.78',
-          PARENTNETPROFIT: '41000000000',
-          PARENTNETPROFITTZ: '68.17',
-          KCFJCXSYJLR: null,
-          KCFJCXSYJLRTZ: null,
-          ROEJQ: 19.6,
-          XSMLL: 37.74,
-          XSJLL: 16.2,
-          ZCFZL: 49.55,
-          JYXJLYYSR: 0.28,
-          MGJYXJJE: 2.0861,
-          FCFF_BACK: 19447406136,
-          FCFF_FORWARD: 39583497221,
-          INTEREST_COVERAGE_RATIO: 25.18,
-          INTEREST_DEBT_RATIO: 30.59,
-          CASH_RATIO: 0.777,
-          LIABILITY: 268266643912,
-          ROIC: 11.75,
-        },
-      ],
-      count: 2,
-    }), { status: 200 }))
+    const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      if (new URL(input.toString()).pathname.endsWith('/BusinessAnalysis/PageAjax'))
+        return new Response(JSON.stringify({ zygcfx: [] }), { status: 200 })
+      return new Response(JSON.stringify({
+        pages: 2,
+        data: [
+          {
+            SECURITY_CODE: '601899',
+            REPORT_DATE: '2025-12-31 00:00:00',
+            REPORT_TYPE: '年报',
+            REPORT_DATE_NAME: '2025年报',
+            NOTICE_DATE: '2026-03-21 00:00:00',
+            TOTALOPERATEREVE: 303639957153,
+            TOTALOPERATEREVETZ: 3.48,
+            PARENTNETPROFIT: 32050602437,
+            PARENTNETPROFITTZ: 51.75,
+            KCFJCXSYJLR: 31692529659,
+            KCFJCXSYJLRTZ: 46.61,
+            ROEJQ: 25.89,
+            XSMLL: 20.37,
+            XSJLL: 12.97,
+            ZCFZL: 55.18,
+            JYXJLYYSR: 0.16,
+            ROIC: '-',
+          },
+          {
+            SECURITY_CODE: '601899',
+            REPORT_DATE: '2026-06-30 00:00:00',
+            REPORT_TYPE: '中报',
+            REPORT_DATE_NAME: '2026中报',
+            NOTICE_DATE: '2026-08-30 00:00:00',
+            TOTALOPERATEREVE: '350000000000',
+            TOTALOPERATEREVETZ: '15.78',
+            PARENTNETPROFIT: '41000000000',
+            PARENTNETPROFITTZ: '68.17',
+            KCFJCXSYJLR: null,
+            KCFJCXSYJLRTZ: null,
+            ROEJQ: 19.6,
+            XSMLL: 37.74,
+            XSJLL: 16.2,
+            ZCFZL: 49.55,
+            JYXJLYYSR: 0.28,
+            MGJYXJJE: 2.0861,
+            FCFF_BACK: 19447406136,
+            FCFF_FORWARD: 39583497221,
+            INTEREST_COVERAGE_RATIO: 25.18,
+            INTEREST_DEBT_RATIO: 30.59,
+            CASH_RATIO: 0.777,
+            LIABILITY: 268266643912,
+            ROIC: 11.75,
+          },
+        ],
+        count: 2,
+      }), { status: 200 })
+    })
     const provider = createEastmoneyFinancialProvider({
       fetchImpl,
       now: () => new Date('2026-08-23T00:00:00.000Z'),
@@ -392,6 +396,45 @@ describe('quant daily providers', () => {
       contractLiabilities: null,
     })
     expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('code=SH601899')
+  })
+
+  it('enriches financial reports with same-period Eastmoney business segments', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString())
+      if (url.pathname.endsWith('/BusinessAnalysis/PageAjax')) {
+        return new Response(JSON.stringify({ zygcfx: [{
+          SECURITY_CODE: '601899',
+          REPORT_DATE: '2026-06-30 00:00:00',
+          MAINOP_TYPE: '2',
+          ITEM_NAME: '冶炼产铜',
+          MAIN_BUSINESS_INCOME: 31427370000,
+          MBI_RATIO: 0.161848,
+          GROSS_RPOFIT_RATIO: null,
+        }] }), { status: 200 })
+      }
+      if (url.pathname.endsWith('/zcfzbAjaxNew'))
+        return new Response(JSON.stringify({ data: [] }), { status: 200 })
+      return new Response(JSON.stringify({
+        data: [{ SECURITY_CODE: '601899', REPORT_DATE: '2026-06-30 00:00:00', TOTALOPERATEREVE: 1000 }],
+      }), { status: 200 })
+    })
+    const provider = createEastmoneyFinancialProvider({ fetchImpl })
+
+    await expect(provider.fetchFinancialQuality({ tsCode: '601899.SH' })).resolves.toMatchObject({
+      businessSegments: [{
+        tsCode: '601899.SH',
+        reportDate: '2026-06-30',
+        category: 'product',
+        name: '冶炼产铜',
+        revenue: 31427370000,
+        revenueRatio: 0.161848,
+        grossMargin: null,
+      }],
+      businessSegmentSource: 'eastmoney-business-analysis',
+    })
+    const segmentUrl = new URL(String(fetchImpl.mock.calls[2]?.[0]))
+    expect(segmentUrl.pathname).toBe('/PC_HSF10/BusinessAnalysis/PageAjax')
+    expect(segmentUrl.searchParams.get('code')).toBe('SH601899')
   })
 
   it('enriches financial reports with same-period Eastmoney balance-sheet fields', async () => {
@@ -568,7 +611,7 @@ describe('quant daily providers', () => {
       grossMargin: 24.2,
       cashRatio: 1.1,
     })
-    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(fetchImpl).toHaveBeenCalledTimes(4)
   })
 
   it('falls back to Tushare when the Eastmoney financial provider fails completely', async () => {

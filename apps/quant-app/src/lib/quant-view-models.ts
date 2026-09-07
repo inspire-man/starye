@@ -731,6 +731,16 @@ export interface QuantValuationComparison {
   pbHigherThanPercent: number | null
 }
 
+export interface QuantBusinessSegment {
+  tsCode: string
+  reportDate: string
+  category: 'industry' | 'product' | 'region' | 'other'
+  name: string
+  revenue: number | null
+  revenueRatio: number | null
+  grossMargin: number | null
+}
+
 export interface QuantFinancialQualitySnapshot {
   tsCode: string
   observedAt: string
@@ -761,6 +771,9 @@ export interface QuantFinancialQualitySnapshot {
   inventory?: number | null
   contractLiabilities?: number | null
   workingCapitalErrorCode?: string | null
+  businessSegments?: QuantBusinessSegment[]
+  businessSegmentErrorCode?: string | null
+  businessSegmentSource?: string | null
   provider?: QuantSourceName
   fallbackUsed?: boolean
   fallbackReason?: string | null

@@ -67,7 +67,9 @@ describe('quant investment knowledge catalog', () => {
     const businessDriver = QUANT_KNOWLEDGE_FACTORS.find(factor => factor.id === 'business-driver')!
 
     expect(businessDriver.availableFields).toEqual(expect.arrayContaining(['contractLiabilities', 'accountsReceivable', 'inventory']))
-    expect(businessDriver.missingFields).toEqual(expect.arrayContaining(['orderBacklog', 'segmentRevenue', 'segmentGrossMargin', 'volume', 'realizedPrice']))
+    expect(businessDriver.missingFields).toEqual(expect.arrayContaining(['orderBacklog', 'volume', 'realizedPrice']))
+    expect(businessDriver.missingFields).not.toContain('segmentRevenue')
+    expect(businessDriver.missingFields).not.toContain('segmentGrossMargin')
     expect(businessDriver.missingFields).not.toContain('contractLiabilities')
     expect(businessDriver.status).toBe('partial')
   })

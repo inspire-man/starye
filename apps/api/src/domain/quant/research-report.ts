@@ -221,6 +221,60 @@ function appendWorkingCapitalEvidence(evidenceItems: QuantResearchEvidence[], la
   }
 }
 
+function appendBusinessSegmentEvidence(evidenceItems: QuantResearchEvidence[], latestFinancial: QuantFinancialQualitySnapshot | null, financialSource: ReturnType<typeof financialSourceFor>): void {
+  const segments = latestFinancial?.businessSegments?.slice(0, 12) ?? []
+  if (!segments.length) {
+    evidenceItems.push(evidence({
+      key: 'operating-driver-segment-revenue',
+      dimension: 'quality',
+      label: '分部主营收入',
+      status: 'missing',
+      value: null,
+      threshold: '仅记录同报告期主营构成原始字段，不进入价值质量评分或交易判断',
+      source: latestFinancial?.businessSegmentSource ? `${financialSource.name} · ${latestFinancial.businessSegmentSource}` : financialSource.name,
+      observedAt: latestFinancial?.reportDate ?? null,
+      formulaVersion: financialSource.formulaVersion,
+      detail: latestFinancial?.businessSegmentErrorCode
+        ? `分部来源暂不可用（${latestFinancial.businessSegmentErrorCode}）`
+        : '当前报告期未返回分部主营构成原始字段，需继续核验来源状态',
+      optional: true,
+    }))
+    return
+  }
+
+  for (const [index, segment] of segments.entries()) {
+    const suffix = String(index + 1)
+    const ratio = segment.revenueRatio === null ? '待补' : `${(segment.revenueRatio * 100).toFixed(2)}%`
+    const grossMargin = segment.grossMargin === null ? '待补' : `${(segment.grossMargin * 100).toFixed(2)}%`
+    evidenceItems.push(evidence({
+      key: `operating-driver-segment-revenue-${suffix}`,
+      dimension: 'quality',
+      label: `${segment.name}主营收入`,
+      status: segment.revenue === null ? 'missing' : 'pass',
+      value: segment.revenue,
+      threshold: '仅记录同报告期主营构成原始字段，不进入价值质量评分或交易判断',
+      source: latestFinancial?.businessSegmentSource ? `${financialSource.name} · ${latestFinancial.businessSegmentSource}` : financialSource.name,
+      observedAt: segment.reportDate,
+      formulaVersion: financialSource.formulaVersion,
+      detail: `分类 ${segment.category}；收入占比 ${ratio}；毛利率 ${grossMargin}；订单、销量和实现价格另行核验`,
+      optional: true,
+    }))
+    evidenceItems.push(evidence({
+      key: `operating-driver-segment-gross-margin-${suffix}`,
+      dimension: 'quality',
+      label: `${segment.name}分部毛利率`,
+      status: segment.grossMargin === null ? 'missing' : 'pass',
+      value: segment.grossMargin,
+      threshold: '仅记录源站披露的分部毛利率，不用收入或比例推导',
+      source: latestFinancial?.businessSegmentSource ? `${financialSource.name} · ${latestFinancial.businessSegmentSource}` : financialSource.name,
+      observedAt: segment.reportDate,
+      formulaVersion: financialSource.formulaVersion,
+      detail: `分类 ${segment.category}；主营收入 ${segment.revenue === null ? '待补' : `${segment.revenue.toFixed(2)} 元`}`,
+      optional: true,
+    }))
+  }
+}
+
 function withAkshareCrossSourceCheck(item: QuantResearchEvidence, latestFinancial: QuantFinancialQualitySnapshot | null): QuantResearchEvidence {
   const existingValues: Record<string, number | null | undefined> = {
     'akshare-roe': latestFinancial?.roe,
@@ -419,6 +473,7 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
   const genericMetricApplicable = genericFinancialMetricApplicable(input)
   const evidenceItems: QuantResearchEvidence[] = []
   appendWorkingCapitalEvidence(evidenceItems, latestFinancial, financialSource)
+  appendBusinessSegmentEvidence(evidenceItems, latestFinancial, financialSource)
 
   evidenceItems.push(evidence({
     key: 'trend-sample',

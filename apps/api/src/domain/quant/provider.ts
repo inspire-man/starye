@@ -6,6 +6,18 @@ export const QUANT_PROVIDER_NAMES = ['tushare', 'eastmoney'] as const
 export type QuantProviderName = typeof QUANT_PROVIDER_NAMES[number]
 export type QuantSourceName = QuantProviderName | 'akshare'
 
+export type QuantBusinessSegmentCategory = 'industry' | 'product' | 'region' | 'other'
+
+export interface QuantBusinessSegment {
+  readonly tsCode: string
+  readonly reportDate: string
+  readonly category: QuantBusinessSegmentCategory
+  readonly name: string
+  readonly revenue: number | null
+  readonly revenueRatio: number | null
+  readonly grossMargin: number | null
+}
+
 export const TUSHARE_API_NAMES = ['daily'] as const
 export type TushareApiName = typeof TUSHARE_API_NAMES[number]
 
@@ -909,7 +921,8 @@ export function createQuantFinancialProviderChain(primary: QuantFinancialQuality
     }
 
     if (primaryReports && primaryReports.length > 0) {
-      if (!fallback?.isConfigured || !primaryReports.some(needsFinancialSupplement))
+      const fallbackSupportsBusinessSegments = fallback?.supportsBusinessSegments === true
+      if (!fallback?.isConfigured || !primaryReports.some(report => needsFinancialSupplement(report, fallbackSupportsBusinessSegments)))
         return primaryReports
       try {
         const supplementReports = await fallback.fetchFinancialQualityHistory(currentRequest)
@@ -951,6 +964,7 @@ export function createQuantFinancialProviderChain(primary: QuantFinancialQuality
   return {
     name: primary.name,
     isConfigured: providers.some(provider => provider.isConfigured),
+    supportsBusinessSegments: providers.some(provider => provider.isConfigured && provider.supportsBusinessSegments === true),
     fetchFinancialQuality,
     fetchFinancialQualityHistory,
   }
@@ -1058,6 +1072,9 @@ export interface QuantFinancialQualitySnapshot {
   readonly inventory?: number | null
   readonly contractLiabilities?: number | null
   readonly workingCapitalErrorCode?: string | null
+  readonly businessSegments?: readonly QuantBusinessSegment[]
+  readonly businessSegmentErrorCode?: string | null
+  readonly businessSegmentSource?: string | null
   /** Present when a fallback provider supplied the report. */
   readonly provider?: QuantSourceName
   readonly fallbackUsed?: boolean
@@ -1090,6 +1107,7 @@ export interface QuantFinancialQualityRequest {
 export interface QuantFinancialQualityProvider {
   readonly name: QuantSourceName
   readonly isConfigured: boolean
+  readonly supportsBusinessSegments?: boolean
   fetchFinancialQuality: (request: QuantFinancialQualityRequest) => Promise<QuantFinancialQualitySnapshot>
   fetchFinancialQualityHistory: (request: QuantFinancialQualityRequest) => Promise<readonly QuantFinancialQualitySnapshot[]>
 }
@@ -1123,8 +1141,9 @@ const FINANCIAL_WORKING_CAPITAL_FIELDS = ['accountsReceivable', 'inventory', 'co
 
 type FinancialNumericField = typeof FINANCIAL_NUMERIC_FIELDS[number]
 
-function needsFinancialSupplement(report: QuantFinancialQualitySnapshot): boolean {
+function needsFinancialSupplement(report: QuantFinancialQualitySnapshot, supplementSupportsBusinessSegments = false): boolean {
   return FINANCIAL_NUMERIC_FIELDS.some(field => report[field] === null || report[field] === undefined)
+    || (supplementSupportsBusinessSegments && !report.businessSegments?.length)
     || (report.provider === 'tushare' && report.industry === undefined)
     || ((report.industry === 'bank' || report.industry === 'insurance') && report.industryMetrics === undefined)
 }
@@ -1168,14 +1187,25 @@ function mergeFinancialReport(primary: QuantFinancialQualitySnapshot, supplement
   })
     ? null
     : primary.workingCapitalErrorCode ?? supplement.workingCapitalErrorCode ?? null
+  const businessSegments = primary.businessSegments?.length
+    ? primary.businessSegments
+    : supplement.businessSegments?.length
+      ? supplement.businessSegments
+      : primary.businessSegments ?? supplement.businessSegments
   const merged: QuantFinancialQualitySnapshot = {
     ...primary,
     ...Object.fromEntries(FINANCIAL_NUMERIC_FIELDS.map(field => [field, primary[field] ?? supplement[field]])) as Pick<QuantFinancialQualitySnapshot, FinancialNumericField>,
     industry: primary.industry ?? supplement.industry,
     industryMetrics: mergeFinancialIndustryMetrics(primary.industryMetrics, supplement.industryMetrics),
     workingCapitalErrorCode,
+    businessSegments,
+    businessSegmentErrorCode: businessSegments?.length
+      ? null
+      : primary.businessSegmentErrorCode ?? supplement.businessSegmentErrorCode ?? null,
+    businessSegmentSource: primary.businessSegmentSource ?? supplement.businessSegmentSource,
   }
   const supplemented = FINANCIAL_NUMERIC_FIELDS.some(field => (primary[field] === null || primary[field] === undefined) && supplement[field] !== null && supplement[field] !== undefined)
+    || (!primary.businessSegments?.length && Boolean(supplement.businessSegments?.length))
     || (primary.industry === undefined && supplement.industry !== undefined)
     || (primary.industryMetrics === undefined && supplement.industryMetrics !== undefined)
     || Boolean(primary.industryMetrics && supplement.industryMetrics && JSON.stringify(primary.industryMetrics) !== JSON.stringify(merged.industryMetrics))
@@ -1225,6 +1255,10 @@ const EastmoneyValuationHistoryResponseSchema = v.object({
 
 const EastmoneyFinancialResponseSchema = v.object({
   data: v.array(v.unknown()),
+})
+
+const EastmoneyBusinessAnalysisResponseSchema = v.object({
+  zygcfx: v.array(v.unknown()),
 })
 
 const EastmoneyCapitalStructureResponseSchema = v.object({
@@ -1902,6 +1936,42 @@ function normalizeEastmoneyWorkingCapital(record: Record<string, unknown>): Pick
   }
 }
 
+function normalizeEastmoneyBusinessSegmentCategory(value: unknown): QuantBusinessSegment['category'] {
+  const text = typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : ''
+  return text === '1' || /行业/u.test(text)
+    ? 'industry'
+    : text === '2' || /产品/u.test(text)
+      ? 'product'
+      : text === '3' || /地区/u.test(text)
+        ? 'region'
+        : 'other'
+}
+
+function normalizeEastmoneyBusinessSegments(tsCode: string, rows: readonly Record<string, unknown>[]): readonly QuantBusinessSegment[] {
+  const requestedCode = tsCode.split('.')[0]
+  const normalized = rows.flatMap((record) => {
+    const returnedCode = financialString(record, 'SECURITY_CODE')
+    if (returnedCode && returnedCode.padStart(6, '0') !== requestedCode)
+      return []
+    const reportDate = normalizeFinancialDate(record.REPORT_DATE, 'business segment report date', false)
+    const name = financialString(record, 'ITEM_NAME')
+    if (!reportDate || !name)
+      return []
+    return [{
+      tsCode,
+      reportDate,
+      category: normalizeEastmoneyBusinessSegmentCategory(record.MAINOP_TYPE),
+      name,
+      revenue: eastmoneyQuoteNumber(record.MAIN_BUSINESS_INCOME, 'businessSegmentRevenue'),
+      revenueRatio: eastmoneyQuoteNumber(record.MBI_RATIO, 'businessSegmentRevenueRatio'),
+      grossMargin: eastmoneyQuoteNumber(record.GROSS_RPOFIT_RATIO, 'businessSegmentGrossMargin'),
+    }]
+  })
+  return [...new Map(normalized.map(segment => [`${segment.reportDate}:${segment.category}:${segment.name}`, segment] as const)).values()]
+    .sort((left, right) => (right.revenue ?? Number.NEGATIVE_INFINITY) - (left.revenue ?? Number.NEGATIVE_INFINITY))
+    .slice(0, 64)
+}
+
 function hasFinancialIndustryMetric(metrics: QuantFinancialIndustryMetrics): boolean {
   return Object.values(metrics).some(value => value !== null)
 }
@@ -2195,6 +2265,43 @@ export function createEastmoneyFinancialProvider(options: EastmoneyProviderOptio
     return normalizeEastmoneyStatementRows(tsCode, rows, 'balance sheet')
   }
 
+  async function fetchBusinessSegments(tsCode: string): Promise<readonly QuantBusinessSegment[]> {
+    const url = new URL('/PC_HSF10/BusinessAnalysis/PageAjax', baseUrl)
+    url.searchParams.set('code', eastmoneyFinancialCode(tsCode))
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let response: Response
+    try {
+      response = await fetchImpl(url, { method: 'GET', headers: { accept: 'application/json' }, signal: controller.signal })
+    }
+    catch {
+      if (controller.signal.aborted)
+        throw new EastmoneyProviderError('TIMEOUT', 'Eastmoney business segment request timed out')
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', 'Eastmoney business segment request failed')
+    }
+    finally {
+      clearTimeout(timer)
+    }
+    if (!response.ok)
+      throw new EastmoneyProviderError('UPSTREAM_ERROR', `Eastmoney business segment HTTP ${response.status}`)
+    let payload: unknown
+    try {
+      payload = await response.json()
+    }
+    catch {
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney business segment response is not JSON')
+    }
+    const parsed = v.safeParse(EastmoneyBusinessAnalysisResponseSchema, payload)
+    if (!parsed.success)
+      throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney business segment response schema is invalid')
+    const rows = parsed.output.zygcfx.map((value) => {
+      if (!isRecord(value))
+        throw new EastmoneyProviderError('INVALID_RESPONSE', 'Eastmoney business segment row is not an object')
+      return value
+    })
+    return normalizeEastmoneyBusinessSegments(tsCode, rows)
+  }
+
   async function fetchFinancialReports(request: QuantFinancialQualityRequest): Promise<readonly QuantFinancialQualitySnapshot[]> {
     const tsCode = request.tsCode.trim().toUpperCase()
     const url = new URL('/PC_HSF10/NewFinanceAnalysis/ZYZBAjaxNew', baseUrl)
@@ -2239,6 +2346,8 @@ export function createEastmoneyFinancialProvider(options: EastmoneyProviderOptio
     const observedAt = now().toISOString()
     let workingCapitalRows: ReadonlyMap<string, Record<string, unknown>> = new Map()
     let workingCapitalErrorCode: string | null = null
+    let businessSegments: readonly QuantBusinessSegment[] = []
+    let businessSegmentErrorCode: string | null = null
     try {
       workingCapitalRows = await fetchWorkingCapitalRows(tsCode, reportRows)
     }
@@ -2246,20 +2355,48 @@ export function createEastmoneyFinancialProvider(options: EastmoneyProviderOptio
       workingCapitalRows = new Map()
       workingCapitalErrorCode = eastmoneySafeErrorCode(error)
     }
+    try {
+      businessSegments = await fetchBusinessSegments(tsCode)
+    }
+    catch (error) {
+      businessSegments = []
+      businessSegmentErrorCode = eastmoneySafeErrorCode(error)
+    }
+    const businessSegmentFields = (reportDate: string): Pick<QuantFinancialQualitySnapshot, 'businessSegments' | 'businessSegmentErrorCode' | 'businessSegmentSource'> => {
+      const matching = businessSegments.filter(segment => segment.reportDate === reportDate)
+      if (!matching.length && !businessSegmentErrorCode)
+        return {}
+      return {
+        ...(matching.length ? { businessSegments: matching } : {}),
+        ...(businessSegmentErrorCode ? { businessSegmentErrorCode } : {}),
+        businessSegmentSource: 'eastmoney-business-analysis',
+      }
+    }
     const reports = reportRows.map((record) => {
       const report = normalizeFinancialReport(tsCode, record, observedAt)
       const workingCapital = workingCapitalRows.get(report.reportDate)
-      if (!workingCapital)
-        return workingCapitalErrorCode ? { ...report, workingCapitalErrorCode } : report
+      if (!workingCapital) {
+        return {
+          ...report,
+          ...(workingCapitalErrorCode ? { workingCapitalErrorCode } : {}),
+          ...businessSegmentFields(report.reportDate),
+        }
+      }
       const normalizedWorkingCapital = normalizeEastmoneyWorkingCapital(workingCapital)
-      if (!Object.values(normalizedWorkingCapital).some(value => value !== null))
-        return workingCapitalErrorCode ? { ...report, workingCapitalErrorCode } : report
+      if (!Object.values(normalizedWorkingCapital).some(value => value !== null)) {
+        return {
+          ...report,
+          ...(workingCapitalErrorCode ? { workingCapitalErrorCode } : {}),
+          ...businessSegmentFields(report.reportDate),
+        }
+      }
       return {
         ...report,
         accountsReceivable: report.accountsReceivable ?? normalizedWorkingCapital.accountsReceivable,
         inventory: report.inventory ?? normalizedWorkingCapital.inventory,
         contractLiabilities: report.contractLiabilities ?? normalizedWorkingCapital.contractLiabilities,
         ...(workingCapitalErrorCode ? { workingCapitalErrorCode } : {}),
+        ...businessSegmentFields(report.reportDate),
       }
     })
     return [...new Map(reports.map(report => [`${report.reportDate}:${report.reportType ?? ''}`, report])).values()]
@@ -2284,6 +2421,7 @@ export function createEastmoneyFinancialProvider(options: EastmoneyProviderOptio
   return {
     name: 'eastmoney',
     isConfigured: true,
+    supportsBusinessSegments: true,
     fetchFinancialQuality,
     fetchFinancialQualityHistory,
   }
