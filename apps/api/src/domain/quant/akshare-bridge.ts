@@ -184,6 +184,10 @@ function normalizeBridgeBusinessSegments(result: QuantAkshareBridgeResult, recor
       revenue: bridgeNumber(record, 'revenue', 'segment_revenue', 'segmentRevenue', 'MAIN_BUSINESS_INCOME', '主营收入'),
       revenueRatio: bridgeNumber(record, 'revenue_ratio', 'revenueRatio', 'MBI_RATIO', '收入比例'),
       grossMargin: bridgeNumber(record, 'gross_margin', 'grossMargin', 'GROSS_RPOFIT_RATIO', '毛利率'),
+      cost: bridgeNumber(record, 'cost', 'segment_cost', 'segmentCost', 'MAIN_BUSINESS_COST', '主营成本'),
+      costRatio: bridgeNumber(record, 'cost_ratio', 'costRatio', 'MBC_RATIO', '成本比例'),
+      profit: bridgeNumber(record, 'profit', 'segment_profit', 'segmentProfit', 'MAIN_BUSINESS_RPOFIT', '主营利润'),
+      profitRatio: bridgeNumber(record, 'profit_ratio', 'profitRatio', 'MBR_RATIO', '利润比例'),
     }]
   })
 }

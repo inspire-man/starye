@@ -739,6 +739,10 @@ export interface QuantBusinessSegment {
   revenue: number | null
   revenueRatio: number | null
   grossMargin: number | null
+  cost?: number | null
+  costRatio?: number | null
+  profit?: number | null
+  profitRatio?: number | null
 }
 
 export interface QuantFinancialQualitySnapshot {

@@ -127,6 +127,10 @@ const QuantBusinessSegmentSchema = v.object({
   revenue: v.nullable(v.number()),
   revenueRatio: v.nullable(v.number()),
   grossMargin: v.nullable(v.number()),
+  cost: v.optional(v.nullable(v.number())),
+  costRatio: v.optional(v.nullable(v.number())),
+  profit: v.optional(v.nullable(v.number())),
+  profitRatio: v.optional(v.nullable(v.number())),
 })
 
 export const QuantFinancialQualitySnapshotSchema = v.object({

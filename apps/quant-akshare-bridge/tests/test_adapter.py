@@ -61,10 +61,14 @@ class FakeAkShare:
             "股票代码": "601899",
             "报告日期": "2026-06-30",
             "分类类型": "按产品分类",
-            "主营构成": "冶炼产铜",
+            "主营构成": "其他主营业务",
             "主营收入": 31427370000,
             "收入比例": 0.161848,
             "毛利率": None,
+            "主营成本": 120111338341,
+            "成本比例": 0.993629,
+            "主营利润": 73194480361,
+            "利润比例": 0.998601,
         }]
 
 
@@ -93,8 +97,10 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(payload["financials"][0]["accounts_receivable"], 120.0)
         self.assertEqual(payload["financials"][0]["inventory"], 300.0)
         self.assertEqual(payload["financials"][0]["contract_liabilities"], 80.0)
-        self.assertEqual(payload["business_segments"][0]["name"], "冶炼产铜")
+        self.assertEqual(payload["business_segments"][0]["name"], "其他主营业务")
         self.assertEqual(payload["business_segments"][0]["revenue"], 31427370000.0)
+        self.assertEqual(payload["business_segments"][0]["cost"], 120111338341.0)
+        self.assertEqual(payload["business_segments"][0]["profit"], 73194480361.0)
         self.assertIn("stock_profit_sheet_by_report_em", payload["source"]["endpoints"])
         self.assertIn("stock_balance_sheet_by_report_em", payload["source"]["endpoints"])
         self.assertIn("stock_zygc_em", payload["source"]["endpoints"])

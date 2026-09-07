@@ -133,6 +133,10 @@ function parseFinancialQuality(payload: unknown): QuantFinancialQualitySnapshot 
           revenue: readNumber(value, 'revenue', 'segment_revenue'),
           revenueRatio: readNumber(value, 'revenueRatio', 'revenue_ratio'),
           grossMargin: readNumber(value, 'grossMargin', 'gross_margin'),
+          cost: readNumber(value, 'cost', 'segment_cost'),
+          costRatio: readNumber(value, 'costRatio', 'cost_ratio'),
+          profit: readNumber(value, 'profit', 'segment_profit'),
+          profitRatio: readNumber(value, 'profitRatio', 'profit_ratio'),
         }]
       })
     : undefined

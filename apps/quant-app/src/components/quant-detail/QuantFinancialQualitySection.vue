@@ -195,13 +195,17 @@ function segmentCategoryLabel(value: QuantBusinessSegment['category']): string {
         </div>
         <div v-if="financialQuality.businessSegments?.length" class="financial-segment-table">
           <div class="financial-segment-row financial-segment-head">
-            <span>分类</span><span>分部</span><span>主营收入</span><span>收入占比</span><span>毛利率</span>
+            <span>分类</span><span>分部</span><span>主营收入</span><span>收入占比</span><span>主营成本</span><span>成本占比</span><span>主营利润</span><span>利润占比</span><span>毛利率</span>
           </div>
           <div v-for="segment in financialQuality.businessSegments" :key="`${segment.reportDate}-${segment.category}-${segment.name}`" class="financial-segment-row">
             <span>{{ segmentCategoryLabel(segment.category) }}</span>
             <strong>{{ segment.name }}</strong>
             <span>{{ workingCapitalAmount(segment.revenue) }}</span>
             <span>{{ formatRatioPercent(segment.revenueRatio) }}</span>
+            <span>{{ workingCapitalAmount(segment.cost) }}</span>
+            <span>{{ formatRatioPercent(segment.costRatio ?? null) }}</span>
+            <span>{{ workingCapitalAmount(segment.profit) }}</span>
+            <span>{{ formatRatioPercent(segment.profitRatio ?? null) }}</span>
             <span>{{ formatRatioPercent(segment.grossMargin) }}</span>
           </div>
         </div>
@@ -210,7 +214,7 @@ function segmentCategoryLabel(value: QuantBusinessSegment['category']): string {
           <span>{{ financialQuality.businessSegmentErrorCode ? `分部来源暂不可用（${financialQuality.businessSegmentErrorCode}）` : '当前报告期未返回分部主营构成；订单、销量和实现价格仍需其他来源。' }}</span>
         </div>
         <p class="financial-context-note">
-          分部收入和毛利率仅记录源站披露，不从收入比例推导销量、价格或订单金额，也不进入价值质量总分。
+          分部收入、成本、利润和毛利率仅记录源站披露，不从收入比例推导销量、价格或订单金额，也不进入价值质量总分。
         </p>
       </div>
     </div>

@@ -471,6 +471,10 @@ describe('quant research report', () => {
           revenue: 31427370000,
           revenueRatio: 0.161848,
           grossMargin: null,
+          cost: 120111338341,
+          costRatio: 0.993629,
+          profit: 73194480361,
+          profitRatio: 0.998601,
         }],
       }],
       shareholderReturn,
@@ -484,6 +488,8 @@ describe('quant research report', () => {
     expect(report.evidence).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'operating-driver-segment-revenue-1', value: 31427370000, optional: true, status: 'pass' }),
       expect.objectContaining({ key: 'operating-driver-segment-gross-margin-1', value: null, optional: true, status: 'missing' }),
+      expect.objectContaining({ key: 'operating-driver-segment-cost-1', value: 120111338341, optional: true, status: 'pass' }),
+      expect.objectContaining({ key: 'operating-driver-segment-profit-1', value: 73194480361, optional: true, status: 'pass' }),
     ]))
     expect(report.score).toBe(baseline.score)
     expect(report.decision?.evidenceKeys).not.toContain('operating-driver-segment-revenue-1')

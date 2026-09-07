@@ -173,6 +173,10 @@ const financialQuality: QuantFinancialQualitySnapshot = {
     revenue: 31427370000,
     revenueRatio: 0.161848,
     grossMargin: null,
+    cost: 120111338341,
+    costRatio: 0.993629,
+    profit: 73194480361,
+    profitRatio: 0.998601,
   }],
 }
 
@@ -783,6 +787,8 @@ describe('quant detail feature sections', () => {
     expect(wrapper.text()).toContain('合同负债')
     expect(wrapper.text()).toContain('分部经营原始字段')
     expect(wrapper.text()).toContain('冶炼产铜')
+    expect(wrapper.text()).toContain('主营成本')
+    expect(wrapper.text()).toContain('主营利润')
     expect(wrapper.text()).toContain('现金流韧性')
     expect(wrapper.text()).toContain('资本开支、回购和分红支付率已在股东回报区域独立展示')
     expect(wrapper.text()).not.toContain('资本开支逐项数据、回购和分红支付率暂未接通')
