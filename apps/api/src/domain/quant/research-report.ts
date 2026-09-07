@@ -246,6 +246,10 @@ function appendBusinessSegmentEvidence(evidenceItems: QuantResearchEvidence[], l
     const suffix = String(index + 1)
     const ratio = segment.revenueRatio === null ? '待补' : `${(segment.revenueRatio * 100).toFixed(2)}%`
     const grossMargin = segment.grossMargin === null ? '待补' : `${(segment.grossMargin * 100).toFixed(2)}%`
+    const cost = finite(segment.cost)
+    const costRatio = finite(segment.costRatio)
+    const profit = finite(segment.profit)
+    const profitRatio = finite(segment.profitRatio)
     evidenceItems.push(evidence({
       key: `operating-driver-segment-revenue-${suffix}`,
       dimension: 'quality',
@@ -256,7 +260,7 @@ function appendBusinessSegmentEvidence(evidenceItems: QuantResearchEvidence[], l
       source: latestFinancial?.businessSegmentSource ? `${financialSource.name} · ${latestFinancial.businessSegmentSource}` : financialSource.name,
       observedAt: segment.reportDate,
       formulaVersion: financialSource.formulaVersion,
-      detail: `分类 ${segment.category}；收入占比 ${ratio}；毛利率 ${grossMargin}；订单、销量和实现价格另行核验`,
+      detail: `分类 ${segment.category}；收入占比 ${ratio}；毛利率 ${grossMargin}；成本 ${cost === null ? '待补' : `${cost.toFixed(2)} 元`}；利润 ${profit === null ? '待补' : `${profit.toFixed(2)} 元`}；订单、销量和实现价格另行核验`,
       optional: true,
     }))
     evidenceItems.push(evidence({
@@ -270,6 +274,32 @@ function appendBusinessSegmentEvidence(evidenceItems: QuantResearchEvidence[], l
       observedAt: segment.reportDate,
       formulaVersion: financialSource.formulaVersion,
       detail: `分类 ${segment.category}；主营收入 ${segment.revenue === null ? '待补' : `${segment.revenue.toFixed(2)} 元`}`,
+      optional: true,
+    }))
+    evidenceItems.push(evidence({
+      key: `operating-driver-segment-cost-${suffix}`,
+      dimension: 'quality',
+      label: `${segment.name}主营成本`,
+      status: cost === null ? 'missing' : 'pass',
+      value: cost,
+      threshold: '仅记录同报告期源站披露的主营成本，不由收入或比例推导',
+      source: latestFinancial?.businessSegmentSource ? `${financialSource.name} · ${latestFinancial.businessSegmentSource}` : financialSource.name,
+      observedAt: segment.reportDate,
+      formulaVersion: financialSource.formulaVersion,
+      detail: `分类 ${segment.category}；成本占比 ${costRatio === null ? '待补' : `${(costRatio * 100).toFixed(2)}%`}`,
+      optional: true,
+    }))
+    evidenceItems.push(evidence({
+      key: `operating-driver-segment-profit-${suffix}`,
+      dimension: 'quality',
+      label: `${segment.name}主营利润`,
+      status: profit === null ? 'missing' : 'pass',
+      value: profit,
+      threshold: '仅记录同报告期源站披露的主营利润，不由收入或成本推导',
+      source: latestFinancial?.businessSegmentSource ? `${financialSource.name} · ${latestFinancial.businessSegmentSource}` : financialSource.name,
+      observedAt: segment.reportDate,
+      formulaVersion: financialSource.formulaVersion,
+      detail: `分类 ${segment.category}；利润占比 ${profitRatio === null ? '待补' : `${(profitRatio * 100).toFixed(2)}%`}`,
       optional: true,
     }))
   }

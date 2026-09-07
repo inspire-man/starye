@@ -10,10 +10,14 @@ class NormalizerTest(unittest.TestCase):
             "股票代码": "601899",
             "报告日期": "2026-06-30",
             "分类类型": "按产品分类",
-            "主营构成": "冶炼产铜",
+            "主营构成": "其他主营业务",
             "主营收入": 31427370000,
             "收入比例": 0.161848,
             "毛利率": float("nan"),
+            "主营成本": 120111338341,
+            "成本比例": 0.993629,
+            "主营利润": 73194480361,
+            "利润比例": 0.998601,
         }, {
             "股票代码": "000001",
             "报告日期": "2026-06-30",
@@ -30,10 +34,14 @@ class NormalizerTest(unittest.TestCase):
             "ts_code": "601899.SH",
             "report_date": "20260630",
             "category": "product",
-            "name": "冶炼产铜",
+            "name": "其他主营业务",
             "revenue": 31427370000.0,
             "revenue_ratio": 0.161848,
             "gross_margin": None,
+            "cost": 120111338341.0,
+            "cost_ratio": 0.993629,
+            "profit": 73194480361.0,
+            "profit_ratio": 0.998601,
         }])
 
     def test_normalizes_codes_and_daily_aliases(self) -> None:

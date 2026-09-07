@@ -16,6 +16,11 @@ export interface QuantBusinessSegment {
   readonly revenue: number | null
   readonly revenueRatio: number | null
   readonly grossMargin: number | null
+  /** Optional for rows produced before segment profitability coverage. */
+  readonly cost?: number | null
+  readonly costRatio?: number | null
+  readonly profit?: number | null
+  readonly profitRatio?: number | null
 }
 
 export const TUSHARE_API_NAMES = ['daily'] as const
@@ -1965,6 +1970,10 @@ function normalizeEastmoneyBusinessSegments(tsCode: string, rows: readonly Recor
       revenue: eastmoneyQuoteNumber(record.MAIN_BUSINESS_INCOME, 'businessSegmentRevenue'),
       revenueRatio: eastmoneyQuoteNumber(record.MBI_RATIO, 'businessSegmentRevenueRatio'),
       grossMargin: eastmoneyQuoteNumber(record.GROSS_RPOFIT_RATIO, 'businessSegmentGrossMargin'),
+      cost: eastmoneyQuoteNumber(record.MAIN_BUSINESS_COST, 'businessSegmentCost'),
+      costRatio: eastmoneyQuoteNumber(record.MBC_RATIO, 'businessSegmentCostRatio'),
+      profit: eastmoneyQuoteNumber(record.MAIN_BUSINESS_RPOFIT, 'businessSegmentProfit'),
+      profitRatio: eastmoneyQuoteNumber(record.MBR_RATIO, 'businessSegmentProfitRatio'),
     }]
   })
   return [...new Map(normalized.map(segment => [`${segment.reportDate}:${segment.category}:${segment.name}`, segment] as const)).values()]

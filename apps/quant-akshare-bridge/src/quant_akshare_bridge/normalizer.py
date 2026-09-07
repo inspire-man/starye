@@ -388,6 +388,10 @@ def normalize_business_segment_rows(
             "revenue": _field(row, "主营收入", "MAIN_BUSINESS_INCOME", "revenue", "segment_revenue"),
             "revenue_ratio": _field(row, "收入比例", "MBI_RATIO", "revenue_ratio", "revenueRatio"),
             "gross_margin": _field(row, "毛利率", "GROSS_RPOFIT_RATIO", "gross_margin", "grossMargin"),
+            "cost": _field(row, "主营成本", "MAIN_BUSINESS_COST", "cost", "segment_cost"),
+            "cost_ratio": _field(row, "成本比例", "MBC_RATIO", "cost_ratio", "costRatio"),
+            "profit": _field(row, "主营利润", "MAIN_BUSINESS_RPOFIT", "profit", "segment_profit"),
+            "profit_ratio": _field(row, "利润比例", "MBR_RATIO", "profit_ratio", "profitRatio"),
         }
         metrics = {key: _number(value) for key, value in raw_metrics.items()}
         if any(value not in (None, "") and normalized is None for value, normalized in zip(raw_metrics.values(), metrics.values())):
