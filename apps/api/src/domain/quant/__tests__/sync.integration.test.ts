@@ -37,6 +37,28 @@ function fixtureBars(tsCode: string, offset = 0): readonly DailyBar[] {
   })
 }
 
+function longFixtureBars(tsCode: string, count = 800): readonly DailyBar[] {
+  const start = new Date('2024-08-21T00:00:00.000Z')
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(start)
+    date.setUTCDate(date.getUTCDate() + index)
+    const close = 10 + index / 100
+    return {
+      tsCode,
+      tradeDate: `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, '0')}${String(date.getUTCDate()).padStart(2, '0')}`,
+      open: close,
+      high: close,
+      low: close,
+      close,
+      preClose: index === 0 ? null : close - 0.01,
+      change: index === 0 ? null : 0.01,
+      pctChg: index === 0 ? null : 0.1,
+      volume: 1000,
+      amount: 10_000,
+    }
+  })
+}
+
 function wait(milliseconds: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, milliseconds))
 }
@@ -63,6 +85,29 @@ async function createQuantDatabase(): Promise<{ client: ReturnType<typeof create
 }
 
 describe('quant daily sync integration', () => {
+  it('keeps a two-year refresh window while capping each stock at 520 daily bars', async () => {
+    const { client, db } = await createQuantDatabase()
+    const tsCode = '601899.SH'
+    await createQuantWatchlistItem(db, { userId: TEST_USER_ID, tsCode, name: '紫金矿业' })
+    const provider: TushareProvider = {
+      isConfigured: true,
+      request: vi.fn(),
+      fetchDaily: vi.fn().mockResolvedValue(longFixtureBars(tsCode)),
+    }
+
+    const result = await syncQuantDaily(db, { TUSHARE_POINTS_TIER: '120' }, {}, {
+      userId: TEST_USER_ID,
+      provider,
+      now: () => new Date('2026-08-21T00:00:00.000Z'),
+    })
+
+    expect(result).toMatchObject({ status: 'completed', writtenCount: 520 })
+    expect(provider.fetchDaily).toHaveBeenCalledWith({ tsCode, startDate: '20240821', endDate: '20260821' })
+    await expect(client.execute('SELECT count(*) AS count, min(trade_date) AS first_date, max(trade_date) AS last_date FROM quant_daily_bar')).resolves.toMatchObject({
+      rows: [{ count: 520, first_date: '20250320', last_date: '20260821' }],
+    })
+  })
+
   it('upserts repeated daily responses and persists a completed snapshot', async () => {
     const { client, db } = await createQuantDatabase()
     const tsCode = '000001.SZ'

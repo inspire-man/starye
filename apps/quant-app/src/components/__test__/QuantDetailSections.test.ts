@@ -466,16 +466,24 @@ const timingBucket: TimingHistoryBucket = {
   sampleSize: 4,
   positiveCount: 3,
   positiveRate: 0.75,
+  positiveRateLower: 0.3,
+  positiveRateUpper: 0.95,
+  positiveRateLift: 0.1,
   averageForwardReturn20: 0.04,
+  averageForwardReturn20Delta: 0.02,
   medianForwardReturn20: 0.03,
+  medianForwardReturn20Delta: 0.01,
   bestForwardReturn20: 0.1,
   worstForwardReturn20: -0.02,
+  sampleQuality: 'insufficient',
 }
 
 const timingHistory: TimingHistory = {
   availableBars: 80,
   evaluatedWindows: 4,
   forwardDays: 20,
+  samplingInterval: 20,
+  minimumReliableSampleSize: 6,
   dataStartDate: '20260601',
   dataEndDate: '20260903',
   evaluationStartDate: '20260801',
@@ -483,6 +491,15 @@ const timingHistory: TimingHistory = {
   currentState: 'constructive',
   currentLabel: '结构平稳',
   observations: [],
+  baseline: {
+    sampleSize: 4,
+    positiveCount: 3,
+    positiveRate: 0.75,
+    positiveRateLower: 0.3,
+    positiveRateUpper: 0.95,
+    averageForwardReturn20: 0.04,
+    medianForwardReturn20: 0.03,
+  },
   buckets: [timingBucket],
 }
 

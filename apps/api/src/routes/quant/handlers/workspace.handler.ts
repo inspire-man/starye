@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { validator } from 'hono-openapi'
 import { QuantError } from '../../../domain/quant/errors'
 import { mapQuantProviderError } from '../../../domain/quant/provider'
+import { QUANT_DAILY_HISTORY_LIMIT } from '../../../domain/quant/types'
 import { createQuantWatchlistWorkspaceItem, deleteQuantWatchlistWorkspaceItem, readQuantDailyBars, readQuantStockBasic, readQuantSyncState, readQuantWatchlistWorkspace, runQuantDailySync, updateQuantWatchlistWorkspaceItem } from '../../../domain/quant/workspace-service'
 import { QuantDailyQuerySchema, QuantSyncSchema, QuantWatchlistCreateSchema, QuantWatchlistParamSchema, QuantWatchlistUpdateSchema } from '../../../schemas/quant'
 import { quantRouteDocs } from '../contract-docs'
@@ -58,7 +59,7 @@ quantWorkspaceRoutes.get('/stock-basic/:tsCode', quantRouteDocs('workspace.stock
 quantWorkspaceRoutes.get('/daily/:tsCode', quantRouteDocs('workspace.daily.list'), validator('param', QuantWatchlistParamSchema), validator('query', QuantDailyQuerySchema), async (c) => {
   const { tsCode } = c.req.valid('param')
   const input = c.req.valid('query')
-  const limit = input.limit ? Math.min(120, Math.max(1, Number(input.limit))) : 120
+  const limit = input.limit ? Math.min(QUANT_DAILY_HISTORY_LIMIT, Math.max(1, Number(input.limit))) : QUANT_DAILY_HISTORY_LIMIT
   const data = await readQuantDailyBars(c.get('db'), {
     tsCode,
     ...(input.from ? { fromDate: input.from } : {}),

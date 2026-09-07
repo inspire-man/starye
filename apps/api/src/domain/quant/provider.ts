@@ -1,6 +1,7 @@
 import type { DailyBar } from './types'
 import * as v from 'valibot'
 import { QuantError } from './errors'
+import { QUANT_DAILY_HISTORY_LIMIT } from './types'
 
 export const QUANT_PROVIDER_NAMES = ['tushare', 'eastmoney'] as const
 export type QuantProviderName = typeof QUANT_PROVIDER_NAMES[number]
@@ -1524,7 +1525,7 @@ export function createEastmoneyProvider(options: EastmoneyProviderOptions = {}):
     url.searchParams.set('fqt', '1')
     url.searchParams.set('beg', startDate)
     url.searchParams.set('end', endDate)
-    url.searchParams.set('lmt', '120')
+    url.searchParams.set('lmt', String(QUANT_DAILY_HISTORY_LIMIT))
     url.searchParams.set('fields1', 'f1,f2,f3,f4,f5,f6')
     url.searchParams.set('fields2', 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61')
 

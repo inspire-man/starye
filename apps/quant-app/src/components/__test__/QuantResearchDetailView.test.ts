@@ -91,6 +91,8 @@ function baseProps(loadResearchRuns: (tsCode: string) => void): QuantResearchDet
     availableBars: 0,
     evaluatedWindows: 0,
     forwardDays: 20,
+    samplingInterval: 20,
+    minimumReliableSampleSize: 6,
     dataStartDate: null,
     dataEndDate: null,
     evaluationStartDate: null,
@@ -98,6 +100,15 @@ function baseProps(loadResearchRuns: (tsCode: string) => void): QuantResearchDet
     currentState: 'insufficient' as const,
     currentLabel: '数据不足',
     observations: [],
+    baseline: {
+      sampleSize: 0,
+      positiveCount: 0,
+      positiveRate: null,
+      positiveRateLower: null,
+      positiveRateUpper: null,
+      averageForwardReturn20: null,
+      medianForwardReturn20: null,
+    },
     buckets: [],
   }
   const emptyTimeline = {

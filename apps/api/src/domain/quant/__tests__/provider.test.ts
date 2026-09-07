@@ -83,6 +83,7 @@ describe('quant daily providers', () => {
     ])
 
     expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('secid=1.601899')
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('lmt=520')
   })
 
   it('rejects malformed Eastmoney payloads', async () => {

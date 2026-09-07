@@ -292,7 +292,7 @@ const emit = defineEmits<{
           <span class="research-path-index">02</span>
           <span class="research-path-copy">
             <strong>维护观察池</strong>
-            <small>确认标的并更新最近 120 个交易日</small>
+            <small>确认标的并更新约两年历史日线</small>
           </span>
           <ChevronRight :size="16" aria-hidden="true" />
         </button>
