@@ -9,7 +9,7 @@ last_updated: "2026-09-07"
 
 ## 当前
 
-v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。Quant 历史验证与候选对照已合入 `main`，下一轮开发从合并后的 `main` 开始。
+v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。Quant 历史验证、候选对照与可信度校准已合入 `main`，下一轮开发从合并后的 `main` 开始。
 
 ## 最近验证
 
@@ -39,6 +39,7 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 - 2026-09-07 Quant AkShare 盈利预测来源已合入 `main`（PR #91，merge SHA `7748504a06d34432f9527771e5f577515ee62dac`）：bridge 接入同花顺 `stock_profit_forecast_ths` 年度预测 EPS/预测净利润与 Eastmoney 动态年份 EPS fallback，研究报告保留可选预测证据、预测年度和来源 provenance，不改实际财报、价值质量评分或判断；PR CI `34059066513`、合并 SHA CI `34059328406`（重跑后通过）、Deploy API `34059328460`、Deploy API After PR Merge `34059328507`、Deploy Quant `34059328483` 均通过；合并后 Gateway `/quant/` 为 302、匿名股东回报 API 为 401。
 - 2026-09-07 Quant 历史时机验证已合入 `main`（PR #95，merge SHA `9af9984e55e78790f296409f4604810226662264`）：日线扩展至约两年/最多 520 根，历史回看使用非重叠 20 日窗口、全体基准、lift、Wilson 95% 区间和样本等级；真实紫金矿业与特变电工分别得到 482 根日线、21 个截点，紫金当前回撤观察 5 个样本、80% 上涨、lift +22.86%（样本不足），特变趋势走弱 9 个样本、67% 上涨、lift +4.76%（有限参考）。
 - 2026-09-07 Quant 候选历史回看对照已合入 `main`（PR #96，merge SHA `308f265ca8111ebf3e25365c220c0f1faeb7b78e`）：比较抽屉为每个候选独立读取最多 520 根日线，展示历史数据、当前状态、全体上涨比例、状态样本等级和 lift；generation 忽略过期响应，加载/来源失败/数据不足/小样本保持可见。PR CI `34084602939`、合并 SHA CI `34084879930`、Deploy Quant `34084879960` 均通过；认证态 Gateway 已确认 `601899.SH` 与 `600089.SH` 并排显示 `482 根 · 21 截点`，浏览器 error/warn 为 0。
+- 2026-09-07 Quant 历史结论可信度校准已合入 `main`（PR #97，merge SHA `e19bca82d4f76f343278efc74595f0e022eb901f`）：状态 Wilson 95% 区间与全体基准区间现在输出样本不足、区间重叠、相对基准有稳定支持或相对基准偏弱；原始上涨比例、lift、样本等级和研究语义保持不变。Quant 67 个测试文件/340 项通过，OpenSpec strict 95/95；PR CI `34086030506`、合并 SHA CI `34086289714`、Deploy Quant `34086289715` 均通过；认证态 Gateway 确认紫金为“样本不足”、特变为“区间重叠”。
 
 ## 延后事项
 
@@ -48,7 +49,7 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 
 ## 下一步
 
-1. 从最新 `main` 开始历史结论可信度校准：用紫金矿业、特变电工和更多已有标的检查状态区间与全体基准是否真正分离；先改进可信度表达和验证口径，样本不足前不调整状态阈值。
+1. 从最新 `main` 开始扩大历史验证样本：用观察池更多已有标的检查各状态的区间分离情况；在样本量和跨标的稳定性足够前，不调整状态阈值。
 2. 小 bug：定位 → 最小修复 → 定向测试 → Gateway 验证。
 3. crawler/D1：补 Gateway、D1 readback、content integrity 和实际消费层证据。
 4. 完成后更新本文件的当前状态；稳定规则回写对应 canonical owner。
