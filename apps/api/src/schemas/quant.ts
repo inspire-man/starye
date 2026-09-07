@@ -119,6 +119,16 @@ export const QuantValuationComparisonResponseSchema = v.object({
   }),
 })
 
+const QuantBusinessSegmentSchema = v.object({
+  tsCode: v.string(),
+  reportDate: v.string(),
+  category: v.picklist(['industry', 'product', 'region', 'other']),
+  name: v.string(),
+  revenue: v.nullable(v.number()),
+  revenueRatio: v.nullable(v.number()),
+  grossMargin: v.nullable(v.number()),
+})
+
 export const QuantFinancialQualitySnapshotSchema = v.object({
   tsCode: v.string(),
   observedAt: v.string(),
@@ -149,6 +159,9 @@ export const QuantFinancialQualitySnapshotSchema = v.object({
   inventory: v.optional(v.nullable(v.number())),
   contractLiabilities: v.optional(v.nullable(v.number())),
   workingCapitalErrorCode: v.optional(v.nullable(v.string())),
+  businessSegments: v.optional(v.array(QuantBusinessSegmentSchema)),
+  businessSegmentErrorCode: v.optional(v.nullable(v.string())),
+  businessSegmentSource: v.optional(v.nullable(v.string())),
   provider: v.optional(v.picklist(['tushare', 'eastmoney', 'akshare'])),
   fallbackUsed: v.optional(v.boolean()),
   fallbackReason: v.optional(v.nullable(v.string())),

@@ -1683,7 +1683,7 @@ describe('quant watchlist CRUD contract', () => {
         ],
       },
     })
-    expect(fetchMock).toHaveBeenCalledTimes(6)
+    expect(fetchMock).toHaveBeenCalledTimes(9)
   })
 
   it('keeps comparison samples when a non-target valuation source fails', async () => {
@@ -1812,7 +1812,7 @@ describe('quant watchlist CRUD contract', () => {
         ],
       },
     })
-    expect(fetchMock).toHaveBeenCalledTimes(stocks.length * 4)
+    expect(fetchMock).toHaveBeenCalledTimes(stocks.length * 5)
   })
 
   it('returns shareholder returns from implemented Tushare dividends and local prices', async () => {

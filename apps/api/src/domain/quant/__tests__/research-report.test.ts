@@ -452,6 +452,43 @@ describe('quant research report', () => {
     expect(report.decision?.evidenceKeys).not.toContain('operating-driver-inventory')
   })
 
+  it('keeps business segments as optional operating-driver evidence', () => {
+    const input = {
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-segment',
+      candidate,
+      dailyBars: bars(80),
+      valuation,
+      financialReports: [{
+        ...financial,
+        businessSegments: [{
+          tsCode: '601899.SH',
+          reportDate: '2026-06-30',
+          category: 'product' as const,
+          name: '冶炼产铜',
+          revenue: 31427370000,
+          revenueRatio: 0.161848,
+          grossMargin: null,
+        }],
+      }],
+      shareholderReturn,
+    }
+    const report = buildQuantResearchReport(input)
+    const baseline = buildQuantResearchReport({
+      ...input,
+      financialReports: [{ ...financial, businessSegments: undefined }],
+    })
+
+    expect(report.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'operating-driver-segment-revenue-1', value: 31427370000, optional: true, status: 'pass' }),
+      expect.objectContaining({ key: 'operating-driver-segment-gross-margin-1', value: null, optional: true, status: 'missing' }),
+    ]))
+    expect(report.score).toBe(baseline.score)
+    expect(report.decision?.evidenceKeys).not.toContain('operating-driver-segment-revenue-1')
+  })
+
   it('surfaces partial AkShare endpoint failures as optional source evidence', () => {
     const report = buildQuantResearchReport({
       tsCode: '601899.SH',

@@ -1,4 +1,4 @@
-import type { QuantCapitalStructureProvider, QuantCapitalStructureReport, QuantCashflowProvider, QuantCashflowReport, QuantDividendFetchResult, QuantDividendProvider, QuantDividendRecord, QuantFinancialQualityProvider, QuantFinancialQualitySnapshot, QuantInterestBearingDebtComponents, QuantInterestExpenseSourceField, QuantRepurchaseProvider, QuantRepurchaseReport } from './provider'
+import type { QuantBusinessSegment, QuantCapitalStructureProvider, QuantCapitalStructureReport, QuantCashflowProvider, QuantCashflowReport, QuantDividendFetchResult, QuantDividendProvider, QuantDividendRecord, QuantFinancialQualityProvider, QuantFinancialQualitySnapshot, QuantInterestBearingDebtComponents, QuantInterestExpenseSourceField, QuantRepurchaseProvider, QuantRepurchaseReport } from './provider'
 import type { QuantResearchEvidence, QuantResearchSource } from './research-report'
 import { QuantError } from './errors'
 
@@ -55,6 +55,8 @@ export interface QuantAkshareBridgeResult {
   readonly capitalStructures?: readonly Record<string, unknown>[]
   /** Optional for responses produced before the AkShare profit forecast expansion. */
   readonly profitForecasts?: readonly QuantAkshareProfitForecast[]
+  /** Optional for responses produced before the business segment expansion. */
+  readonly businessSegments?: readonly Record<string, unknown>[]
   readonly evidence: readonly QuantAkshareBridgeEvidence[]
   readonly errors: readonly { readonly code: string, readonly message: string, readonly source?: string | null }[]
 }
@@ -158,6 +160,34 @@ function normalizeRows(value: unknown): readonly Record<string, unknown>[] {
     : []
 }
 
+function normalizeBridgeBusinessSegments(result: QuantAkshareBridgeResult, records: readonly Record<string, unknown>[]): readonly QuantBusinessSegment[] {
+  return records.slice(0, 64).flatMap((record) => {
+    if (!bridgeReportCode(record, result.tsCode))
+      throw new QuantAkshareBridgeError('INVALID_RESPONSE', 'AkShare business segment code is missing or mismatched', 502)
+    const reportDate = bridgeDate(record, 'report_date', 'reportDate', 'REPORT_DATE', '报告日期')
+    const name = bridgeString(record, 'name', 'segment_name', 'segmentName', 'ITEM_NAME', '主营构成')
+    if (!reportDate || !name)
+      return []
+    const rawCategory = bridgeString(record, 'category', 'segment_category', 'segmentCategory', 'MAINOP_TYPE', '分类类型')
+    const category: QuantBusinessSegment['category'] = rawCategory === '1' || rawCategory === 'industry' || /行业/u.test(rawCategory ?? '')
+      ? 'industry'
+      : rawCategory === '2' || rawCategory === 'product' || /产品/u.test(rawCategory ?? '')
+        ? 'product'
+        : rawCategory === '3' || rawCategory === 'region' || /地区/u.test(rawCategory ?? '')
+          ? 'region'
+          : 'other'
+    return [{
+      tsCode: result.tsCode,
+      reportDate,
+      category,
+      name,
+      revenue: bridgeNumber(record, 'revenue', 'segment_revenue', 'segmentRevenue', 'MAIN_BUSINESS_INCOME', '主营收入'),
+      revenueRatio: bridgeNumber(record, 'revenue_ratio', 'revenueRatio', 'MBI_RATIO', '收入比例'),
+      grossMargin: bridgeNumber(record, 'gross_margin', 'grossMargin', 'GROSS_RPOFIT_RATIO', '毛利率'),
+    }]
+  })
+}
+
 function normalizeProfitForecastRows(value: unknown, requestedTsCode: string): readonly QuantAkshareProfitForecast[] {
   if (value === undefined)
     return []
@@ -237,6 +267,9 @@ function parseBridgeResponse(payload: unknown, requestedTsCode: string): QuantAk
     dividends: normalizeRows(record?.dividends),
     capitalStructures: normalizeRows(record?.capital_structures ?? record?.capitalStructures),
     profitForecasts: normalizeProfitForecastRows(record?.profit_forecasts ?? record?.profitForecasts, tsCode),
+    businessSegments: record?.business_segments === undefined && record?.businessSegments === undefined
+      ? undefined
+      : normalizeRows(record?.business_segments ?? record?.businessSegments),
     evidence,
     errors,
   }
@@ -371,6 +404,13 @@ function normalizeBridgeFinancialReport(result: QuantAkshareBridgeResult, record
   if (!reportDate)
     return null
   const industry = financialIndustry(bridgeString(record, 'industry', '行业', 'ORG_TYPE') ?? result.identity.industry ?? null)
+  const businessSegments = result.businessSegments === undefined
+    ? undefined
+    : normalizeBridgeBusinessSegments(result, result.businessSegments).filter(segment => segment.reportDate === reportDate)
+  const businessSegmentErrorCode = result.errors.find(error => error.code.startsWith('AKSHARE_SEGMENT_'))?.code ?? null
+  const businessSegmentSource = result.businessSegments !== undefined && result.source.name.includes('stock_zygc_em')
+    ? 'stock_zygc_em'
+    : null
   const accountsReceivable = bridgeNumber(record, 'accounts_receivable', 'accountsReceivable', 'ACCOUNTS_RECE', '应收账款')
   const inventory = bridgeNumber(record, 'inventory', 'INVENTORY', '存货')
   const contractLiabilities = bridgeNumber(record, 'contract_liabilities', 'contractLiabilities', 'CONTRACT_LIAB', '合同负债')
@@ -414,6 +454,9 @@ function normalizeBridgeFinancialReport(result: QuantAkshareBridgeResult, record
     inventory,
     contractLiabilities,
     ...(workingCapitalErrorCode ? { workingCapitalErrorCode } : {}),
+    ...(businessSegments !== undefined ? { businessSegments } : {}),
+    ...(businessSegments?.length ? {} : businessSegmentErrorCode ? { businessSegmentErrorCode } : {}),
+    ...(businessSegmentSource ? { businessSegmentSource } : {}),
     provider: 'akshare',
     ...(industry ? { industry } : {}),
   }
@@ -601,6 +644,7 @@ export function createQuantAkshareFinancialProvider(bridge: QuantAkshareBridgeCl
   return {
     name: 'akshare',
     isConfigured: bridge.isConfigured,
+    supportsBusinessSegments: true,
     fetchFinancialQuality,
     fetchFinancialQualityHistory,
   }

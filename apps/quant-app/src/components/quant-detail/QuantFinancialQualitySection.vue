@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {
+  QuantBusinessSegment,
   QuantFinancialQualityComparison,
   QuantFinancialQualityHistory,
   QuantFinancialQualitySnapshot,
@@ -76,6 +77,10 @@ function financialSourceLabel(value: QuantFinancialQualitySnapshot): string {
 
 function workingCapitalAmount(value: number | null | undefined): string {
   return value === null || value === undefined ? '缺失' : formatFinancialAmount(value)
+}
+
+function segmentCategoryLabel(value: QuantBusinessSegment['category']): string {
+  return value === 'product' ? '产品' : value === 'industry' ? '行业' : value === 'region' ? '地区' : '其他'
 }
 </script>
 
@@ -180,6 +185,34 @@ function workingCapitalAmount(value: number | null | undefined): string {
       <p class="financial-context-note">
         {{ financialQuality.workingCapitalErrorCode ? `经营驱动来源暂不可用（${financialQuality.workingCapitalErrorCode}）` : '这些是同报告期资产负债表原始金额；缺失表示来源未返回。' }} 订单、销量、价格与未来利润另行核验，不进入价值质量总分。
       </p>
+      <div class="financial-segment-list" aria-label="分部经营原始字段">
+        <div class="financial-subheading">
+          <div>
+            <span class="section-kicker">SEGMENT CONTEXT</span>
+            <strong>分部经营原始字段</strong>
+          </div>
+          <small>最多展示最近报告期的 12 条披露</small>
+        </div>
+        <div v-if="financialQuality.businessSegments?.length" class="financial-segment-table">
+          <div class="financial-segment-row financial-segment-head">
+            <span>分类</span><span>分部</span><span>主营收入</span><span>收入占比</span><span>毛利率</span>
+          </div>
+          <div v-for="segment in financialQuality.businessSegments" :key="`${segment.reportDate}-${segment.category}-${segment.name}`" class="financial-segment-row">
+            <span>{{ segmentCategoryLabel(segment.category) }}</span>
+            <strong>{{ segment.name }}</strong>
+            <span>{{ workingCapitalAmount(segment.revenue) }}</span>
+            <span>{{ formatRatioPercent(segment.revenueRatio) }}</span>
+            <span>{{ formatRatioPercent(segment.grossMargin) }}</span>
+          </div>
+        </div>
+        <div v-else class="financial-segment-empty">
+          <Info :size="15" aria-hidden="true" />
+          <span>{{ financialQuality.businessSegmentErrorCode ? `分部来源暂不可用（${financialQuality.businessSegmentErrorCode}）` : '当前报告期未返回分部主营构成；订单、销量和实现价格仍需其他来源。' }}</span>
+        </div>
+        <p class="financial-context-note">
+          分部收入和毛利率仅记录源站披露，不从收入比例推导销量、价格或订单金额，也不进入价值质量总分。
+        </p>
+      </div>
     </div>
     <div v-if="financialQuality?.industry && financialQuality.industry !== 'general' && financialQuality.industryMetrics" class="financial-context-panel financial-industry-panel">
       <div class="financial-subheading">

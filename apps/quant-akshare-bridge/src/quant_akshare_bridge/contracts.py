@@ -64,6 +64,7 @@ class BridgeResponse:
     identity: dict[str, Any] = field(default_factory=dict)
     daily_bars: list[dict[str, Any]] = field(default_factory=list)
     financials: list[dict[str, Any]] = field(default_factory=list)
+    business_segments: list[dict[str, Any]] = field(default_factory=list)
     cashflows: list[dict[str, Any]] = field(default_factory=list)
     capital_structures: list[dict[str, Any]] = field(default_factory=list)
     profit_forecasts: list[dict[str, Any]] = field(default_factory=list)

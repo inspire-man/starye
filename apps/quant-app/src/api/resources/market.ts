@@ -1,4 +1,5 @@
 import type {
+  QuantBusinessSegment,
   QuantFinancialIndustry,
   QuantFinancialIndustryMetrics,
   QuantFinancialQualityComparison,
@@ -113,6 +114,30 @@ function parseFinancialQuality(payload: unknown): QuantFinancialQualitySnapshot 
   const inventory = readNumber(data, 'inventory')
   const contractLiabilities = readNumber(data, 'contractLiabilities', 'contract_liabilities')
   const workingCapitalErrorCode = readString(data, 'workingCapitalErrorCode', 'working_capital_error_code')
+  const rawBusinessSegments = data.businessSegments ?? data.business_segments
+  const businessSegments = Array.isArray(rawBusinessSegments)
+    ? (rawBusinessSegments as unknown[]).flatMap((value: unknown): QuantBusinessSegment[] => {
+        if (!isRecord(value))
+          return []
+        const category = readString(value, 'category')
+        const name = readString(value, 'name', 'segmentName', 'segment_name')
+        const segmentTsCode = readString(value, 'tsCode', 'ts_code') || tsCode
+        const segmentReportDate = readString(value, 'reportDate', 'report_date')
+        if (!name || !segmentReportDate || !segmentTsCode || (category !== 'industry' && category !== 'product' && category !== 'region' && category !== 'other'))
+          return []
+        return [{
+          tsCode: segmentTsCode,
+          reportDate: segmentReportDate,
+          category,
+          name,
+          revenue: readNumber(value, 'revenue', 'segment_revenue'),
+          revenueRatio: readNumber(value, 'revenueRatio', 'revenue_ratio'),
+          grossMargin: readNumber(value, 'grossMargin', 'gross_margin'),
+        }]
+      })
+    : undefined
+  const businessSegmentErrorCode = readString(data, 'businessSegmentErrorCode', 'business_segment_error_code')
+  const businessSegmentSource = readString(data, 'businessSegmentSource', 'business_segment_source')
   const hasField = (...keys: string[]) => keys.some(key => Object.hasOwn(data, key))
   return {
     tsCode,
@@ -144,6 +169,9 @@ function parseFinancialQuality(payload: unknown): QuantFinancialQualitySnapshot 
     ...(hasField('inventory') ? { inventory } : {}),
     ...(hasField('contractLiabilities', 'contract_liabilities') ? { contractLiabilities } : {}),
     ...(workingCapitalErrorCode ? { workingCapitalErrorCode } : {}),
+    ...(businessSegments !== undefined ? { businessSegments } : {}),
+    ...(businessSegmentErrorCode ? { businessSegmentErrorCode } : {}),
+    ...(businessSegmentSource ? { businessSegmentSource } : {}),
     ...(provider ? { provider } : {}),
     ...(typeof (data.fallbackUsed ?? data.fallback_used) === 'boolean' ? { fallbackUsed: (data.fallbackUsed ?? data.fallback_used) as boolean } : {}),
     ...(readString(data, 'fallbackReason', 'fallback_reason') ? { fallbackReason: readString(data, 'fallbackReason', 'fallback_reason') } : {}),

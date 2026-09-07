@@ -56,6 +56,17 @@ class FakeAkShare:
             "净利润": 200,
         }]
 
+    def stock_zygc_em(self, **_kwargs):
+        return [{
+            "股票代码": "601899",
+            "报告日期": "2026-06-30",
+            "分类类型": "按产品分类",
+            "主营构成": "冶炼产铜",
+            "主营收入": 31427370000,
+            "收入比例": 0.161848,
+            "毛利率": None,
+        }]
+
 
 class AdapterTest(unittest.TestCase):
     def test_returns_standardized_contract_without_dataframe(self) -> None:
@@ -82,8 +93,11 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(payload["financials"][0]["accounts_receivable"], 120.0)
         self.assertEqual(payload["financials"][0]["inventory"], 300.0)
         self.assertEqual(payload["financials"][0]["contract_liabilities"], 80.0)
+        self.assertEqual(payload["business_segments"][0]["name"], "冶炼产铜")
+        self.assertEqual(payload["business_segments"][0]["revenue"], 31427370000.0)
         self.assertIn("stock_profit_sheet_by_report_em", payload["source"]["endpoints"])
         self.assertIn("stock_balance_sheet_by_report_em", payload["source"]["endpoints"])
+        self.assertIn("stock_zygc_em", payload["source"]["endpoints"])
 
     def test_collects_matching_repurchase_rows_without_leaking_other_stocks(self) -> None:
         class RepurchaseAkShare(FakeAkShare):

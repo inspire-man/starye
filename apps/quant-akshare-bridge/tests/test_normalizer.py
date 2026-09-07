@@ -1,10 +1,41 @@
 import unittest
 
 from quant_akshare_bridge.contracts import BridgeRequest
-from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_capital_structure_rows, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_profit_forecast_rows, normalize_repurchase_rows, normalize_ths_cashflow_rows, normalize_ts_code, validate_date_range
+from quant_akshare_bridge.normalizer import akshare_symbol, build_evidence, normalize_business_segment_rows, normalize_capital_structure_rows, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_profit_forecast_rows, normalize_repurchase_rows, normalize_ths_cashflow_rows, normalize_ts_code, validate_date_range
 
 
 class NormalizerTest(unittest.TestCase):
+    def test_normalizes_business_segment_rows_and_keeps_missing_gross_margin_null(self) -> None:
+        rows, errors = normalize_business_segment_rows("601899.SH", [{
+            "股票代码": "601899",
+            "报告日期": "2026-06-30",
+            "分类类型": "按产品分类",
+            "主营构成": "冶炼产铜",
+            "主营收入": 31427370000,
+            "收入比例": 0.161848,
+            "毛利率": float("nan"),
+        }, {
+            "股票代码": "000001",
+            "报告日期": "2026-06-30",
+            "分类类型": "按产品分类",
+            "主营构成": "其他股票",
+            "主营收入": 999,
+        }])
+
+        self.assertEqual({error.code for error in errors}, {
+            "AKSHARE_SEGMENT_FIELD_INVALID",
+            "AKSHARE_SEGMENT_ROW_MISMATCHED",
+        })
+        self.assertEqual(rows, [{
+            "ts_code": "601899.SH",
+            "report_date": "20260630",
+            "category": "product",
+            "name": "冶炼产铜",
+            "revenue": 31427370000.0,
+            "revenue_ratio": 0.161848,
+            "gross_margin": None,
+        }])
+
     def test_normalizes_codes_and_daily_aliases(self) -> None:
         self.assertEqual(normalize_ts_code("601899.sh"), "601899.SH")
         self.assertEqual(akshare_symbol("601899.SH"), "601899")

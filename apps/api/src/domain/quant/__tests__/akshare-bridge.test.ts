@@ -94,6 +94,7 @@ describe('akShare bridge client', () => {
 
   it('maps expanded financial and cashflow rows into provider contracts', async () => {
     const fetchImpl = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(payload({
+      source: { adapter: 'akshare-adapter-v1', endpoints: ['stock_zygc_em'], formula_version: 'akshare-adapter-v1' },
       identity: { name: '平安银行', industry: '银行' },
       financials: [{
         ts_code: '601899.SH',
@@ -106,6 +107,15 @@ describe('akShare bridge client', () => {
         accounts_receivable: 120,
         inventory: 300,
         contract_liabilities: 80,
+      }],
+      business_segments: [{
+        ts_code: '601899.SH',
+        report_date: '20260630',
+        category: 'product',
+        name: '冶炼产铜',
+        revenue: 31427370000,
+        revenue_ratio: 0.161848,
+        gross_margin: null,
       }],
       errors: [{ code: 'AKSHARE_FINANCIAL_ENDPOINT_FAILED', message: 'endpoint failed', source: 'stock_balance_sheet_by_report_em' }],
       cashflows: [{
@@ -139,6 +149,14 @@ describe('akShare bridge client', () => {
       accountsReceivable: 120,
       inventory: 300,
       contractLiabilities: 80,
+      businessSegments: [{
+        category: 'product',
+        name: '冶炼产铜',
+        revenue: 31427370000,
+        revenueRatio: 0.161848,
+        grossMargin: null,
+      }],
+      businessSegmentSource: 'stock_zygc_em',
       industry: 'bank',
     })
     expect(financialSnapshot).not.toHaveProperty('workingCapitalErrorCode')

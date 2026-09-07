@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 from .contracts import BridgeError, BridgeRequest, BridgeResponse, BridgeSource, observed_now
-from .normalizer import FORMULA_VERSION, _merge_debt_components, akshare_symbol, build_evidence, normalize_capital_structure_rows, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_profit_forecast_rows, normalize_repurchase_rows, normalize_ths_cashflow_rows, normalize_ts_code, validate_date_range
+from .normalizer import FORMULA_VERSION, _merge_debt_components, akshare_symbol, build_evidence, normalize_business_segment_rows, normalize_capital_structure_rows, normalize_cashflow_rows, normalize_daily_rows, normalize_date, normalize_dividend_rows, normalize_financial_rows, normalize_identity_rows, normalize_profit_forecast_rows, normalize_repurchase_rows, normalize_ths_cashflow_rows, normalize_ts_code, validate_date_range
 
 
 def akshare_available() -> bool:
@@ -219,6 +219,25 @@ def _collect_financials(api: Any, ts_code: str, observed_at: str) -> tuple[list[
             else:
                 errors.append(BridgeError("AKSHARE_FINANCIAL_FIELDS_UNAVAILABLE", "AkShare financial statement fields remain unavailable", "financial"))
     return financials, errors, attempted
+
+
+def _collect_business_segments(api: Any, ts_code: str) -> tuple[list[dict[str, Any]], list[BridgeError], list[str]]:
+    endpoint = "stock_zygc_em"
+    method = getattr(api, endpoint, None)
+    if not callable(method):
+        return [], [BridgeError("AKSHARE_SEGMENT_ENDPOINT_UNAVAILABLE", "AkShare business segment endpoint is unavailable", endpoint)], []
+    try:
+        rows, row_errors = normalize_business_segment_rows(
+            ts_code,
+            method(symbol=_market_symbol(ts_code)),
+            source=endpoint,
+        )
+        errors = list(row_errors)
+        if not rows:
+            errors.append(BridgeError("AKSHARE_SEGMENT_EMPTY", "AkShare business segment data is empty", endpoint))
+        return rows, errors, [endpoint]
+    except Exception:
+        return [], [BridgeError("AKSHARE_SEGMENT_ENDPOINT_FAILED", "AkShare business segment endpoint failed", endpoint)], [endpoint]
 
 
 def _enrich_cashflow_rows(cashflows: list[dict[str, Any]], financials: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -472,6 +491,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
     errors: list[BridgeError] = []
     daily_bars: list[dict[str, Any]] = []
     financials: list[dict[str, Any]] = []
+    business_segments: list[dict[str, Any]] = []
     cashflows: list[dict[str, Any]] = []
     capital_structures: list[dict[str, Any]] = []
     profit_forecasts: list[dict[str, Any]] = []
@@ -481,6 +501,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
     daily_endpoints: list[str] = []
     identity_endpoints: list[str] = []
     financial_endpoints: list[str] = []
+    business_segment_endpoints: list[str] = []
     cashflow_endpoints: list[str] = []
     capital_endpoints: list[str] = []
     profit_forecast_endpoints: list[str] = []
@@ -540,6 +561,8 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
     if request.include_financials:
         financials, financial_errors, financial_endpoints = _collect_financials(api, ts_code, observed_at)
         errors.extend(financial_errors)
+        business_segments, segment_errors, business_segment_endpoints = _collect_business_segments(api, ts_code)
+        errors.extend(segment_errors)
 
         cashflows, cashflow_errors, cashflow_endpoints = _collect_cashflows(api, ts_code, observed_at, financials)
         errors.extend(cashflow_errors)
@@ -559,7 +582,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
         errors.extend(profit_forecast_errors)
 
     evidence = build_evidence(ts_code, observed_at, daily_bars, financials, cashflows)
-    has_data = bool(daily_bars or identity or financials or cashflows or capital_structures or profit_forecasts)
+    has_data = bool(daily_bars or identity or financials or cashflows or business_segments or capital_structures or profit_forecasts)
     status = "ready" if has_data and not _has_unresolved_gaps(request, daily_bars, identity, financials, cashflows, errors) else "partial" if has_data else "unavailable"
     return BridgeResponse(
         ts_code=ts_code,
@@ -571,6 +594,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
                 *daily_endpoints,
                 *identity_endpoints,
                 *financial_endpoints,
+                *business_segment_endpoints,
                 *cashflow_endpoints,
                 *capital_endpoints,
                 *profit_forecast_endpoints,
@@ -582,6 +606,7 @@ def collect_evidence(request: BridgeRequest, client: Any | None = None) -> Bridg
         identity=identity,
         daily_bars=daily_bars,
         financials=financials,
+        business_segments=business_segments,
         cashflows=cashflows,
         capital_structures=capital_structures,
         profit_forecasts=profit_forecasts,

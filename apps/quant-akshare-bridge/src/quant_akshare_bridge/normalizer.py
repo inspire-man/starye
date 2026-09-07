@@ -172,7 +172,7 @@ def _row_code(value: Any) -> str | None:
 
 
 def _row_matches_ts_code(row: Mapping[str, Any], normalized_code: str) -> bool:
-    returned = _row_code(_field(row, "ts_code", "tsCode", "SECUCODE", "SECURITY_CODE", "security_code"))
+    returned = _row_code(_field(row, "ts_code", "tsCode", "SECUCODE", "SECURITY_CODE", "security_code", "股票代码", "代码"))
     return returned is None or returned == normalized_code.split(".", 1)[0]
 
 
@@ -348,6 +348,60 @@ def normalize_financial_rows(
     deduplicated = {row["report_date"]: row for row in result}
     ordered = sorted(deduplicated.values(), key=lambda item: item["report_date"], reverse=True)
     return ordered[:max(1, min(limit, 12))], errors
+
+
+BUSINESS_SEGMENT_CATEGORIES = {
+    "1": "industry",
+    "2": "product",
+    "3": "region",
+    "按行业分类": "industry",
+    "按产品分类": "product",
+    "按地区分类": "region",
+}
+
+
+def normalize_business_segment_rows(
+    ts_code: str,
+    raw: Any,
+    limit: int = 64,
+    source: str = "stock_zygc_em",
+) -> tuple[list[dict[str, Any]], list[BridgeError]]:
+    normalized_code = normalize_ts_code(ts_code)
+    errors: list[BridgeError] = []
+    result: list[dict[str, Any]] = []
+    for row in _rows(raw):
+        if not _row_matches_ts_code(row, normalized_code):
+            errors.append(BridgeError("AKSHARE_SEGMENT_ROW_MISMATCHED", "business segment row code does not match the requested stock", source))
+            continue
+        try:
+            report_date = normalize_date(_field(row, "报告日期", "报告期", "REPORT_DATE", "report_date"), "report_date")
+        except ValueError:
+            errors.append(BridgeError("AKSHARE_SEGMENT_ROW_INVALID", "business segment row has an invalid report date", source))
+            continue
+        category_value = _text(_field(row, "分类类型", "MAINOP_TYPE", "category", "segment_category")) or ""
+        category = BUSINESS_SEGMENT_CATEGORIES.get(category_value, "other")
+        name = _text(_field(row, "主营构成", "ITEM_NAME", "name", "segment_name"))
+        if not report_date or not name:
+            errors.append(BridgeError("AKSHARE_SEGMENT_ROW_INVALID", "business segment row is missing report date or name", source))
+            continue
+        raw_metrics = {
+            "revenue": _field(row, "主营收入", "MAIN_BUSINESS_INCOME", "revenue", "segment_revenue"),
+            "revenue_ratio": _field(row, "收入比例", "MBI_RATIO", "revenue_ratio", "revenueRatio"),
+            "gross_margin": _field(row, "毛利率", "GROSS_RPOFIT_RATIO", "gross_margin", "grossMargin"),
+        }
+        metrics = {key: _number(value) for key, value in raw_metrics.items()}
+        if any(value not in (None, "") and normalized is None for value, normalized in zip(raw_metrics.values(), metrics.values())):
+            errors.append(BridgeError("AKSHARE_SEGMENT_FIELD_INVALID", "business segment numeric field is invalid", source))
+        result.append({
+            "ts_code": normalized_code,
+            "report_date": report_date,
+            "category": category,
+            "name": name,
+            **metrics,
+        })
+    deduplicated = {f"{row['report_date']}:{row['category']}:{row['name']}": row for row in result}
+    ordered = sorted(deduplicated.values(), key=lambda item: (item["report_date"], item["revenue"] if item["revenue"] is not None else float("-inf")), reverse=True)
+    return ordered[:max(1, min(limit, 96))], errors
 
 
 def normalize_cashflow_rows(
