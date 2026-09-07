@@ -1181,7 +1181,8 @@ function formatTimingHistoryPercent(value: number | null): string {
 
 function timingHistoryBucketTitle(bucket: TimingHistoryBucket): string {
   const quality = bucket.sampleQuality === 'usable' ? '可参考' : bucket.sampleQuality === 'limited' ? '有限参考' : '样本不足'
-  return `${bucket.label}：${bucket.sampleSize} 个非重叠截点，未来 20 日上涨比例 ${formatTimingHistoryRate(bucket.positiveRate)}（Wilson 95% ${formatTimingHistoryRate(bucket.positiveRateLower)} - ${formatTimingHistoryRate(bucket.positiveRateUpper)}），相对全体 ${formatTimingHistoryPercent(bucket.positiveRateLift)}，${quality}`
+  const edge = bucket.edgeAssessment === 'supported' ? '相对基准有稳定支持' : bucket.edgeAssessment === 'weaker' ? '相对基准偏弱' : bucket.edgeAssessment === 'indeterminate' ? '区间重叠' : '样本不足'
+  return `${bucket.label}：${bucket.sampleSize} 个非重叠截点，未来 20 日上涨比例 ${formatTimingHistoryRate(bucket.positiveRate)}（Wilson 95% ${formatTimingHistoryRate(bucket.positiveRateLower)} - ${formatTimingHistoryRate(bucket.positiveRateUpper)}），相对全体 ${formatTimingHistoryPercent(bucket.positiveRateLift)}，${quality}，${edge}`
 }
 
 function formatEvidenceDate(value: string | null): string {

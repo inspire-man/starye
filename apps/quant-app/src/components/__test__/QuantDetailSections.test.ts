@@ -476,6 +476,7 @@ const timingBucket: TimingHistoryBucket = {
   bestForwardReturn20: 0.1,
   worstForwardReturn20: -0.02,
   sampleQuality: 'insufficient',
+  edgeAssessment: 'insufficient',
 }
 
 const timingHistory: TimingHistory = {
@@ -853,6 +854,7 @@ describe('quant detail feature sections', () => {
     expect(wrapper.text()).toContain('中长线时机窗口')
     expect(wrapper.text()).toContain('历史条件回看')
     expect(wrapper.text()).toContain('未来 20 日上涨比例')
+    expect(wrapper.text()).toContain('基准区间结论')
   })
 
   it('keeps decision evidence status and action formatting at the component boundary', () => {

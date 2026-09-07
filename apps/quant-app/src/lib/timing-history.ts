@@ -5,6 +5,7 @@ import { buildTrendStructure } from './trend-analysis'
 
 export type TimingHistoryState = Exclude<TimingWindowState, 'insufficient'>
 export type TimingHistorySampleQuality = 'insufficient' | 'limited' | 'usable'
+export type TimingHistoryEdgeAssessment = 'insufficient' | 'indeterminate' | 'supported' | 'weaker'
 
 export interface TimingHistoryObservation {
   readonly anchorDate: string
@@ -21,6 +22,7 @@ export interface TimingHistoryBucket {
   readonly positiveRateLower: number | null
   readonly positiveRateUpper: number | null
   readonly positiveRateLift: number | null
+  readonly edgeAssessment: TimingHistoryEdgeAssessment
   readonly averageForwardReturn20: number | null
   readonly averageForwardReturn20Delta: number | null
   readonly medianForwardReturn20: number | null
@@ -125,8 +127,24 @@ function buildBaseline(returns: readonly number[]): TimingHistoryBaseline {
   }
 }
 
+export function classifyTimingHistoryEdge(
+  bucket: Pick<TimingHistoryBucket, 'sampleSize' | 'positiveRateLower' | 'positiveRateUpper'>,
+  baseline: Pick<TimingHistoryBaseline, 'positiveRateLower' | 'positiveRateUpper'>,
+): TimingHistoryEdgeAssessment {
+  if (bucket.sampleSize < MIN_RELIABLE_SAMPLE_SIZE)
+    return 'insufficient'
+  if (bucket.positiveRateLower === null || bucket.positiveRateUpper === null || baseline.positiveRateLower === null || baseline.positiveRateUpper === null)
+    return 'indeterminate'
+  if (bucket.positiveRateLower > baseline.positiveRateUpper)
+    return 'supported'
+  if (bucket.positiveRateUpper < baseline.positiveRateLower)
+    return 'weaker'
+  return 'indeterminate'
+}
+
 function buildBucket(state: TimingHistoryState, returns: readonly number[], baseline: TimingHistoryBaseline): TimingHistoryBucket {
   const summary = buildBaseline(returns)
+  const edgeAssessment = classifyTimingHistoryEdge(summary, baseline)
   return {
     state,
     label: STATE_LABELS[state],
@@ -136,6 +154,7 @@ function buildBucket(state: TimingHistoryState, returns: readonly number[], base
     positiveRateLower: summary.positiveRateLower,
     positiveRateUpper: summary.positiveRateUpper,
     positiveRateLift: summary.positiveRate !== null && baseline.positiveRate !== null ? summary.positiveRate - baseline.positiveRate : null,
+    edgeAssessment,
     averageForwardReturn20: summary.averageForwardReturn20,
     averageForwardReturn20Delta: summary.averageForwardReturn20 !== null && baseline.averageForwardReturn20 !== null ? summary.averageForwardReturn20 - baseline.averageForwardReturn20 : null,
     medianForwardReturn20: summary.medianForwardReturn20,
