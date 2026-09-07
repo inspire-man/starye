@@ -48,7 +48,7 @@ import type { ResearchReportCopyResult } from './lib/research-report-copy'
 import type { ResearchReviewMeta } from './lib/research-review'
 import type { ResearchRunScoreDirection } from './lib/research-run-timeline'
 import type { CandidateResearchMetadata, CandidateResearchStatus, CandidateReviewFilter, CandidateSortKey } from './lib/selection-presets'
-import type { TimingHistoryBucket } from './lib/timing-history'
+import type { TimingHistory, TimingHistoryBucket } from './lib/timing-history'
 import type { TimingWindow, TimingWindowMetricStatus, TimingWindowState } from './lib/timing-window'
 import type { WatchlistEnvironmentStatus } from './lib/watchlist-environment'
 import { DetailDrawer } from '@starye/ui'
@@ -71,6 +71,7 @@ import { buildCandidateBriefingScopeKey, canApplyCandidateBriefingResponse } fro
 import { buildCandidateEvidenceScore } from './lib/candidate-evidence-score'
 import { buildResearchComparisonFilename, buildResearchComparisonMarkdown } from './lib/comparison-ai-export'
 import { buildComparisonAiNextCheckPrompt } from './lib/comparison-ai-prompts'
+import { createComparisonDailyGeneration } from './lib/comparison-daily-generation'
 import { buildQuantDataHealth, classifyQuantDataHealthFreshness, mergeQuantDataHealthFreshness } from './lib/data-health'
 import { buildDecisionEvidence } from './lib/decision-evidence'
 import { quantEvidenceRefreshTargetForKey } from './lib/quant-evidence-refresh'
@@ -194,6 +195,10 @@ const comparisonLoading = ref(false)
 const comparisonValuations = ref<Record<string, QuantValuationSnapshot | null>>({})
 const comparisonFinancials = ref<Record<string, QuantFinancialQualitySnapshot | null>>({})
 const comparisonErrors = ref<Record<string, { valuation: boolean, financial: boolean }>>({})
+const comparisonDailyBars = ref<Record<string, DailyBar[]>>({})
+const comparisonDailyLoading = ref<Record<string, boolean>>({})
+const comparisonDailyErrors = ref<Record<string, boolean>>({})
+const comparisonDailyGeneration = createComparisonDailyGeneration()
 const comparisonResearchRunning = ref(false)
 const comparisonResearchStates = ref<Record<string, ComparisonResearchItemState>>({})
 const comparisonResearchHistoryLoading = ref<Record<string, boolean>>({})
@@ -513,6 +518,10 @@ const selectedResearchMarker = computed<QuantResearchMarker>(() => researchMarke
 const selectedResearchReview = computed(() => researchReviewFor(selectedTsCode.value || ''))
 const selectedCandidateItems = computed(() => candidateItems.value.filter(item => selectedCandidateIds.value.has(item.id)).slice(0, 3))
 const canCompareCandidates = computed(() => selectedCandidateItems.value.length >= 2)
+const comparisonTimingHistories = computed<Record<string, TimingHistory | null>>(() => Object.fromEntries(selectedCandidateItems.value.map((item) => {
+  const bars = comparisonDailyBars.value[item.tsCode]
+  return [item.tsCode, bars === undefined ? null : buildTimingHistory(bars)]
+})))
 const automatedResearchCandidates = computed<AutomatedResearchCandidate[]>(() => {
   const source = selectedCandidateItems.value.length ? selectedCandidateItems.value : filteredCandidateItems.value
   return source.slice(0, 3).map(item => ({ tsCode: item.tsCode, name: item.name }))
@@ -2346,8 +2355,13 @@ function clearCandidateSelection() {
 
 function handleComparisonDrawerOpenChange(open: boolean): void {
   comparisonDrawerOpen.value = open
-  if (!open)
+  if (!open) {
+    comparisonDailyGeneration.invalidate()
+    comparisonDailyBars.value = {}
+    comparisonDailyLoading.value = {}
+    comparisonDailyErrors.value = {}
     resetComparisonAiComparisonState()
+  }
 }
 
 function researchEvidenceDomId(tsCode: string, evidenceKey: string): string {
@@ -2564,10 +2578,33 @@ async function retryComparisonResearchHistory(item: CandidateItem): Promise<void
   await loadComparisonResearchHistory(item)
 }
 
+async function loadComparisonDailyHistory(tsCode: string, generation: number): Promise<void> {
+  if (!comparisonDailyGeneration.isCurrent(generation))
+    return
+  comparisonDailyLoading.value = { ...comparisonDailyLoading.value, [tsCode]: true }
+  comparisonDailyErrors.value = { ...comparisonDailyErrors.value, [tsCode]: false }
+  try {
+    const bars = await quantApi.getDailyBars(tsCode, { limit: DAILY_HISTORY_LIMIT })
+    if (!comparisonDailyGeneration.isCurrent(generation))
+      return
+    comparisonDailyBars.value = { ...comparisonDailyBars.value, [tsCode]: bars }
+  }
+  catch {
+    if (!comparisonDailyGeneration.isCurrent(generation))
+      return
+    comparisonDailyErrors.value = { ...comparisonDailyErrors.value, [tsCode]: true }
+  }
+  finally {
+    if (comparisonDailyGeneration.isCurrent(generation))
+      comparisonDailyLoading.value = { ...comparisonDailyLoading.value, [tsCode]: false }
+  }
+}
+
 async function openComparisonDrawer() {
   if (!canCompareCandidates.value)
     return
   const items = [...selectedCandidateItems.value]
+  const generation = comparisonDailyGeneration.next()
   resetComparisonResearchExportState()
   resetComparisonResearchCopyState()
   resetComparisonResearchAiSummaryState()
@@ -2577,11 +2614,15 @@ async function openComparisonDrawer() {
   comparisonValuations.value = {}
   comparisonFinancials.value = {}
   comparisonErrors.value = {}
+  comparisonDailyBars.value = {}
+  comparisonDailyLoading.value = Object.fromEntries(items.map(item => [item.tsCode, true]))
+  comparisonDailyErrors.value = Object.fromEntries(items.map(item => [item.tsCode, false]))
   comparisonResearchHistoryErrors.value = {
     ...comparisonResearchHistoryErrors.value,
     ...Object.fromEntries(items.map(item => [item.tsCode, null])),
   }
   void Promise.all(items.map(item => loadComparisonResearchHistory(item)))
+  void Promise.all(items.map(item => loadComparisonDailyHistory(item.tsCode, generation)))
   await Promise.all(items.map(async (item) => {
     const result = { valuation: null as QuantValuationSnapshot | null, financial: null as QuantFinancialQualitySnapshot | null, valuationError: false, financialError: false }
     const [valuationResult, financialResult] = await Promise.allSettled([
@@ -3589,6 +3630,9 @@ onUnmounted(() => {
         :comparison-valuations="comparisonValuations"
         :comparison-financials="comparisonFinancials"
         :comparison-errors="comparisonErrors"
+        :comparison-timing-histories="comparisonTimingHistories"
+        :comparison-daily-loading="comparisonDailyLoading"
+        :comparison-daily-errors="comparisonDailyErrors"
         :comparison-research-button-label="comparisonResearchButtonLabel"
         :can-compare-candidates="canCompareCandidates"
         :comparison-research-running="comparisonResearchRunning"
@@ -3637,6 +3681,8 @@ onUnmounted(() => {
         :format-percent="formatPercent"
         :format-signal-score="formatSignalScore"
         :format-metric-percent="formatMetricPercent"
+        :format-timing-history-rate="formatTimingHistoryRate"
+        :format-timing-history-percent="formatTimingHistoryPercent"
         :format-date-time="formatDateTime"
         :start-batch-research="startBatchResearch"
         :download-comparison-research-reports="downloadComparisonResearchReports"
