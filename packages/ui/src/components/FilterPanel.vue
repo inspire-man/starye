@@ -476,6 +476,7 @@ function isInlineField(field: FilterField): boolean {
 .filter-body {
   display: none;
   padding: 0.75rem 1rem;
+  background: hsl(var(--card));
 }
 
 .filter-body.expanded {
@@ -519,13 +520,20 @@ function isInlineField(field: FilterField): boolean {
   min-height: var(--ui-control-height-md, 2.25rem);
   border-radius: var(--ui-radius-md, 0.375rem);
   border: 1px solid hsl(var(--border));
-  background-color: hsl(var(--card));
+  background-color: hsl(var(--background)) !important;
+  background-image: none;
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   color: hsl(var(--foreground));
   width: 100%;
   box-sizing: border-box;
-  cursor: pointer;
+  cursor: text;
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.filter-input:hover {
+  border-color: hsl(var(--primary) / 0.55);
+  background-color: hsl(var(--muted) / 0.35);
 }
 
 .filter-select-control {
@@ -534,22 +542,13 @@ function isInlineField(field: FilterField): boolean {
 }
 
 .filter-select-control .filter-input {
+  cursor: pointer;
   appearance: none;
   border-color: hsl(var(--border));
   border-radius: var(--ui-radius-md, 0.375rem);
-  background: hsl(var(--muted) / 0.45);
+  background: hsl(var(--background));
   padding-right: 2.25rem;
   font-weight: 500;
-  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
-}
-
-.filter-select-control .filter-input:hover {
-  border-color: hsl(var(--primary) / 0.55);
-  background: hsl(var(--muted) / 0.7);
-}
-
-.filter-select-control .filter-input:focus {
-  background: hsl(var(--card));
 }
 
 .filter-select-icon {
@@ -623,6 +622,16 @@ function isInlineField(field: FilterField): boolean {
   transition: max-height 180ms ease, opacity 180ms ease;
 }
 
+.filter-advanced {
+  margin-top: 1.125rem;
+  padding-top: 1.125rem;
+  border-top: 1px solid hsl(var(--border) / 0.75);
+}
+
+.filter-advanced .filter-grid {
+  row-gap: 1.125rem;
+}
+
 .filter-advanced-enter-from,
 .filter-advanced-leave-to {
   max-height: 0;
@@ -658,6 +667,7 @@ function isInlineField(field: FilterField): boolean {
 
 .filter-date-range .filter-input {
   flex: 1;
+  min-width: 0;
 }
 
 .filter-date-sep {
