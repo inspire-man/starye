@@ -2,9 +2,9 @@ import type { CandidateItem, QuantResearchRun, QuantResearchSummary } from './qu
 
 export const MAX_AUTOMATED_RESEARCH_ITEMS = 3
 
-export type AutomatedResearchStage = 'watchlist' | 'research' | 'ai' | 'completed' | 'error'
+export type AutomatedResearchStage = 'watchlist' | 'data' | 'research' | 'ai' | 'completed' | 'error'
 export type AutomatedResearchAiStatus = 'pending' | 'running' | 'success' | 'skipped' | 'error'
-export type AutomatedResearchErrorStage = 'watchlist' | 'research' | 'ai' | null
+export type AutomatedResearchErrorStage = 'watchlist' | 'data' | 'research' | 'ai' | null
 
 export type AutomatedResearchCandidate = Pick<CandidateItem, 'tsCode' | 'name'>
 
@@ -45,6 +45,7 @@ export interface AutomatedResearchResult {
 export interface AutomatedResearchRunner {
   aiReady: boolean
   ensureWatchlist: (candidate: AutomatedResearchCandidate) => Promise<void>
+  prepareData: (candidate: AutomatedResearchCandidate) => Promise<void>
   generateResearch: (candidate: AutomatedResearchCandidate) => Promise<QuantResearchRun>
   generateAiSummary: (run: QuantResearchRun) => Promise<QuantResearchSummary>
 }
@@ -119,6 +120,7 @@ export function markAutomatedResearchItemPending(
 export function automatedResearchStageLabel(stage: AutomatedResearchStage): string {
   return {
     watchlist: '确认入池',
+    data: '更新与补齐数据',
     research: '生成研究报告',
     ai: 'AI 因子复核',
     completed: '闭环完成',
@@ -166,6 +168,9 @@ export async function runAutomatedResearch(
     onProgress({ candidate, stage, aiStatus, errorStage: null, run, summary, error: null })
     try {
       await runner.ensureWatchlist(candidate)
+      stage = 'data'
+      onProgress({ candidate, stage, aiStatus, errorStage: null, run, summary, error: null })
+      await runner.prepareData(candidate)
       stage = 'research'
       onProgress({ candidate, stage, aiStatus, errorStage: null, run, summary, error: null })
       run = await runner.generateResearch(candidate)
@@ -187,7 +192,7 @@ export async function runAutomatedResearch(
       results.push({ candidate, status: 'completed', aiStatus, errorStage: null, run, summary, error: null })
     }
     catch (error) {
-      const errorStage: AutomatedResearchErrorStage = stage === 'watchlist' || stage === 'research' || stage === 'ai' ? stage : 'research'
+      const errorStage: AutomatedResearchErrorStage = stage === 'watchlist' || stage === 'data' || stage === 'research' || stage === 'ai' ? stage : 'research'
       aiStatus = errorStage === 'ai' ? 'error' : aiStatus
       stage = 'error'
       onProgress({ candidate, stage, aiStatus, errorStage, run, summary, error })

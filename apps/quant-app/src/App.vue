@@ -316,6 +316,7 @@ const {
 } = storeToRefs(candidatesStore)
 const navigationStore = useQuantNavigationStore()
 const workspaceLifecycleStore = useQuantWorkspaceLifecycleStore()
+const automaticDataRecoveryAttempted = ref(false)
 const activeView = computed(() => navigationStore.activeView)
 const candidateFilterOptions = [
   { ...selectionPresets[0], icon: ShieldCheck },
@@ -1385,6 +1386,12 @@ function researchReviewFor(tsCode: string): ResearchReviewMeta {
   return researchReviewMap.value.get(tsCode) || getResearchReviewMeta(null, todayDate.value)
 }
 
+function nextReviewDate(days = 7): string {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return getTodayDate(date)
+}
+
 function parsedError(error: unknown): ParsedError {
   let type: ErrorType = 'unknown'
   let statusCode: number | undefined
@@ -1466,6 +1473,10 @@ function dataHealthSummaryClass(status: QuantDataHealthStatus): string {
 async function runDataHealthAction(action: QuantDataHealthAction | null): Promise<void> {
   if (action === 'open-watchlist') {
     setActiveView('watchlist')
+    return
+  }
+  if (action === 'refresh-daily') {
+    await syncDaily()
     return
   }
   if (action === 'refresh-value-quality') {
@@ -2690,11 +2701,29 @@ async function executeAutomatedResearch(targets: readonly AutomatedResearchCandi
         if (!persisted)
           throw new QuantApiError('观察池写入后没有返回已保存记录', 500, 'QUANT_WATCHLIST_READBACK_FAILED')
       },
+      prepareData: async (candidate) => {
+        const result = await quantApi.syncDaily([candidate.tsCode])
+        syncResult.value = result
+        syncState.value = result
+        if (result.status !== 'completed')
+          throw new QuantApiError('数据更新尚未完整完成，请重试该项', 409, 'QUANT_RESEARCH_DATA_INCOMPLETE')
+      },
       generateResearch: candidate => quantApi.generateResearchRun(candidate.tsCode),
       generateAiSummary: run => quantApi.generateResearchSummary(run.id),
     }, (progress) => {
       automatedResearchStates.value = applyAutomatedResearchProgress(automatedResearchStates.value, progress)
     })
+
+    for (const result of results) {
+      if (result.status !== 'completed' || result.run?.status !== 'ready')
+        continue
+      const marker = researchMarkers.value.find(item => item.tsCode === result.candidate.tsCode)
+      await quantApi.updateResearchMarker(result.candidate.tsCode, {
+        status: marker?.status || 'unreviewed',
+        note: marker?.note || null,
+        reviewDate: nextReviewDate(),
+      })
+    }
 
     await Promise.all([
       loadWatchlist(),
@@ -3093,6 +3122,22 @@ async function loadWorkspace(force = false) {
     syncResult.value = null
     await Promise.all([loadWatchlist(), loadCandidates(), loadDecisionQueue(), loadResearchMarkers(), loadInvestmentKnowledge(), loadSyncState()])
     await Promise.all([loadValueSelection(), loadShareholderReturns()])
+    if (!automaticDataRecoveryAttempted.value) {
+      automaticDataRecoveryAttempted.value = true
+      const daily = dataHealthSummary.value.items.find(item => item.key === 'daily')
+      if (daily?.action === 'refresh-daily') {
+        await syncDaily()
+      }
+      else {
+        const refreshes: Promise<void>[] = []
+        if (dataHealthSummary.value.items.some(item => item.action === 'refresh-value-quality'))
+          refreshes.push(loadValueSelection())
+        if (dataHealthSummary.value.items.some(item => item.action === 'refresh-shareholder-returns'))
+          refreshes.push(loadShareholderReturns())
+        if (refreshes.length)
+          await Promise.all(refreshes)
+      }
+    }
   }
   await (force ? workspaceLifecycleStore.run(loader) : workspaceLifecycleStore.initialize(loader))
 }
@@ -3296,6 +3341,7 @@ onUnmounted(() => {
       @navigate="setActiveView"
       @select-stock="selectStock"
       @run-data-health-action="runDataHealthAction"
+      @recover-data-health="syncDaily"
     />
 
     <QuantWatchlistView

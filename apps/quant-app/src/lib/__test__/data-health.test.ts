@@ -105,7 +105,7 @@ describe('buildQuantDataHealth', () => {
 
     expect(result.status).toBe('partial')
     expect(result.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'daily', status: 'partial', readyCount: 1, totalCount: 2, detail: '最近一次同步部分完成 · 1 / 2 只', action: 'open-watchlist', actionLabel: '去更新日线' }),
+      expect.objectContaining({ key: 'daily', status: 'partial', readyCount: 1, totalCount: 2, detail: '最近一次同步部分完成 · 1 / 2 只', action: 'refresh-daily', actionLabel: '自动更新日线' }),
       expect.objectContaining({ key: 'value-quality', status: 'partial', detail: '1 / 3 只完整 · 0 只部分 · 2 只数据不足', action: 'refresh-value-quality', actionLabel: '重新读取价值质量' }),
       expect.objectContaining({ key: 'shareholder-returns', status: 'partial', detail: '0 / 3 只完整 · 3 只部分 · 0 只数据不足', action: 'refresh-shareholder-returns', actionLabel: '重新读取股东回报' }),
     ]))
@@ -162,7 +162,7 @@ describe('buildQuantDataHealth', () => {
     })
 
     expect(result.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'daily', action: 'open-watchlist', actionLabel: '去更新日线' }),
+      expect.objectContaining({ key: 'daily', action: 'refresh-daily', actionLabel: '自动更新日线' }),
       expect.objectContaining({ key: 'value-quality', action: 'refresh-value-quality', actionLabel: '重新读取价值质量' }),
       expect.objectContaining({ key: 'shareholder-returns', action: 'refresh-shareholder-returns', actionLabel: '重新读取股东回报' }),
     ]))
@@ -207,8 +207,8 @@ describe('buildQuantDataHealth', () => {
     expect(staleDaily.items.find(item => item.key === 'daily')).toMatchObject({
       status: 'ready',
       freshness: 'aging',
-      action: 'open-watchlist',
-      actionLabel: '去更新日线',
+      action: 'refresh-daily',
+      actionLabel: '自动更新日线',
     })
 
     const unknown = buildQuantDataHealth({

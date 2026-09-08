@@ -159,10 +159,10 @@ export const quantWorkspaceApi = {
     return parseSyncState(await requestJson('/sync', options.signal ? { signal: options.signal } : undefined))
   },
 
-  async syncDaily(): Promise<SyncResult> {
+  async syncDaily(tsCodes?: readonly string[]): Promise<SyncResult> {
     return parseSyncResult(await requestJson('/sync', {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify(tsCodes ? { ts_codes: tsCodes } : {}),
     }, { allowErrorResponse: true }))
   },
 

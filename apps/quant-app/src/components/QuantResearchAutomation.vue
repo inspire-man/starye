@@ -57,6 +57,8 @@ function detail(candidate: AutomatedResearchCandidate): string {
       return '报告已保存，AI 复核失败'
     if (state.errorStage === 'watchlist')
       return '观察池确认失败，可重试该项'
+    if (state.errorStage === 'data')
+      return '数据更新或补齐未完成，可重试该项'
     if (state.errorStage === 'research')
       return '研究报告生成失败，可重试该项'
     return '该项处理失败，可重试'

@@ -65,19 +65,22 @@ describe('runAutomatedResearch', () => {
       { tsCode: '601899.SH', name: '重复项' },
       { tsCode: '000001.SZ', name: '平安银行' },
       { tsCode: '600000.SH', name: '超出上限' },
-    ], { aiReady: true, ensureWatchlist, generateResearch, generateAiSummary }, (item) => {
+    ], { aiReady: true, ensureWatchlist, prepareData: async ({ tsCode }) => { events.push(`${tsCode}:data`) }, generateResearch, generateAiSummary }, (item) => {
       progress.push(`${item.candidate.tsCode}:${item.stage}:${item.aiStatus}`)
     })
 
     expect(results).toHaveLength(3)
     expect(events).toEqual([
       '601899.SH:watchlist',
+      '601899.SH:data',
       '601899.SH:research',
       '601899.SH:ai',
       '000001.SZ:watchlist',
+      '000001.SZ:data',
       '000001.SZ:research',
       '000001.SZ:ai',
       '600000.SH:watchlist',
+      '600000.SH:data',
       '600000.SH:research',
       '600000.SH:ai',
     ])
@@ -97,6 +100,7 @@ describe('runAutomatedResearch', () => {
     ], {
       aiReady: true,
       ensureWatchlist: async () => {},
+      prepareData: async () => {},
       generateResearch: async candidate => run(candidate.tsCode),
       generateAiSummary: async (researchRun) => {
         if (researchRun.tsCode === '601899.SH')
@@ -119,11 +123,34 @@ describe('runAutomatedResearch', () => {
     const result = await runAutomatedResearch([{ tsCode: '601899.SH', name: null }], {
       aiReady: false,
       ensureWatchlist: async () => {},
+      prepareData: async () => {},
       generateResearch: async candidate => run(candidate.tsCode),
       generateAiSummary: vi.fn(),
     })
 
     expect(result[0]).toMatchObject({ status: 'completed', aiStatus: 'skipped', run: { tsCode: '601899.SH' } })
+  })
+})
+
+describe('automated research data preparation', () => {
+  it('stops research for a failed data update and continues later stocks', async () => {
+    const generateResearch = vi.fn(async candidate => run(candidate.tsCode))
+    const results = await runAutomatedResearch([
+      { tsCode: '601899.SH', name: null },
+      { tsCode: '000001.SZ', name: null },
+    ], {
+      aiReady: false,
+      ensureWatchlist: async () => {},
+      prepareData: async ({ tsCode }) => {
+        if (tsCode === '601899.SH')
+          throw new Error('data unavailable')
+      },
+      generateResearch,
+      generateAiSummary: vi.fn(),
+    })
+    expect(results[0]).toMatchObject({ status: 'error', errorStage: 'data', run: null })
+    expect(results[1]).toMatchObject({ status: 'completed', run: { tsCode: '000001.SZ' } })
+    expect(generateResearch).toHaveBeenCalledTimes(1)
   })
 })
 

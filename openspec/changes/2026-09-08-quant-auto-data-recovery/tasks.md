@@ -1,0 +1,4 @@
+- [x] Update data-health daily action to invoke existing sync orchestration.
+- [x] Keep value-quality and shareholder-return actions connected to existing loaders.
+- [x] Add automatic pre-research recovery orchestration for stale or insufficient domains.
+- [x] Add Gateway/browser evidence for stale and insufficient states.

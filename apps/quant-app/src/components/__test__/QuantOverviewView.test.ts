@@ -120,7 +120,7 @@ describe('quant overview view', () => {
     expect(action.exists()).toBe(true)
     await action.trigger('click')
 
-    expect(wrapper.emitted('runDataHealthAction')).toEqual([['open-watchlist']])
+    expect(wrapper.emitted('runDataHealthAction')).toEqual([['refresh-daily']])
     expect(wrapper.find('[aria-label="数据健康状态"]').exists()).toBe(true)
   })
 })

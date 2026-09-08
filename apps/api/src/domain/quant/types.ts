@@ -57,5 +57,6 @@ export interface QuantSyncResult {
   readonly reasonCode?: string
   readonly reason?: string
   readonly snapshotId?: string
+  readonly completedAt?: string
   readonly candidates: readonly MomentumCandidate[]
 }

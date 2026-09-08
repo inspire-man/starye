@@ -4,7 +4,7 @@ import type { QuantView } from '../lib/quant-view'
 import type { CandidateItem, WatchlistItem } from '../lib/quant-view-models'
 import type { WatchlistEnvironment, WatchlistEnvironmentStatus } from '../lib/watchlist-environment'
 import { SkeletonCard } from '@starye/ui'
-import { ArrowUpRight, CalendarDays, ChevronRight, DatabaseZap, Eye, Info, ShieldAlert, Sparkles } from 'lucide-vue-next'
+import { ArrowUpRight, CalendarDays, ChevronRight, DatabaseZap, Eye, Info, RefreshCw, ShieldAlert, Sparkles } from 'lucide-vue-next'
 
 type RiskTone = 'neutral' | 'warning' | 'danger'
 
@@ -50,6 +50,7 @@ const emit = defineEmits<{
   navigate: [view: QuantView]
   selectStock: [item: Pick<WatchlistItem, 'tsCode' | 'name'>]
   runDataHealthAction: [action: QuantDataHealthAction | null]
+  recoverDataHealth: []
 }>()
 </script>
 
@@ -122,6 +123,10 @@ const emit = defineEmits<{
           <strong>{{ props.dataHealthSummary.headline }}</strong>
           <p>{{ props.dataHealthSummary.scopeNote }}</p>
           <small class="data-health-freshness-summary">{{ props.dataHealthSummary.freshnessDetail }}</small>
+          <button v-if="props.dataHealthSummary.items[0]?.totalCount && props.dataHealthSummary.status !== 'loading' && (props.dataHealthSummary.status !== 'ready' || props.dataHealthSummary.freshness !== 'fresh')" class="text-button data-health-recover-all" type="button" aria-label="自动补齐全部数据" @click="emit('recoverDataHealth')">
+            <RefreshCw :size="13" aria-hidden="true" />
+            自动补齐全部数据
+          </button>
         </div>
         <div class="data-health-list" role="list" aria-label="数据健康状态">
           <div v-for="item in props.dataHealthSummary.items" :key="item.key" class="data-health-item" role="listitem">

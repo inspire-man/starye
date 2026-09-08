@@ -4,7 +4,7 @@ export const QUANT_DATA_HEALTH_VERSION = 'quant-data-health-v3' as const
 
 export type QuantDataHealthStatus = 'ready' | 'partial' | 'missing' | 'loading' | 'error'
 export type QuantDataHealthKey = 'daily' | 'value-quality' | 'shareholder-returns'
-export type QuantDataHealthAction = 'open-watchlist' | 'refresh-value-quality' | 'refresh-shareholder-returns'
+export type QuantDataHealthAction = 'open-watchlist' | 'refresh-daily' | 'refresh-value-quality' | 'refresh-shareholder-returns'
 export type QuantDataHealthFreshness = 'fresh' | 'aging' | 'stale' | 'unknown'
 
 export interface QuantDataHealthItem {
@@ -159,7 +159,7 @@ function resultCounts(selection: QuantValueSelection | QuantShareholderReturnSel
 }
 
 const DATA_HEALTH_ACTIONS: Record<QuantDataHealthKey, { action: QuantDataHealthAction, actionLabel: string }> = {
-  'daily': { action: 'open-watchlist', actionLabel: '去更新日线' },
+  'daily': { action: 'refresh-daily', actionLabel: '自动更新日线' },
   'value-quality': { action: 'refresh-value-quality', actionLabel: '重新读取价值质量' },
   'shareholder-returns': { action: 'refresh-shareholder-returns', actionLabel: '重新读取股东回报' },
 }
@@ -243,7 +243,7 @@ function buildDailyItem(input: QuantDataHealthInput): QuantDataHealthItem {
   if (input.syncError)
     return createDataHealthItem('daily', '日线同步', 'error', { ...previous, readyCount: covered, totalCount: total, detail: input.sync ? `同步状态读取失败 · 保留最近一次结果 · 当前覆盖 ${covered} / ${total} 只` : `同步状态读取失败 · 当前覆盖 ${covered} / ${total} 只` })
   if (total === 0)
-    return createDataHealthItem('daily', '日线同步', 'missing', { ...previous, readyCount: 0, totalCount: 0, detail: '观察池为空，先加入股票' })
+    return { ...createDataHealthItem('daily', '日线同步', 'missing', { ...previous, readyCount: 0, totalCount: 0, detail: '观察池为空，先加入股票' }), action: 'open-watchlist', actionLabel: '去添加股票' }
   if (!input.sync) {
     const status = covered > 0 ? 'partial' : 'missing'
     return createDataHealthItem('daily', '日线同步', status, {

@@ -182,6 +182,7 @@ async function persistRejected(
     skippedCount: requestedCount,
     reasonCode,
     reason,
+    completedAt: completedAt.toISOString(),
     candidates: [],
   }
 }
@@ -350,6 +351,7 @@ export async function syncQuantDaily(
       reasonCode: errors.length > 0 ? 'QUANT_PROVIDER_PARTIAL' : undefined,
       reason: errors.length > 0 ? [...new Set(errors)].join(',') : undefined,
       snapshotId,
+      completedAt: completedAt.toISOString(),
       candidates,
     }
   }
