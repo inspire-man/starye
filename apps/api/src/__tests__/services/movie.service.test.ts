@@ -100,6 +100,23 @@ describe('movieService', () => {
   })
 
   describe('getMovieByIdentifier', () => {
+    it.each([true, false])('returns cover first and deduplicates preview images (adult=%s)', async (isAdult) => {
+      mockDb.query.movies.findFirst.mockResolvedValue({
+        id: 'gallery-1',
+        code: 'GALLERY-001',
+        slug: 'gallery-001',
+        isR18: true,
+        coverImage: 'https://cdn.example/cover.webp',
+        previewImages: ['https://cdn.example/preview.webp', 'https://cdn.example/cover.webp', ''],
+        movieActors: [],
+        moviePublishers: [],
+        players: [],
+      })
+      mockDb.query.movieActors.findMany.mockResolvedValue([])
+      const result = await getMovieByIdentifier({ db: mockDb, identifier: 'GALLERY-001', isAdult })
+      expect(result?.previewImages).toEqual(['https://cdn.example/cover.webp', 'https://cdn.example/preview.webp'])
+    })
+
     it('应该通过 slug 查找电影', async () => {
       const mockMovie = {
         id: '1',

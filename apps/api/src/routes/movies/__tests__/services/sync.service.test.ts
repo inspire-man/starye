@@ -1,4 +1,5 @@
 import type { Database } from '@starye/db'
+import { movies as moviesTable } from '@starye/db/schema'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { syncMovieData } from '../../services/sync.service'
 
@@ -89,6 +90,25 @@ describe('syncMovieData', () => {
   })
 
   describe('基础同步（无 players / actors）', () => {
+    it('keeps saved R2 media when a recrawl returns failed or empty media', async () => {
+      const db = createMockDb({ existingMovie: {
+        id: 'saved-movie',
+        code: 'TEST-001',
+        coverImage: 'https://cdn.example/cover.webp',
+        previewImages: ['https://cdn.example/preview.webp'],
+      } })
+      await syncMovieData({ db, r2PublicUrl: 'https://cdn.example', movies: [{
+        code: 'TEST-001',
+        title: 'saved',
+        coverImage: null,
+        previewImages: [],
+      }] })
+      expect(db.update(moviesTable).set).toHaveBeenCalledWith(expect.objectContaining({
+        coverImage: 'https://cdn.example/cover.webp',
+        previewImages: ['https://cdn.example/preview.webp'],
+      }))
+    })
+
     it('应该插入新电影并返回 success=1', async () => {
       const db = createMockDb({ existingMovie: null })
 

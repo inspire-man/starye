@@ -60,6 +60,7 @@ export interface TargetWorkerDeployProjection {
   readonly vars: Readonly<{
     readonly webUrl?: string
     readonly adminUrl?: string
+    readonly r2PublicUrl?: string
     readonly apiOrigin?: string
     readonly dashboardOrigin?: string
     readonly quantOrigin?: string
@@ -194,6 +195,7 @@ function buildWorkerDeployProjection(
       vars: {
         webUrl: profile.urls.gateway,
         adminUrl: profile.urls.dashboard,
+        r2PublicUrl: `https://cdn.${profile.domain.root}`,
       },
       resources: sharedResources,
     }

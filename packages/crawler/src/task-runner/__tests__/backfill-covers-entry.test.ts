@@ -127,6 +127,7 @@ describe('registry-owned JAV.hk media backfill entry', () => {
       code: 'MUDR-392',
       coverImage: 'https://cdn.example.test/cover-preview.webp',
       previewImages: [
+        'https://cdn.example.test/cover-preview.webp',
         'https://cdn.example.test/overview-01-preview.webp',
         'https://cdn.example.test/overview-02-preview.webp',
       ],
@@ -179,7 +180,7 @@ describe('registry-owned JAV.hk media backfill entry', () => {
     expect(syncMovie).toHaveBeenLastCalledWith({
       code: 'GOOD-003',
       coverImage: 'https://cdn.example.test/cover-preview.webp',
-      previewImages: ['https://cdn.example.test/overview-01-preview.webp'],
+      previewImages: ['https://cdn.example.test/cover-preview.webp', 'https://cdn.example.test/overview-01-preview.webp'],
     })
     expect(syncActorDetails).toHaveBeenCalledTimes(2)
     expect(syncActorDetails).toHaveBeenLastCalledWith('actor-good', { avatar: 'https://cdn.example.test/avatar-preview.webp' })

@@ -62,6 +62,7 @@ describe('target deploy config materializer', () => {
     expect(apiConfig).toContain('migrations_dir = "../../packages/db/drizzle"')
     expect(apiConfig).toContain('name = "starye-api"')
     expect(apiConfig).toContain('database_name = "starye-db"')
+    expect(apiConfig).toContain(`R2_PUBLIC_URL = "https://cdn.${resolution.profile.domain.root}"`)
     expect(apiConfig).toContain('[triggers]\ncrons = ["*/1 * * * *"]')
     const gatewayConfig = await readFile(result.gatewayConfigPath, 'utf8')
     expect(gatewayConfig).toContain('QUANT_ORIGIN = "https://starye-quant.pages.dev"')

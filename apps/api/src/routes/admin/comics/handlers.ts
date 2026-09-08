@@ -215,6 +215,9 @@ export async function updateComicProgress(c: Context<AppEnv>) {
       return c.json({ error: 'Comic not found' }, 404)
     }
 
+    if (crawledChapters > totalChapters || (status === 'complete' && crawledChapters !== totalChapters))
+      return c.json({ error: 'Comic progress is inconsistent' }, 422)
+
     await db.update(comics)
       .set({
         crawlStatus: status,

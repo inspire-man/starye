@@ -155,6 +155,7 @@ function apiConfigContent(deploy: TargetDeployProjection): string {
     '[vars]',
     `WEB_URL = ${quoteToml(worker.vars.webUrl ?? '', 'WEB_URL')}`,
     `ADMIN_URL = ${quoteToml(worker.vars.adminUrl ?? '', 'ADMIN_URL')}`,
+    `R2_PUBLIC_URL = ${quoteToml(worker.vars.r2PublicUrl ?? '', 'R2_PUBLIC_URL')}`,
     '',
     '[[d1_databases]]',
     `binding = ${quoteToml(resource.d1.binding, 'd1 binding')}`,

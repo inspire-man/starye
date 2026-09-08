@@ -56,7 +56,7 @@ function createCrawler(options: { uploadCoversToR2?: boolean } = {}) {
     options,
   )
 
-  const syncToApi = vi.fn(async (endpoint: string, data: any) => {
+  const syncToApi = vi.fn(async (endpoint: string, data: any): Promise<string[] | { success: boolean } | null> => {
     if (endpoint === '/api/admin/sync' && data?.type === 'manga') {
       return { success: true }
     }
@@ -90,6 +90,27 @@ function createCrawler(options: { uploadCoversToR2?: boolean } = {}) {
 }
 
 describe('comicCrawler chapter flow', () => {
+  it('recomputes progress from current stored identities instead of accumulating stale counters', async () => {
+    const { crawler, syncToApi, strategy } = createCrawler()
+    syncToApi.mockImplementation(async (endpoint: string) => endpoint.includes('/existing-chapters')
+      ? ['chapter-1', 'old-removed-chapter', 'chapter-1']
+      : { success: true })
+
+    await (crawler as any).processManga('https://source.example.com/book/comic-1', {} as any, {
+      exists: true,
+      status: 'partial',
+      crawledChapters: 35,
+      isSerializing: true,
+    })
+
+    expect(strategy.getChapterContent).not.toHaveBeenCalled()
+    expect(syncToApi).toHaveBeenCalledWith('/api/admin/comics/comic-1/progress', {
+      status: 'complete',
+      crawledChapters: 1,
+      totalChapters: 1,
+    }, { method: 'POST' })
+  })
+
   beforeEach(() => {
     vi.restoreAllMocks()
   })

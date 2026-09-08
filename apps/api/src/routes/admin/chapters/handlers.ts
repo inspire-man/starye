@@ -144,7 +144,7 @@ export async function getComicChapters(c: Context<AppEnv>) {
   const [results, snapshots] = await Promise.all([
     db.query.chapters.findMany({
       where: eq(chapters.comicId, id),
-      orderBy: (chapters, { asc }) => [asc(chapters.sortOrder)],
+      orderBy: (chapters, { asc }) => [asc(chapters.sortOrder), asc(chapters.chapterNumber), asc(chapters.id)],
     }),
     readChapterSourceSnapshots(db, id, 1),
   ])

@@ -233,6 +233,9 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
     try {
       const { code, title, slug, coverImage, previewImages, sourceUrl, releaseDate, duration, description, genres, actors: actorNames, series, publisher, isR18, players } = movieData
 
+      if ((coverImage !== undefined || previewImages !== undefined) && !r2PublicUrl?.trim())
+        throw new Error('MOVIE_MEDIA_STORAGE_UNCONFIGURED')
+
       // 检查电影是否已存在
       const existingMovie = await db.query.movies.findFirst({
         where: eq(moviesTable.code, code),
@@ -251,14 +254,20 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
 
       // 只有 R2 托管地址允许写入媒体字段，源站外链统一清空。
       // 可选字段：仅当调用方显式传入时才更新，避免部分同步覆盖已有数据
+      const nextCover = normalizeManagedImageUrl(coverImage, r2PublicUrl)
+        ?? normalizeManagedImageUrl(existingMovie?.coverImage, r2PublicUrl)
+      const incomingPreviews = normalizePreviewImages(previewImages, r2PublicUrl)
+      const nextPreviews = incomingPreviews.length > 0
+        ? incomingPreviews
+        : normalizePreviewImages(Array.isArray(existingMovie?.previewImages) ? existingMovie.previewImages : [], r2PublicUrl)
       const moviePayload: Partial<Movie> = {
         code,
         ...(title !== undefined && { title }),
         ...(slug !== undefined
           ? { slug }
           : (!existingMovie && { slug: code.toLowerCase().replace(/[^a-z0-9]+/g, '-') })),
-        ...(coverImage !== undefined && { coverImage: normalizeManagedImageUrl(coverImage, r2PublicUrl) }),
-        ...(previewImages !== undefined && { previewImages: normalizePreviewImages(previewImages, r2PublicUrl) }),
+        ...(coverImage !== undefined && { coverImage: nextCover }),
+        ...(previewImages !== undefined && { previewImages: nextPreviews }),
         ...(sourceUrl !== undefined && { sourceUrl }),
         ...(releaseDate !== undefined && {
           releaseDate: releaseDate

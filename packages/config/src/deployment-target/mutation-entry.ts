@@ -131,7 +131,7 @@ export const targetRemoteEntryDefinitions = [
   crawlerEntry('crawler-search-index', 'search-index'),
   crawlerEntry('crawler-enrich-players', 'enrich-players', 'mutation', ['limit', 'dry-run']),
   crawlerEntry('crawler-check-config', 'check-config', 'diagnostic'),
-  crawlerEntry('crawler-backfill-covers', 'backfill-covers', 'mutation', ['limit', 'dry-run'], ['CRAWLER_SECRET', 'R2_ACCESS_KEY_ID', 'R2_PUBLIC_URL', 'R2_SECRET_ACCESS_KEY']),
+  crawlerEntry('crawler-backfill-covers', 'backfill-covers', 'mutation', ['limit', 'dry-run'], ['CRAWLER_SECRET', 'R2_ACCESS_KEY_ID', 'R2_PUBLIC_URL', 'R2_SECRET_ACCESS_KEY'], ['CRAWLER_MEDIA_CODE']),
   crawlerEntry('crawler-backfill-publishers', 'backfill-publishers', 'mutation', ['limit', 'dry-run']),
   crawlerEntry('crawler-enrich-players-javbus', 'enrich-players-javbus', 'mutation', ['limit', 'dry-run']),
   crawlerEntry('crawler-r2-storage-audit', 'r2-storage-audit', 'read-only', ['prefix', 'sample-limit', 'dry-run']),

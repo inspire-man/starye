@@ -624,6 +624,11 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
     isActive: player.isActive ?? true,
   }))
 
+  const previewImages = [...new Set([
+    movie.coverImage,
+    ...(Array.isArray(movie.previewImages) ? movie.previewImages : []),
+  ].filter((url): url is string => typeof url === 'string' && url.trim().length > 0))]
+
   if (movie.isR18 && !isAdult) {
     const { sourceState: _sourceState, ...movieData } = movie
     return {
@@ -632,7 +637,7 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
       primaryContentId: movie.id,
       readiness,
       coverImage: movie.coverImage,
-      previewImages: Array.isArray(movieData.previewImages) ? movieData.previewImages : [],
+      previewImages,
       players: [],
       actors: actorsData,
       publishers: publishersData,
@@ -646,7 +651,7 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
     availability,
     primaryContentId: movie.id,
     readiness,
-    previewImages: Array.isArray(movieData.previewImages) ? movieData.previewImages : [],
+    previewImages,
     players: playersWithRatings ?? [],
     actors: actorsData,
     publishers: publishersData,

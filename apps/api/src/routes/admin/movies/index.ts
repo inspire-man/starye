@@ -23,7 +23,6 @@ import { serviceAuth } from '../../../middleware/service-auth'
 import { AddPlayerSchema, BatchImportPlayersSchema, BatchOperationMoviesSchema, MovieFilterSchema, UpdateMovieActorsSchema, UpdateMovieMetadataSchema, UpdateMoviePublishersSchema, UpdatePlayerSchema } from '../../../schemas/admin'
 
 const adminMovies = new Hono<AppEnv>()
-const MINIMUM_MOVIE_PREVIEW_IMAGES = 2
 
 function hasManagedMovieMedia(
   coverImage: string | null | undefined,
@@ -31,19 +30,8 @@ function hasManagedMovieMedia(
   r2PublicUrl?: string | null,
 ): boolean {
   return classifyStorageUrlKind(coverImage, r2PublicUrl) === 'managed'
-    && Array.isArray(previewImages)
-    && previewImages.length > 0
-    && previewImages.every(image => typeof image === 'string' && classifyStorageUrlKind(image, r2PublicUrl) === 'managed')
-}
-
-function hasManagedMoviePreviewGallery(
-  coverImage: string | null | undefined,
-  previewImages: unknown,
-  r2PublicUrl?: string | null,
-): boolean {
-  return hasManagedMovieMedia(coverImage, previewImages, r2PublicUrl)
-    && Array.isArray(previewImages)
-    && previewImages.length >= MINIMUM_MOVIE_PREVIEW_IMAGES
+    && (previewImages == null || (Array.isArray(previewImages)
+      && previewImages.every(image => typeof image === 'string' && classifyStorageUrlKind(image, r2PublicUrl) === 'managed')))
 }
 
 async function invalidateMovieGatewayCache(env: AppEnv['Bindings']): Promise<void> {
@@ -56,7 +44,7 @@ adminMovies.get(
   '/missing-images',
   describeRoute({
     summary: '查询缺少影片媒体的记录',
-    description: '返回封面为空、概览图未托管或预览图集不足的影片，供电影爬虫执行媒体回填',
+    description: '返回缺少 R2 封面或包含未托管预览图的影片；无独立预览图时使用封面展示',
     tags: ['Admin'],
     operationId: 'getMoviesMissingImages',
     security: [{ serviceAuth: [] }],
@@ -75,8 +63,7 @@ adminMovies.get(
       const missingMediaConditions = [
         isNull(movies.coverImage),
         eq(movies.coverImage, ''),
-        sql`json_array_length(CASE WHEN json_valid(${movies.previewImages}) = 1 THEN ${movies.previewImages} ELSE '[]' END) = 0`,
-        sql`json_array_length(CASE WHEN json_valid(${movies.previewImages}) = 1 THEN ${movies.previewImages} ELSE '[]' END) < ${MINIMUM_MOVIE_PREVIEW_IMAGES}`,
+        sql`(${movies.previewImages} IS NOT NULL AND (json_valid(${movies.previewImages}) = 0 OR json_type(CASE WHEN json_valid(${movies.previewImages}) = 1 THEN ${movies.previewImages} ELSE 'null' END) <> 'array'))`,
       ]
       if (r2PublicUrl) {
         missingMediaConditions.push(
@@ -110,7 +97,7 @@ adminMovies.get(
       })
 
       const candidates = data
-        .filter(movie => !hasManagedMoviePreviewGallery(movie.coverImage, movie.previewImages, r2PublicUrl))
+        .filter(movie => !hasManagedMovieMedia(movie.coverImage, movie.previewImages, r2PublicUrl))
         .map(movie => ({
           code: movie.code,
           // 当前媒体回填执行器是 JavBusCrawler，旧记录可能仍指向已停用的 JavDB 来源。

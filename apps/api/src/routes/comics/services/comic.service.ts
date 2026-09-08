@@ -108,7 +108,7 @@ export async function getComicBySlug(options: GetComicBySlugOptions) {
           chapterNumber: true,
           publishedAt: true,
         },
-        orderBy: (chapters, { asc }) => [asc(chapters.sortOrder)],
+        orderBy: (chapters, { asc }) => [asc(chapters.sortOrder), asc(chapters.chapterNumber), asc(chapters.id)],
       },
     },
   })

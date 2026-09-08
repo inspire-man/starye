@@ -390,7 +390,7 @@ export class ComicCrawler extends BaseCrawler {
     }
 
     // 开始标记
-    let crawledChapters = status.crawledChapters || 0
+    let crawledChapters = 0
     const totalChapters = info.chapters.length
 
     try {
@@ -439,10 +439,12 @@ export class ComicCrawler extends BaseCrawler {
       }
 
       // 4. 确定要处理的章节列表（根据状态应用限制）
-      let chaptersToProcess = info.chapters.filter(ch => !existingChapters.includes(ch.slug))
+      const existingChapterSet = new Set(existingChapters)
+      crawledChapters = info.chapters.filter(ch => existingChapterSet.has(ch.slug)).length
+      let chaptersToProcess = info.chapters.filter(ch => !existingChapterSet.has(ch.slug))
 
       // 统计跳过的章节
-      const skippedChapterCount = existingChapters.length
+      const skippedChapterCount = crawledChapters
       if (skippedChapterCount > 0) {
         console.log(`  ⏭️  跳过 ${skippedChapterCount} 个已存在章节`)
         this.stats.skippedChapters += skippedChapterCount

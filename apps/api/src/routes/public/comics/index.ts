@@ -192,7 +192,7 @@ export const publicComicsRoutes = new Hono<AppEnv>()
         // 查询章节列表
         const chapterList = await db.query.chapters.findMany({
           where: eq(chapters.comicId, comic.id),
-          orderBy: (chapters, { asc }) => [asc(chapters.sortOrder)],
+          orderBy: (chapters, { asc }) => [asc(chapters.sortOrder), asc(chapters.chapterNumber), asc(chapters.id)],
         })
 
         return c.json({

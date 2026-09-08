@@ -347,13 +347,8 @@ async function runBackfillCoversMutation(
   let javDbBrowserImagePage: Page | null = null
   let javDbBrowserSource: JavDBImageStrategy | null = null
   const movieSource = dependencies.createBackfillMovieSource?.() ?? (() => {
-    const javHkSource = new JavHkStrategy()
     return {
       findMovieImages: async (movieCode: string): Promise<JavHkMovieImageUrls | null> => {
-        const javHkImages = await javHkSource.findMovieImages(movieCode)
-        if (javHkImages)
-          return javHkImages
-
         if (!javDbBrowserManager) {
           javDbBrowserManager = new BrowserManager()
           await javDbBrowserManager.launch()
@@ -400,8 +395,25 @@ async function runBackfillCoversMutation(
       },
     }
   })()
-  const movieCandidates = await apiClient.fetchMoviesNeedingImageRefresh(200)
-  const actorCandidates = await apiClient.fetchPendingActors(200)
+  const selectedCode = environment.CRAWLER_MEDIA_CODE?.trim().toUpperCase()
+  if (selectedCode && !/^[A-Z0-9][A-Z0-9_-]{1,39}$/u.test(selectedCode))
+    throw new Error('CRAWLER_MEDIA_CODE is invalid')
+  if (selectedCode) {
+    const response = await fetch(`${config.api.url.replace(/\/$/u, '')}/api/admin/movies/batch-status?codes=${encodeURIComponent(selectedCode)}`, {
+      headers: { 'x-service-token': config.api.token },
+      signal: AbortSignal.timeout(30000),
+    })
+    if (!response.ok)
+      throw new Error(`Movie media target readback failed: ${response.status}`)
+    const status = await response.json() as Record<string, { exists?: boolean }>
+    if (!status[selectedCode]?.exists)
+      throw new Error('Movie media target does not exist')
+  }
+  const movieCandidates = selectedCode
+    ? [{ code: selectedCode, sourceUrl: `https://www.javbus.com/${encodeURIComponent(selectedCode)}` }]
+    : await apiClient.fetchMoviesNeedingImageRefresh(200)
+  const actorCandidates = selectedCode ? [] : await apiClient.fetchPendingActors(200)
+  let selectedMovieRepaired = false
 
   console.log(`🖼️  影片/女优媒体回填：${movieCandidates.length} 部影片，${actorCandidates.length} 位女优`)
 
@@ -410,7 +422,7 @@ async function runBackfillCoversMutation(
       try {
         const imageUrls = await movieSource.findMovieImages(candidate.code)
         if (!imageUrls) {
-          console.warn(`⚠️  JAV.hk/JavDB 未找到可用影片图片源: ${candidate.code}`)
+          console.warn(`⚠️  JavDB 未找到可用影片图片源: ${candidate.code}`)
           continue
         }
 
@@ -452,7 +464,7 @@ async function runBackfillCoversMutation(
         }
 
         const coverImage = getProcessedPreviewUrl(coverImages)
-        const managedPreviewImages = processedPreviewImages.flat()
+        const managedPreviewImages = [...new Set([coverImage, ...processedPreviewImages.flat()].filter((url): url is string => Boolean(url)))]
         if (managedPreviewImages.length === 0)
           throw new Error('预览图回填未返回任何托管地址')
 
@@ -464,7 +476,25 @@ async function runBackfillCoversMutation(
         if (!result)
           throw new Error('API 同步未返回成功响应')
 
+        if (typeof result === 'object' && 'result' in result) {
+          const counts = result.result as { success?: number, failed?: number }
+          if (counts.success !== 1 || counts.failed !== 0)
+            throw new Error('Movie media synchronization was rejected')
+        }
+        if (selectedCode) {
+          const response = await fetch(`${config.api.url.replace(/\/$/u, '')}/api/movies/${encodeURIComponent(selectedCode)}`, {
+            headers: { 'x-service-token': config.api.token, 'cache-control': 'no-cache' },
+            signal: AbortSignal.timeout(30000),
+          })
+          if (!response.ok)
+            throw new Error('Movie media readback failed')
+          const readback = await response.json() as { data?: { coverImage?: string, previewImages?: string[] } }
+          if (readback.data?.coverImage !== coverImage || managedPreviewImages.some(url => !readback.data?.previewImages?.includes(url)))
+            throw new Error('Persisted movie media differs from uploaded R2 media')
+        }
+
         console.log(`✅ 影片媒体已回填: ${candidate.code}`)
+        selectedMovieRepaired = true
       }
       catch (error) {
         console.warn(`⚠️ 影片媒体回填失败 [${candidate.code}]: ${error instanceof Error ? error.message : String(error)}`)
@@ -476,6 +506,9 @@ async function runBackfillCoversMutation(
     if (browserManager)
       await browserManager.close()
   }
+
+  if (selectedCode && !selectedMovieRepaired)
+    throw new Error('Selected movie media repair did not produce a persisted result')
 
   for (const actor of actorCandidates) {
     if (!actor.id || !actor.name.trim())

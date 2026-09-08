@@ -156,8 +156,10 @@ export abstract class OptimizedCrawler {
           previewImages.map((imageUrl, index) => processManagedImage(imageUrl, `overview-${String(index + 1).padStart(2, '0')}`)),
         )
         // 只有 R2 返回的托管地址才能进入 API；失败项保持为空，等待后续回填。
-        movieInfo.previewImages = managedPreviewImages
-          .filter((url): url is string => Boolean(url))
+        movieInfo.previewImages = [...new Set([
+          movieInfo.coverImage,
+          ...managedPreviewImages.filter((url): url is string => Boolean(url)),
+        ].filter((url): url is string => Boolean(url)))].slice(0, 12)
       }
     }).catch(() => {
       // 图片任务失败已在内部处理

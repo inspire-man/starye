@@ -223,7 +223,7 @@ describe('adminMoviesRoutes — GET /analytics', () => {
 describe('adminMoviesRoutes — GET /batch-status', () => {
   beforeEach(() => vi.restoreAllMocks())
 
-  it('标记缺少封面或空概览图的旧影片，并保留已完成影片的查重状态', async () => {
+  it('标记缺少封面的旧影片，已有 R2 封面可单独构成图集', async () => {
     const db = createBatchStatusDb([
       { code: 'SS-154', coverImage: null, previewImages: null, sourceUrl: 'https://www.javbus.com/SS-154' },
       { code: 'SS-155', coverImage: '', previewImages: null, sourceUrl: 'https://www.javbus.com/SS-155' },
@@ -240,7 +240,7 @@ describe('adminMoviesRoutes — GET /batch-status', () => {
     await expect(response.json()).resolves.toMatchObject({
       'SS-154': { exists: true, needsImageRefresh: true },
       'SS-155': { exists: true, needsImageRefresh: true },
-      'SS-156': { exists: true, needsImageRefresh: true },
+      'SS-156': { exists: true, needsImageRefresh: false },
       'SS-157': { exists: true, needsImageRefresh: false },
       'SS-158': { exists: false, code: 'SS-158' },
     })
@@ -269,9 +269,8 @@ describe('adminMoviesRoutes — GET /missing-images', () => {
       data: [
         { code: 'SS-154', sourceUrl: 'https://www.javbus.com/SS-154' },
         { code: 'SS-155', sourceUrl: 'https://www.javbus.com/SS-155' },
-        { code: 'SS-156', sourceUrl: 'https://www.javbus.com/SS-156' },
       ],
-      meta: { limit: 200, total: 3 },
+      meta: { limit: 200, total: 2 },
     })
   })
 
