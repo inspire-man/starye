@@ -44,6 +44,30 @@ export interface NameMapperConfig {
   r2Config?: import('./image-processor').R2Config // R2 配置
 }
 
+const UNMAPPED_RETRY_COOLDOWN_SECONDS = 7 * 24 * 60 * 60
+
+function isRecentUnmapped(record: UnmappedRecord, now = Math.floor(Date.now() / 1000)): boolean {
+  return Number.isSafeInteger(record.lastAttempt)
+    && record.lastAttempt > 0
+    && now - record.lastAttempt < UNMAPPED_RETRY_COOLDOWN_SECONDS
+}
+
+function hasNotFoundMarker(title: string, bodyText: string): boolean {
+  const normalizedTitle = title.trim().toLowerCase()
+  const normalizedBody = bodyText.trim().toLowerCase()
+  return normalizedTitle.includes('404')
+    || normalizedTitle.includes('not found')
+    || normalizedBody.includes('ページが見つかりませんでした')
+    || normalizedBody.includes('お探しのページは見つかりませんでした')
+    || normalizedBody.includes('page not found')
+}
+
+function hasUsableWikiPage(title: string, bodyText: string): boolean {
+  return title.trim().length > 0
+    && bodyText.trim().length >= 80
+    && !hasNotFoundMarker(title, bodyText)
+}
+
 export class NameMapper {
   // 名字映射表（JavBus 名 -> Wiki 名和 URL）
   private actorMap = new Map<string, NameMapping>()
@@ -382,8 +406,9 @@ export class NameMapper {
    */
   async matchActorName(javbusName: string, page: Page): Promise<NameMapping | null> {
     // 检查是否在未匹配清单中（避免重复尝试）
-    if (this.unmappedActors.has(javbusName)) {
-      console.warn(`[NameMapper] 跳过已知未匹配女优: ${javbusName}`)
+    const unmappedActor = this.unmappedActors.get(javbusName)
+    if (unmappedActor && isRecentUnmapped(unmappedActor)) {
+      console.warn(`[NameMapper] 跳过冷却中的未匹配女优: ${javbusName}`)
       return null
     }
 
@@ -412,10 +437,7 @@ export class NameMapper {
       const title = await page.title()
       const bodyText = await page.evaluate(() => document.body?.textContent || '')
 
-      if (!title.includes('404')
-        && !title.includes('Not Found')
-        && !bodyText.includes('ページが見つかりませんでした')
-        && !bodyText.includes('お探しのページは見つかりませんでした')) {
+      if (hasUsableWikiPage(title, bodyText)) {
         // 精确匹配成功
         console.warn(`[NameMapper] ✅ 精确匹配成功: ${javbusName}`)
         this.addActorMapping(javbusName, javbusName, wikiUrl)
@@ -471,8 +493,9 @@ export class NameMapper {
    */
   async matchPublisherName(javbusName: string, page: Page): Promise<NameMapping | null> {
     // 检查是否在未匹配清单中
-    if (this.unmappedPublishers.has(javbusName)) {
-      console.warn(`[NameMapper] 跳过已知未匹配厂商: ${javbusName}`)
+    const unmappedPublisher = this.unmappedPublishers.get(javbusName)
+    if (unmappedPublisher && isRecentUnmapped(unmappedPublisher)) {
+      console.warn(`[NameMapper] 跳过冷却中的未匹配厂商: ${javbusName}`)
       return null
     }
 
@@ -501,10 +524,7 @@ export class NameMapper {
       const title = await page.title()
       const bodyText = await page.evaluate(() => document.body?.textContent || '')
 
-      if (!title.includes('404')
-        && !title.includes('Not Found')
-        && !bodyText.includes('ページが見つかりませんでした')
-        && !bodyText.includes('お探しのページは見つかりませんでした')) {
+      if (hasUsableWikiPage(title, bodyText)) {
         // 精确匹配成功
         console.warn(`[NameMapper] ✅ 精确匹配成功: ${javbusName}`)
         const mapping: NameMapping = {
