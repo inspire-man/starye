@@ -142,6 +142,24 @@ describe('actors Service', () => {
   })
 
   describe('getActorBySlug', () => {
+    it.each([true, false])('protects related R18 covers in both relation queries (verified=%s)', async (isR18Verified) => {
+      for (const useLegacyQuery of [true, false]) {
+        const rows = [true, false].map(isR18 => ({ id: String(isR18), isR18, coverImage: 'https://cdn.example/cover.webp' }))
+        const limit = vi.fn().mockResolvedValue(rows)
+        if (useLegacyQuery)
+          limit.mockResolvedValueOnce([])
+        const chain: any = { from: () => chain, innerJoin: () => chain, where: () => chain, orderBy: () => chain, limit }
+        const db = {
+          query: { actors: { findFirst: async () => ({ id: 'actor-1', name: 'Fixture' }) } },
+          select: () => chain,
+        } as unknown as Database
+        const result = await getActorBySlug({ db, slug: 'fixture', isR18Verified })
+        expect(result?.relatedMovies[0].coverImage).toBe(isR18Verified ? rows[0].coverImage : null)
+        expect(result?.relatedMovies[1].coverImage).toBe(rows[1].coverImage)
+        expect(rows[0].coverImage).toContain('https://')
+      }
+    })
+
     it('应该返回演员详情和关联电影', async () => {
       const mockActor = {
         id: '1',

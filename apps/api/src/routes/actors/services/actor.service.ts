@@ -115,7 +115,7 @@ export interface GetActorBySlugOptions {
 }
 
 export async function getActorBySlug(options: GetActorBySlugOptions) {
-  const { db, slug } = options
+  const { db, slug, isR18Verified = false } = options
 
   // 查找女优
   const actor = await db.query.actors.findFirst({
@@ -136,6 +136,7 @@ export async function getActorBySlug(options: GetActorBySlugOptions) {
       title: movies.title,
       slug: movies.slug,
       coverImage: movies.coverImage,
+      isR18: movies.isR18,
       releaseDate: movies.releaseDate,
       duration: movies.duration,
       sortOrder: movieActors.sortOrder,
@@ -158,6 +159,7 @@ export async function getActorBySlug(options: GetActorBySlugOptions) {
         title: movies.title,
         slug: movies.slug,
         coverImage: movies.coverImage,
+        isR18: movies.isR18,
         releaseDate: movies.releaseDate,
         duration: movies.duration,
       })
@@ -171,7 +173,7 @@ export async function getActorBySlug(options: GetActorBySlugOptions) {
 
   return {
     ...actor,
-    relatedMovies: relatedMoviesData,
+    relatedMovies: relatedMoviesData.map(movie => movie.isR18 && !isR18Verified ? { ...movie, coverImage: null } : movie),
   }
 }
 

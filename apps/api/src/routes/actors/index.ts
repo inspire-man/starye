@@ -1,7 +1,7 @@
 import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
-import { detailCache, listCache } from '../../middleware/cache'
+import { listCache } from '../../middleware/cache'
 import { ActorDetailSchema, ActorRelationsDataSchema, ActorsListDataSchema, GetActorParamSchema, GetActorRelationsParamSchema, GetActorRelationsQuerySchema, GetActorsQuerySchema } from '../../schemas/actor'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../schemas/responses'
 import { getActorDetail, getActorList, getActorRelationsHandler } from './handlers/actors.handler'
@@ -113,6 +113,10 @@ export const actorsRoutes = new Hono<AppEnv>()
       },
     }),
     validator('param', GetActorParamSchema),
-    detailCache(),
+    async (c, next) => {
+      c.header('Cache-Control', 'private, no-store')
+      c.header('Vary', 'Cookie')
+      await next()
+    },
     getActorDetail,
   )

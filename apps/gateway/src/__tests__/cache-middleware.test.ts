@@ -48,7 +48,7 @@ describe('gateway cache middleware', () => {
     vi.restoreAllMocks()
   })
 
-  it('caches movie list responses in KV and returns HIT on repeat requests', async () => {
+  it.each(['/api/movies?page=1', '/api/public/movies?page=1', '/api/movies/', '/api/public/movies/recommended'])('bypasses shared movie caches for %s', async (path) => {
     const { kv } = createMockKv()
     let calls = 0
 
@@ -57,18 +57,20 @@ describe('gateway cache middleware', () => {
       return Response.json({ calls })
     })
 
-    const request = defaultGatewayRequest('/api/movies?page=1')
+    const request = defaultGatewayRequest(path)
 
     const missResponse = await cachedProxy(request, defaultApiOrigin)
-    expect(missResponse.headers.get('X-Cache-Status')).toBe('MISS')
+    expect(missResponse.headers.get('X-Cache-Status')).toBe('BYPASS')
     expect(missResponse.headers.get('X-Cache-Group')).toBe('movies')
-    expect(missResponse.headers.get('X-Cache-Policy')).toBe('public')
-    expect(missResponse.headers.get('Cache-Control')).toContain('max-age=300')
+    expect(missResponse.headers.get('X-Cache-Policy')).toBe('bypass')
+    expect(missResponse.headers.get('Cache-Control')).toBe('private, no-store')
 
     const hitResponse = await cachedProxy(request, defaultApiOrigin)
-    expect(hitResponse.headers.get('X-Cache-Status')).toBe('HIT')
-    expect(await hitResponse.json()).toEqual({ calls: 1 })
-    expect(calls).toBe(1)
+    expect(hitResponse.headers.get('X-Cache-Status')).toBe('BYPASS')
+    expect(await hitResponse.json()).toEqual({ calls: 2 })
+    expect(calls).toBe(2)
+    expect(kv.get).not.toHaveBeenCalled()
+    expect(kv.put).not.toHaveBeenCalled()
   })
 
   it('applies immutable cache headers to static assets without KV storage', async () => {
@@ -151,8 +153,7 @@ describe('gateway cache middleware', () => {
   // 激活方式：Plan 02 删除 `.todo` 并补全 async 实现体。保持 title 中 `D-11 #N` 前缀稳定以便追溯。
   /* eslint-disable test/prefer-lowercase-title -- D-11 matrix identifier must remain uppercase for traceability */
 
-  // D-11 #1: baseline regression — 无头 public group 仍走 MISS→HIT（Plan 02 实现后激活）
-  it('D-11 #1: caches /api/movies on public group when no auth headers present (MISS then HIT)', async () => {
+  it('bypasses movie caches even for anonymous requests', async () => {
     const { kv } = createMockKv()
     let calls = 0
     const cachedProxy = createCachedProxy(kv, async () => {
@@ -162,10 +163,10 @@ describe('gateway cache middleware', () => {
     const request = defaultGatewayRequest('/api/movies')
 
     const miss = await cachedProxy(request, defaultApiOrigin)
-    expect(miss.headers.get('X-Cache-Status')).toBe('MISS')
+    expect(miss.headers.get('X-Cache-Status')).toBe('BYPASS')
     const hit = await cachedProxy(request, defaultApiOrigin)
-    expect(hit.headers.get('X-Cache-Status')).toBe('HIT')
-    expect(calls).toBe(1)
+    expect(hit.headers.get('X-Cache-Status')).toBe('BYPASS')
+    expect(calls).toBe(2)
   })
 
   // D-11 #2: AUTH-07 — 带 session cookie → BYPASS + X-Cache-Reason
@@ -262,7 +263,7 @@ describe('gateway cache middleware', () => {
     const request = defaultGatewayRequest('/api/movies')
     const r = await cachedProxy(request, defaultApiOrigin)
     expect(r.headers.get('X-Cache-Status')).toBe('BYPASS')
-    expect(r.headers.get('X-Cache-Reason')).toBe('set-cookie-response')
+    expect(r.headers.get('X-Cache-Reason')).toBe('no-store-path')
     expect(r.headers.get('Cache-Control')).not.toContain('public')
     expect(r.headers.get('Cache-Control')).toContain('no-store')
     expect(r.headers.get('X-Cache-TTL')).toBeNull()

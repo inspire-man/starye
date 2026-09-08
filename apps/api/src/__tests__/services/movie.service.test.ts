@@ -40,7 +40,7 @@ describe('movieService', () => {
       expect(result.meta.page).toBe(1)
     })
 
-    it('应该为非成人用户保留成人目录封面', async () => {
+    it('应该为非成人用户隐藏成人目录封面', async () => {
       const mockMovies = [
         {
           id: '1',
@@ -65,7 +65,7 @@ describe('movieService', () => {
         pageSize: 24,
       })
 
-      expect(result.data[0].coverImage).toBe('cover.jpg')
+      expect(result.data[0].coverImage).toBeNull()
     })
 
     it('应该正确应用分页参数', async () => {
@@ -114,7 +114,7 @@ describe('movieService', () => {
       })
       mockDb.query.movieActors.findMany.mockResolvedValue([])
       const result = await getMovieByIdentifier({ db: mockDb, identifier: 'GALLERY-001', isAdult })
-      expect(result?.previewImages).toEqual(['https://cdn.example/cover.webp', 'https://cdn.example/preview.webp'])
+      expect(result?.previewImages).toEqual(isAdult ? ['https://cdn.example/cover.webp', 'https://cdn.example/preview.webp'] : [])
     })
 
     it('应该通过 slug 查找电影', async () => {

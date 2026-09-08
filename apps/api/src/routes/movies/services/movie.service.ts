@@ -276,6 +276,7 @@ function buildMovieOrderBy(sortBy?: string, sortOrder?: string) {
 export async function getMovies(options: GetMoviesOptions): Promise<GetMoviesResult> {
   const {
     db,
+    isAdult,
     page = 1,
     pageSize = 24,
     genre,
@@ -360,7 +361,7 @@ export async function getMovies(options: GetMoviesOptions): Promise<GetMoviesRes
       title: movie.title,
       slug: movie.slug,
       code: movie.code,
-      coverImage: movie.coverImage,
+      coverImage: movie.isR18 && !isAdult ? null : movie.coverImage,
       releaseDate: movie.releaseDate,
       isR18: movie.isR18,
       actors: actorsData,
@@ -589,7 +590,7 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
     }
   }
 
-  const relatedMovies = Array.from(relatedMoviesMap.values()).slice(0, 12)
+  const relatedMovies = Array.from(relatedMoviesMap.values()).slice(0, 12).map(related => related.isR18 && !isAdult ? { ...related, coverImage: null } : related)
 
   // 如果有 userId，查询用户对播放源的评分
   let userScores: Map<string, number> | undefined
@@ -636,8 +637,8 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
       availability,
       primaryContentId: movie.id,
       readiness,
-      coverImage: movie.coverImage,
-      previewImages,
+      coverImage: null,
+      previewImages: [],
       players: [],
       actors: actorsData,
       publishers: publishersData,
@@ -666,7 +667,7 @@ export interface GetHotMoviesOptions {
 }
 
 export async function getHotMovies(options: GetHotMoviesOptions): Promise<MovieListItem[]> {
-  const { db, limit = 12 } = options
+  const { db, isAdult, limit = 12 } = options
 
   const movies = await db.query.movies.findMany({
     columns: {
@@ -718,7 +719,7 @@ export async function getHotMovies(options: GetHotMoviesOptions): Promise<MovieL
       title: movie.title,
       slug: movie.slug,
       code: movie.code,
-      coverImage: movie.coverImage,
+      coverImage: movie.isR18 && !isAdult ? null : movie.coverImage,
       releaseDate: movie.releaseDate,
       isR18: movie.isR18,
       actors: actorsData,

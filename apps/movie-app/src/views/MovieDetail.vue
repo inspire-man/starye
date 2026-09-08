@@ -1197,7 +1197,7 @@ onMounted(() => {
           <!-- 封面：完整展示横版原图（400:267） -->
           <div class="movie-detail-cover shrink-0 w-full md:w-72 lg:w-80">
             <img
-              v-if="movie.coverImage"
+              v-if="movie.coverImage && !r18SourcesHidden"
               :src="movie.coverImage"
               :alt="movie.title"
               class="aspect-[4/3] w-full rounded-lg shadow-md object-cover"
@@ -1207,7 +1207,7 @@ onMounted(() => {
               class="flex aspect-[4/3] w-full items-center justify-center rounded-lg bg-gray-700"
             >
               <div class="flex flex-col items-center gap-3 px-4 text-center">
-                <span data-movie-cover-status class="text-gray-500">暂无封面</span>
+                <span data-movie-cover-status class="text-gray-400">{{ r18SourcesHidden ? '封面已隐藏 · 需要 R18 访问权限' : '暂无封面' }}</span>
               </div>
             </div>
           </div>
@@ -1367,9 +1367,15 @@ onMounted(() => {
               预览图
             </h2>
           </div>
-          <span class="movie-overview-count">{{ movie.previewImages?.length || 0 }} 张</span>
+          <span v-if="!r18SourcesHidden" class="movie-overview-count">{{ movie.previewImages?.length || 0 }} 张</span>
         </div>
-        <div v-if="movie.previewImages?.length" class="movie-overview-grid">
+        <div v-if="r18SourcesHidden" data-r18-overview-guard class="movie-detail-media-empty">
+          <p>预览图已隐藏，需要 R18 访问权限。</p>
+          <RouterLink to="/profile">
+            前往账号设置
+          </RouterLink>
+        </div>
+        <div v-else-if="movie.previewImages?.length" class="movie-overview-grid">
           <figure v-for="(previewImage, index) in movie.previewImages" :key="previewImage" class="movie-overview-item">
             <button
               type="button"
@@ -1395,7 +1401,7 @@ onMounted(() => {
 
       <Teleport to="body">
         <div
-          v-if="previewLightboxImage"
+          v-if="previewLightboxImage && !r18SourcesHidden"
           class="movie-preview-lightbox"
           data-preview-lightbox
           role="dialog"
@@ -2329,7 +2335,7 @@ onMounted(() => {
             <div class="relative overflow-hidden rounded-lg shadow-md group-hover:shadow-xl transition-shadow duration-300">
               <div class="aspect-3/4 bg-gray-700">
                 <img
-                  v-if="related.coverImage"
+                  v-if="related.coverImage && (!related.isR18 || userStore.user?.isR18Verified)"
                   :src="related.coverImage"
                   :alt="related.title"
                   class="w-full h-full object-cover object-right group-hover:scale-105 transition-transform duration-300"

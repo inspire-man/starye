@@ -8,11 +8,18 @@ import * as v from 'valibot'
 import { GetMovieParamSchema, GetMoviesQuerySchema, MovieDetailSchema, MovieItemSchema, MoviesListDataSchema } from '../../../schemas/movie'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../../schemas/responses'
 import { getMovieDetail } from '../../movies/handlers/movies.handler'
+import { checkUserAdultStatus } from '../../movies/services/auth.service'
+import { protectMovieImages } from '../../movies/services/media-access'
 
 /**
  * 公开影片路由 — 使用方法链以支持 Hono RPC 类型推导
  */
 export const publicMoviesRoutes = new Hono<AppEnv>()
+  .use('*', async (c, next) => {
+    c.header('Cache-Control', 'private, no-store')
+    c.header('Vary', 'Cookie')
+    await next()
+  })
   // 获取影片列表
   .get(
     '/',
@@ -49,6 +56,8 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
       const offset = (page - 1) * limit
 
       try {
+        const user = c.get('user')
+        const isAdult = checkUserAdultStatus(user)
         const conditions: SQL[] = []
 
         // 演员筛选 — 通过 movie_actors 关联表 EXISTS 子查询
@@ -135,9 +144,10 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
             .then(res => res[0].value),
         ])
 
+        const safeData = data.map(movie => protectMovieImages(movie, isAdult))
         return c.json({
           success: true,
-          data,
+          data: safeData,
           pagination: {
             page,
             limit,
@@ -258,7 +268,7 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
             .from(movies)
             .orderBy(desc(movies.viewCount))
             .limit(12)
-          return c.json({ success: true, data, meta: { strategy: 'hot' } })
+          return c.json({ success: true, data: data.map(movie => protectMovieImages(movie, checkUserAdultStatus(user))), meta: { strategy: 'hot' } })
         }
 
         if (!user) {
@@ -368,7 +378,7 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
           finalData = [...finalData, ...fillData]
         }
 
-        return c.json({ success: true, data: finalData, meta: { strategy: 'personalized' } })
+        return c.json({ success: true, data: finalData.map(movie => protectMovieImages(movie, checkUserAdultStatus(user))), meta: { strategy: 'personalized' } })
       }
       catch (error) {
         console.error('[PublicMovies] Failed to fetch recommended:', error)

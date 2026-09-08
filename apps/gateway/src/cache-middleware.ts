@@ -53,7 +53,6 @@ const CACHE_GROUP_HEADER = 'X-Cache-Group'
 const CACHE_POLICY_HEADER = 'X-Cache-Policy'
 const CACHE_TTL_HEADER = 'X-Cache-TTL'
 const CACHE_REASON_HEADER = 'X-Cache-Reason'
-const MOVIE_LIST_PATHS = new Set(['/api/movies', '/api/public/movies'])
 const NO_STORE_PREFIXES = ['/api/admin', '/api/auth', '/api/monitoring', '/api/upload', '/dashboard', '/auth']
 const STATIC_ASSET_PATTERN = /\.(?:avif|css|gif|ico|jpeg|jpg|js|json|map|mjs|mp4|png|svg|ttf|txt|webp|woff2?|xml)$/i
 
@@ -140,14 +139,14 @@ function resolveBasePolicy(url: URL): CachePolicy {
     }
   }
 
-  if (MOVIE_LIST_PATHS.has(pathname)) {
+  // Movie responses contain session-scoped R18 image fields.
+  if (['/api/movies', '/api/public/movies'].some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
     return {
-      scope: 'public',
+      scope: 'bypass',
       group: 'movies',
-      ttl: 300,
-      staleWhileRevalidate: 60,
-      cacheControl: buildCacheControl('public', 300, 60),
-      shouldStore: true,
+      cacheControl: 'private, no-store',
+      shouldStore: false,
+      bypassReason: 'no-store-path',
     }
   }
 

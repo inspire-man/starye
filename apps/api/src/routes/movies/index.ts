@@ -1,6 +1,5 @@
 import type { AppEnv } from '../../types'
 import { Hono } from 'hono'
-import { detailCache, publicCache } from '../../middleware/cache'
 import { requireAuth } from '../../middleware/guard'
 import { serviceAuth } from '../../middleware/service-auth'
 import { getActorDetail, getActorsList } from './handlers/actors.handler'
@@ -10,8 +9,13 @@ import { getPublisherDetail, getPublishersList } from './handlers/publishers.han
 import { syncMovies } from './handlers/sync.handler'
 
 export const moviesRoutes = new Hono<AppEnv>()
-  .get('/', publicCache(), getMovieList)
-  .get('/featured/hot', publicCache(), getHotMoviesList)
+  .use('*', async (c, next) => {
+    c.header('Cache-Control', 'private, no-store')
+    c.header('Vary', 'Cookie')
+    await next()
+  })
+  .get('/', getMovieList)
+  .get('/featured/hot', getHotMoviesList)
   .get('/actors/list', getActorsList)
   .get('/actors/:slug', getActorDetail)
   .get('/publishers/list', getPublishersList)
@@ -19,4 +23,4 @@ export const moviesRoutes = new Hono<AppEnv>()
   .post('/sync', serviceAuth(), syncMovies)
   // 播放源上报失效（已登录用户）
   .post('/players/:id/report', requireAuth(), reportPlayer)
-  .get('/:identifier', detailCache(), getMovieDetail)
+  .get('/:identifier', getMovieDetail)

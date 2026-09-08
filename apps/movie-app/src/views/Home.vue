@@ -332,7 +332,7 @@ onMounted(() => {
         >
           <div class="continue-cover">
             <img
-              v-if="item.coverImage"
+              v-if="item.coverImage && (!item.isR18 || userStore.user?.isR18Verified)"
               :src="item.coverImage"
               :alt="item.title"
               loading="lazy"
@@ -381,7 +381,7 @@ onMounted(() => {
         >
           <div class="continue-cover">
             <img
-              v-if="movie.coverImage"
+              v-if="movie.coverImage && (!movie.isR18 || userStore.user?.isR18Verified)"
               :src="movie.coverImage"
               :alt="movie.title"
               loading="lazy"
@@ -600,12 +600,12 @@ onMounted(() => {
           :title="movie.title"
           :href="`/movie/${movie.code}`"
           :code="movie.code"
-          :cover="movie.coverImage"
+          :cover="movie.isR18 && !userStore.user?.isR18Verified ? null : movie.coverImage"
           :release-date="movie.releaseDate ? new Date(movie.releaseDate) : null"
           :is-r18="movie.isR18"
           :actors="movie.actors?.map(actor => actor.name)"
           :layout="viewMode"
-          label-missing-cover="暂无封面"
+          :label-missing-cover="movie.isR18 && !userStore.user?.isR18Verified ? '需要 R18 访问权限' : '暂无封面'"
         />
       </div>
 

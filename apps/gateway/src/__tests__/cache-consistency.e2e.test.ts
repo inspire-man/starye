@@ -44,8 +44,18 @@ describe('gateway cache consistency e2e', () => {
     vi.restoreAllMocks()
   })
 
-  it('serves fresh movie data after API-side invalidation clears the gateway cache group', async () => {
+  it('ignores old movie cache entries and serves current permissions before cache cleanup', async () => {
     const { kv, store } = createMockKv()
+    store.set('gateway-cache:v2:movies:public:%2Fapi%2Fmovies%3Fpage%3D1', JSON.stringify({
+      response: JSON.stringify({ coverImage: 'https://cdn.example/restricted.webp' }),
+      headers: { 'content-type': 'application/json' },
+      status: 200,
+      statusText: 'OK',
+      timestamp: Date.now(),
+      ttl: 300,
+      group: 'movies',
+      scope: 'public',
+    }))
     let upstreamVersion = 1
 
     const cachedProxy = createCachedProxy(kv, async () => {
@@ -57,21 +67,23 @@ describe('gateway cache consistency e2e', () => {
     const request = defaultGatewayRequest('/api/movies?page=1')
 
     const firstResponse = await cachedProxy(request, defaultApiOrigin)
-    expect(firstResponse.headers.get('X-Cache-Status')).toBe('MISS')
+    expect(firstResponse.headers.get('X-Cache-Status')).toBe('BYPASS')
     expect(await firstResponse.json()).toEqual({ version: 1 })
     expect(store.size).toBe(1)
 
     upstreamVersion = 2
 
     const staleResponse = await cachedProxy(request, defaultApiOrigin)
-    expect(staleResponse.headers.get('X-Cache-Status')).toBe('HIT')
-    expect(await staleResponse.json()).toEqual({ version: 1 })
+    expect(staleResponse.headers.get('X-Cache-Status')).toBe('BYPASS')
+    expect(await staleResponse.json()).toEqual({ version: 2 })
+    expect(kv.get).not.toHaveBeenCalled()
+    expect(kv.put).not.toHaveBeenCalled()
 
     await expect(clearGatewayCacheGroup(kv, 'movies')).resolves.toBe(1)
     expect(store.size).toBe(0)
 
     const freshResponse = await cachedProxy(request, defaultApiOrigin)
-    expect(freshResponse.headers.get('X-Cache-Status')).toBe('MISS')
+    expect(freshResponse.headers.get('X-Cache-Status')).toBe('BYPASS')
     expect(await freshResponse.json()).toEqual({ version: 2 })
   })
 

@@ -2,11 +2,12 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import MovieDetail from '../MovieDetail.vue'
 
-const { getMovieDetailMock, routeState, routerPushMock, submitVideoAvailabilityCommandMock } = vi.hoisted(() => ({
+const { getMovieDetailMock, routeState, routerPushMock, submitVideoAvailabilityCommandMock, userState } = vi.hoisted(() => ({
   getMovieDetailMock: vi.fn(),
   routeState: { params: { code: 'TEST-001' } },
   routerPushMock: vi.fn(),
   submitVideoAvailabilityCommandMock: vi.fn(),
+  userState: { user: null as { isR18Verified: boolean } | null, loading: false },
 }))
 
 vi.mock('vue-router', () => ({
@@ -33,7 +34,7 @@ vi.mock('../../lib/api-client', () => ({
 }))
 
 vi.mock('../../stores/user', () => ({
-  useUserStore: () => ({ user: null, loading: false }),
+  useUserStore: () => userState,
 }))
 
 vi.mock('../../composables/useDownloadList', () => ({
@@ -71,6 +72,7 @@ vi.mock('../../composables/useAuthGuard', () => ({
 describe('movie detail DOM tuple contract', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    userState.user = null
     submitVideoAvailabilityCommandMock.mockResolvedValue({
       binding: { movieId: 'movie-uuid-1', movieRevision: 1, policyVersion: 'video-source-probe/v1', sourceRevision: 0 },
       kind: 'created',
@@ -249,7 +251,8 @@ describe('movie detail DOM tuple contract', () => {
     expect(wrapper.text()).not.toContain('▶️ 播放')
   })
 
-  it('explains when R18 playback sources are hidden by the current access mode', async () => {
+  it.each([null, { isR18Verified: false }])('hides restricted images for an unverified session (%j)', async (user) => {
+    userState.user = user
     getMovieDetailMock.mockResolvedValueOnce({
       success: true,
       data: {
@@ -283,10 +286,11 @@ describe('movie detail DOM tuple contract', () => {
 
     expect(wrapper.get('[data-r18-source-guard]').text()).toContain('播放源已隐藏')
     expect(wrapper.get('[data-r18-source-guard]').text()).toContain('SFW 模式')
-    expect(wrapper.get('.movie-detail-cover img').attributes('src')).toBe('https://cdn.example/r18-cover.webp')
-    expect(wrapper.get('.movie-overview-image').attributes('src')).toBe('https://cdn.example/r18-preview.webp')
-    expect(wrapper.find('[data-movie-cover-status]').exists()).toBe(false)
-    expect(wrapper.find('[data-r18-overview-guard]').exists()).toBe(false)
+    expect(wrapper.find('.movie-detail-cover img').exists()).toBe(false)
+    expect(wrapper.find('.movie-overview-image').exists()).toBe(false)
+    expect(wrapper.get('[data-movie-cover-status]').text()).toContain('需要 R18 访问权限')
+    expect(wrapper.get('[data-r18-overview-guard]').text()).toContain('预览图已隐藏')
+    expect(wrapper.html()).not.toContain('https://cdn.example/r18-')
     expect(wrapper.get('[data-r18-source-profile]').attributes('href')).toBe('/profile')
     expect(wrapper.get('[data-readiness-action="r18-profile"]').attributes('href')).toBe('/profile')
     expect(wrapper.get('[data-r18-access-summary]').text()).toContain('来源检查记录和播放入口已隐藏')
@@ -298,6 +302,51 @@ describe('movie detail DOM tuple contract', () => {
     expect(wrapper.find('[data-playback-sources]').exists()).toBe(false)
     expect(wrapper.get('[data-readiness-summary]').text()).not.toContain('eligible count')
     expect(wrapper.text()).not.toContain('该影片尚未添加播放源信息')
+  })
+
+  it('shows R18 images only for a verified session and guards related covers independently', async () => {
+    userState.user = { isR18Verified: true }
+    getMovieDetailMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        id: 'verified-fixture',
+        code: 'VERIFIED-001',
+        title: 'Verified fixture',
+        isR18: true,
+        coverImage: 'https://cdn.example/verified-cover.webp',
+        previewImages: ['https://cdn.example/verified-preview.webp'],
+        players: [],
+        relatedMovies: [],
+      },
+    })
+    const wrapper = mount(MovieDetail)
+    await flushPromises()
+    expect(wrapper.get('.movie-detail-cover img').attributes('src')).toContain('verified-cover')
+    expect(wrapper.get('.movie-overview-image').attributes('src')).toContain('verified-preview')
+    expect(wrapper.find('[data-r18-overview-guard]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('hides a related R18 cover while keeping a general cover on a general detail page', async () => {
+    getMovieDetailMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        id: 'general-fixture',
+        code: 'GENERAL-001',
+        title: 'General fixture',
+        isR18: false,
+        players: [],
+        relatedMovies: [
+          { id: 'restricted', code: 'RESTRICTED-002', title: 'Restricted', isR18: true, coverImage: 'https://cdn.example/related-restricted.webp' },
+          { id: 'general', code: 'GENERAL-002', title: 'General', isR18: false, coverImage: 'https://cdn.example/related-general.webp' },
+        ],
+      },
+    })
+    const wrapper = mount(MovieDetail)
+    await flushPromises()
+    expect(wrapper.html()).not.toContain('https://cdn.example/related-restricted.webp')
+    expect(wrapper.find('img[src="https://cdn.example/related-general.webp"]').exists()).toBe(true)
+    wrapper.unmount()
   })
 
   it.each([
