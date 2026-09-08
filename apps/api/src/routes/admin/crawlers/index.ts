@@ -648,7 +648,7 @@ adminCrawlers.get('/mapping-quality', async (c) => {
 
     // 从 R2 读取映射表，计算冲突和失效映射
     let conflictCount = 0
-    const invalidMappingCount = 0
+    let invalidMappingCount = 0
     let actorMappingCount = mappedActors
     const publisherMappingCount = mappedPublishers
 
@@ -667,6 +667,14 @@ adminCrawlers.get('/mapping-quality', async (c) => {
           const wikiUrlCount = new Map<string, string[]>()
           for (const [javbusName, mapping] of Object.entries(actorMap)) {
             const wikiUrl = (mapping as any).wikiUrl
+            try {
+              const parsedUrl = new URL(String(wikiUrl))
+              if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:')
+                invalidMappingCount++
+            }
+            catch {
+              invalidMappingCount++
+            }
             if (!wikiUrlCount.has(wikiUrl)) {
               wikiUrlCount.set(wikiUrl, [])
             }
@@ -696,7 +704,7 @@ adminCrawlers.get('/mapping-quality', async (c) => {
         actorMappingCount,
         publisherMappingCount,
         conflictCount,
-        invalidMappingCount, // TODO: 需要定期验证 URL 有效性
+        invalidMappingCount,
         highPriorityUnmapped,
       },
     })
