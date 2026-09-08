@@ -464,7 +464,7 @@ async function runBackfillCoversMutation(
         }
 
         const coverImage = getProcessedPreviewUrl(coverImages)
-        const managedPreviewImages = [...new Set([coverImage, ...processedPreviewImages.flat()].filter((url): url is string => Boolean(url)))]
+        const managedPreviewImages = [...new Set([coverImage, ...processedPreviewImages.flat()].filter((url): url is string => Boolean(url)))].slice(0, 12)
         if (managedPreviewImages.length === 0)
           throw new Error('预览图回填未返回任何托管地址')
 
