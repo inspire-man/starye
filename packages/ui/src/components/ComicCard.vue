@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import { ImageOff, LockKeyhole, UserRound } from 'lucide-vue-next'
+import { ref, watch } from 'vue'
+
 interface Props {
   title: string
   href: string
   cover?: string | null
   author?: string | null
   isR18?: boolean
+  restricted?: boolean
   region?: string | null
   status?: string | null
   // i18n 文本传入
@@ -15,13 +19,21 @@ interface Props {
   labelCompleted?: string
 }
 
-withDefaults(defineProps<Props>(), {
-  labelAdultOnly: 'Adult Only',
+const props = withDefaults(defineProps<Props>(), {
+  labelAdultOnly: '需要 R18 访问权限',
   labelMissingCover: 'No Cover',
   labelUnknownAuthor: 'Unknown Author',
   labelSerializing: 'Serializing',
   labelCompleted: 'Completed',
 })
+
+const imageFailed = ref(false)
+watch(() => props.cover, () => {
+  imageFailed.value = false
+})
+function handleImageError(): void {
+  imageFailed.value = true
+}
 
 function getStatusClass(status?: string | null) {
   if (status === 'serializing')
@@ -33,20 +45,22 @@ function getStatusClass(status?: string | null) {
 </script>
 
 <template>
-  <RouterLink :to="href" class="group cursor-pointer block text-left">
+  <RouterLink :to="href" :aria-label="`${title}${restricted ? `，${labelAdultOnly}` : ''}`" class="group block min-w-0 cursor-pointer rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background">
     <div class="relative mb-3 aspect-[3/4] overflow-hidden rounded-[var(--ui-radius-lg)] border border-border bg-muted shadow-sm transition-all duration-300 group-hover:-translate-y-0.5 group-hover:border-primary/55 group-hover:shadow-md">
       <img
-        v-if="cover"
+        v-if="cover && !restricted && !imageFailed"
         :src="cover"
         :alt="title"
         loading="lazy"
         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+        @error="handleImageError"
       >
 
       <!-- Placeholder / R18 Mask -->
       <div v-else class="flex h-full w-full flex-col items-center justify-center bg-muted p-4 text-center">
-        <span class="mb-2 text-3xl">{{ isR18 ? '🔞' : '🖼️' }}</span>
-        <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{{ isR18 ? labelAdultOnly : labelMissingCover }}</span>
+        <LockKeyhole v-if="restricted" aria-hidden="true" class="mb-2 h-6 w-6 text-muted-foreground" />
+        <ImageOff v-else aria-hidden="true" class="mb-2 h-6 w-6 text-muted-foreground" />
+        <span class="text-xs font-medium leading-5 text-muted-foreground">{{ restricted ? labelAdultOnly : imageFailed ? '图片加载失败' : labelMissingCover }}</span>
       </div>
 
       <!-- R18 Badge (Overlay on cover) -->
@@ -65,13 +79,13 @@ function getStatusClass(status?: string | null) {
       </div>
     </div>
 
-    <h3 class="line-clamp-2 text-sm font-semibold leading-tight transition-colors group-hover:text-primary">
+    <h3 :title="title" class="line-clamp-2 min-h-10 break-words text-sm font-semibold leading-5 transition-colors group-hover:text-primary">
       {{ title }}
     </h3>
 
-    <p class="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
-      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
-      {{ author || labelUnknownAuthor }}
+    <p class="mt-1.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+      <UserRound aria-hidden="true" class="h-3 w-3 shrink-0" />
+      <span class="truncate">{{ author || labelUnknownAuthor }}</span>
     </p>
   </RouterLink>
 </template>

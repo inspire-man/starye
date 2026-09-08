@@ -4,6 +4,9 @@ import { MovieCard, Pagination, SkeletonCard, useListQuery } from '@starye/ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { movieApi } from '../lib/api-client'
+import { useUserStore } from '../stores/user'
+
+const userStore = useUserStore()
 
 const route = useRoute()
 const router = useRouter()
@@ -164,6 +167,7 @@ onMounted(() => {
             :cover="movie.coverImage"
             :release-date="movie.releaseDate ? new Date(movie.releaseDate) : null"
             :is-r18="movie.isR18"
+            :restricted="movie.isR18 && !userStore.user?.isR18Verified"
             label-missing-cover="暂无封面"
           />
         </div>

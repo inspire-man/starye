@@ -4,6 +4,9 @@ import type { Comic } from '../types'
 import { ComicCard, Pagination, Select, SkeletonCard, useListQuery } from '@starye/ui'
 import { reactive, ref } from 'vue'
 import { comicApi } from '../lib/api-client'
+import { useUserStore } from '../stores/user'
+
+const userStore = useUserStore()
 
 const searched = ref(false)
 const comics = ref<Comic[]>([])
@@ -183,6 +186,7 @@ function resetFilters() {
           :author="comic.author"
           :status="comic.status"
           :is-r18="comic.isR18"
+          :restricted="comic.isR18 && !userStore.user?.isR18Verified"
           label-missing-cover="暂无封面"
           label-unknown-author="未知作者"
           label-serializing="连载中"

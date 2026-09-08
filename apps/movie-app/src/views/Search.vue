@@ -4,6 +4,9 @@ import { MovieCard, SkeletonCard } from '@starye/ui'
 import { ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { searchApi } from '../lib/api-client'
+import { useUserStore } from '../stores/user'
+
+const userStore = useUserStore()
 
 const route = useRoute()
 const router = useRouter()
@@ -124,6 +127,7 @@ function hasResults() {
             :code="movie.code"
             :cover="movie.coverImage"
             :is-r18="movie.isR18"
+            :restricted="movie.isR18 && !userStore.user?.isR18Verified"
             label-missing-cover="暂无封面"
           />
         </div>

@@ -148,6 +148,7 @@ onMounted(() => {
           :author="comic.author"
           :status="comic.status"
           :is-r18="comic.isR18"
+          :restricted="comic.isR18 && !userStore.user?.isR18Verified"
           label-missing-cover="暂无封面"
           label-unknown-author="未知作者"
           label-serializing="连载中"

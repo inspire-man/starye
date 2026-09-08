@@ -603,6 +603,7 @@ onMounted(() => {
           :cover="movie.isR18 && !userStore.user?.isR18Verified ? null : movie.coverImage"
           :release-date="movie.releaseDate ? new Date(movie.releaseDate) : null"
           :is-r18="movie.isR18"
+          :restricted="movie.isR18 && !userStore.user?.isR18Verified"
           :actors="movie.actors?.map(actor => actor.name)"
           :layout="viewMode"
           :label-missing-cover="movie.isR18 && !userStore.user?.isR18Verified ? '需要 R18 访问权限' : '暂无封面'"

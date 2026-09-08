@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { CalendarDays, ImageOff, LockKeyhole } from 'lucide-vue-next'
+import { ref, watch } from 'vue'
+
 interface Props {
   title: string
   href: string
@@ -6,6 +9,7 @@ interface Props {
   cover?: string | null
   releaseDate?: Date | null
   isR18?: boolean
+  restricted?: boolean
   actors?: string[] | null
   genres?: string[] | null
   layout?: 'grid' | 'list'
@@ -14,11 +18,19 @@ interface Props {
   labelMissingCover?: string
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   labelAdultOnly: 'R18',
   labelMissingCover: 'No Cover',
   layout: 'grid',
 })
+
+const imageFailed = ref(false)
+watch(() => props.cover, () => {
+  imageFailed.value = false
+})
+function handleImageError(): void {
+  imageFailed.value = true
+}
 
 function formatDate(date?: Date | null) {
   if (!date)
@@ -31,33 +43,31 @@ function formatDate(date?: Date | null) {
   <RouterLink
     :to="href"
     :data-layout="layout"
-    :aria-label="`${code} ${title}`"
-    class="movie-card group block min-w-0 cursor-pointer text-left"
+    :aria-label="`${code} ${title}${restricted ? '，需要 R18 访问权限' : ''}`"
+    class="movie-card group block min-w-0 cursor-pointer rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
   >
     <div class="movie-card-poster relative overflow-hidden rounded-[var(--ui-radius-lg)] border border-border bg-muted shadow-sm transition-all duration-300 group-hover:-translate-y-0.5 group-hover:border-primary/55 group-hover:shadow-md">
       <img
-        v-if="cover"
+        v-if="cover && !restricted && !imageFailed"
         :src="cover"
         :alt="title"
         loading="lazy"
-        class="movie-card-image h-full w-full object-cover object-right transition-transform duration-500 group-hover:scale-105"
+        class="movie-card-image h-full w-full object-contain transition-transform duration-500 motion-reduce:transition-none"
+        @error="handleImageError"
       >
 
       <!-- Placeholder / R18 Mask -->
-      <div v-else class="flex h-full w-full flex-col items-center justify-center bg-muted p-4 text-center">
-        <span class="mb-2 text-3xl">{{ isR18 ? '🔞' : '🖼️' }}</span>
-        <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{{ isR18 ? labelAdultOnly : labelMissingCover }}</span>
+      <div v-else class="movie-card-placeholder flex h-full w-full flex-col items-center justify-center bg-muted p-4 text-center">
+        <LockKeyhole v-if="restricted" aria-hidden="true" class="mb-2 h-6 w-6 text-muted-foreground" />
+        <ImageOff v-else aria-hidden="true" class="mb-2 h-6 w-6 text-muted-foreground" />
+        <span class="text-xs font-medium leading-5 text-muted-foreground">{{ restricted ? '需要 R18 访问权限' : imageFailed ? '图片加载失败' : labelMissingCover }}</span>
       </div>
 
-      <div class="movie-card-code absolute right-2 top-2 rounded border border-white/20 bg-black/60 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase text-white backdrop-blur">
-        {{ code }}
+      <div v-if="isR18 && layout !== 'list'" class="ui-status-tag ui-status-danger absolute left-2 top-2 border-white/30 bg-black/55 text-white backdrop-blur">
+        {{ labelAdultOnly }}
       </div>
 
-      <div v-if="isR18 && cover" class="ui-status-tag ui-status-danger absolute left-2 top-2 border-white/30 bg-black/55 text-white backdrop-blur">
-        R18
-      </div>
-
-      <div class="movie-card-overlay absolute inset-x-0 bottom-0 flex translate-y-2 items-center justify-between gap-2 bg-black/72 px-3 py-2 text-xs font-semibold text-white opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+      <div class="movie-card-overlay absolute inset-x-0 bottom-0 flex translate-y-2 items-center justify-between gap-2 bg-black/72 px-3 py-2 text-xs font-semibold text-white opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100">
         <span>查看详情</span>
         <span aria-hidden="true">↗</span>
       </div>
@@ -65,18 +75,16 @@ function formatDate(date?: Date | null) {
 
     <div class="movie-card-body min-w-0">
       <div class="mt-3 flex min-w-0 items-start justify-between gap-2">
-        <h3 class="line-clamp-2 min-w-0 text-sm font-semibold leading-tight transition-colors group-hover:text-primary">
+        <h3 :title="title" class="line-clamp-2 min-h-10 min-w-0 break-words text-sm font-semibold leading-5 transition-colors group-hover:text-primary">
           {{ title }}
         </h3>
-        <span v-if="isR18 && !cover" class="movie-card-r18 shrink-0 text-[10px] font-bold uppercase text-red-300">
-          R18
-        </span>
       </div>
 
       <div class="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
         <span class="font-mono font-semibold uppercase text-primary/85">{{ code }}</span>
+        <span v-if="isR18 && layout === 'list'" class="text-[10px] font-semibold text-muted-foreground">{{ labelAdultOnly }}</span>
         <span v-if="releaseDate" class="inline-flex items-center gap-1">
-          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>
+          <CalendarDays aria-hidden="true" class="h-3 w-3 shrink-0" />
           {{ formatDate(releaseDate) }}
         </span>
       </div>
@@ -90,7 +98,7 @@ function formatDate(date?: Date | null) {
 
 <style scoped>
 .movie-card[data-layout='grid'] .movie-card-poster {
-  aspect-ratio: 2 / 3;
+  aspect-ratio: 4 / 3;
 }
 
 .movie-card[data-layout='list'] {
@@ -111,10 +119,18 @@ function formatDate(date?: Date | null) {
 }
 
 .movie-card[data-layout='list'] .movie-card-poster {
-  aspect-ratio: 2 / 3;
+  aspect-ratio: 4 / 3;
 }
 
 .movie-card[data-layout='list'] .movie-card-overlay {
+  display: none;
+}
+
+.movie-card[data-layout='list'] .movie-card-placeholder {
+  padding: 0.375rem;
+}
+
+.movie-card[data-layout='list'] .movie-card-placeholder svg {
   display: none;
 }
 
@@ -128,13 +144,19 @@ function formatDate(date?: Date | null) {
   margin-top: 0;
 }
 
-.movie-card[data-layout='list'] .movie-card-code {
-  display: none;
-}
-
 @media (max-width: 420px) {
   .movie-card[data-layout='list'] {
     grid-template-columns: 5.5rem minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .movie-card,
+  .movie-card-poster,
+  .movie-card-image,
+  .movie-card-overlay {
+    transition: none;
+    transform: none;
   }
 }
 </style>
