@@ -687,6 +687,22 @@ adminCrawlers.get('/mapping-quality', async (c) => {
             }
           }
         }
+
+        const publisherMapFile = await r2.get('mappings/publisher-name-map.json')
+        if (publisherMapFile) {
+          const payload = await publisherMapFile.json() as { metadata?: any, data?: any }
+          const publisherMap = payload.data || payload
+          for (const mapping of Object.values(publisherMap)) {
+            try {
+              const parsedUrl = new URL(String((mapping as any).wikiUrl))
+              if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:')
+                invalidMappingCount++
+            }
+            catch {
+              invalidMappingCount++
+            }
+          }
+        }
       }
     }
     catch (e) {
