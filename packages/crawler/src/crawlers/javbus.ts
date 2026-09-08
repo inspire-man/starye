@@ -20,7 +20,7 @@ import {
 } from '../constants'
 import { OptimizedCrawler } from '../core/optimized-crawler'
 import { FailedTaskRecorder } from '../lib/anti-detection'
-import { buildJavHkMovieImageUrls } from '../strategies/javhk'
+import { JavDBImageStrategy } from '../strategies/javdb-image'
 
 export interface JavBusCrawlerConfig extends OptimizedCrawlerConfig {
   startUrl?: string
@@ -44,6 +44,7 @@ export class JavBusCrawler extends OptimizedCrawler {
   private currentPage: number
   private currentMirror: string
   private failedTasks: FailedTaskRecorder
+  private javDbImageStrategy = new JavDBImageStrategy()
   private failedTasksFile = './.javbus-failed-tasks.json'
 
   // 收集女优和厂商信息（用于批量同步）
@@ -404,13 +405,20 @@ export class JavBusCrawler extends OptimizedCrawler {
         }
       }, url)
 
-      // JavBus/DMM 源图在当前 Node 网络路径上经常超时；JAV.hk CDN 提供稳定的番号图。
-      // 封面使用 JAV.hk，预览图保留详情页图集，并追加 JAV.hk 单图作为兜底。
+      // JavBus 详情页图集保留为第一来源；JavDB 负责补齐并探测可用封面/预览图。
       if (movieInfo) {
-        const javHkImages = buildJavHkMovieImageUrls(movieInfo.code)
-        if (javHkImages) {
-          movieInfo.coverImage = javHkImages.cover
-          movieInfo.previewImages = mergeMoviePreviewImages(movieInfo.previewImages, javHkImages.preview)
+        try {
+          const javDbImages = await this.javDbImageStrategy.findMovieImages(movieInfo.code)
+          if (javDbImages) {
+            movieInfo.coverImage = javDbImages.cover
+            movieInfo.previewImages = mergeMoviePreviewImages(
+              [...javDbImages.previewImages, ...movieInfo.previewImages],
+              javDbImages.preview,
+            )
+          }
+        }
+        catch (error) {
+          console.warn(`[JavDB] 影片图片补齐失败 (${movieInfo.code}): ${error instanceof Error ? error.message : String(error)}`)
         }
       }
 
