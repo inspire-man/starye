@@ -254,7 +254,8 @@ export async function validateReceiptCandidate(input: {
   if (ids.length === 0)
     return missing()
 
-  const placeholders = ids.map(() => '?').join(', ')
+  // Reuse bindings across both identities to stay within D1's 100-parameter limit.
+  const placeholders = ids.map((_, index) => `?${index + 1}`).join(', ')
   if (input.templateKey === 'movie') {
     const rows = await input.database.$client.prepare(`
       SELECT id, code
@@ -262,7 +263,7 @@ export async function validateReceiptCandidate(input: {
       WHERE id IN (${placeholders}) OR code IN (${placeholders})
       ORDER BY id ASC
       LIMIT 1
-    `).bind(...ids, ...ids).all<MovieReceiptRow>()
+    `).bind(...ids).all<MovieReceiptRow>()
     const row = rows.results?.[0]
     if (!row || !row.id)
       return missing()
@@ -332,7 +333,7 @@ export async function validateReceiptCandidate(input: {
     WHERE id IN (${placeholders}) OR slug IN (${placeholders})
     ORDER BY id ASC
     LIMIT 1
-  `).bind(...ids, ...ids).all<ComicReceiptRow>()
+  `).bind(...ids).all<ComicReceiptRow>()
   const row = rows.results?.[0]
   if (!row || !row.id || !hasComicAggregate(row))
     return missing()
