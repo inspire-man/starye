@@ -195,4 +195,15 @@ describe('comicCrawler chapter flow', () => {
     expect((crawler as any).stats.failedMangas).toBe(1)
     expect((crawler as any).stats.failedChapters).toBe(1)
   })
+
+  it('进度接口拒绝时会让漫画运行失败', async () => {
+    const { crawler, syncToApi } = createCrawler()
+    syncToApi.mockImplementation(async (endpoint: string) => endpoint.includes('/existing-chapters')
+      ? []
+      : endpoint.includes('/progress') ? null : { success: true })
+
+    await expect((crawler as any).processManga('https://source.example.com/book/comic-1', {} as any, {}))
+      .rejects
+      .toThrow('Comic progress rejected for comic-1')
+  })
 })

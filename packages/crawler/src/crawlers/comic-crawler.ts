@@ -531,7 +531,7 @@ export class ComicCrawler extends BaseCrawler {
 
   private async updateProgress(slug: string, status: 'pending' | 'partial' | 'complete', crawledChapters: number, totalChapters: number) {
     try {
-      await this.syncToApi(
+      const result = await this.syncToApi(
         `/api/admin/comics/${slug}/progress`,
         {
           status,
@@ -540,10 +540,14 @@ export class ComicCrawler extends BaseCrawler {
         },
         { method: 'POST' },
       )
+      if (!result || typeof result !== 'object' || !('success' in result) || result.success !== true) {
+        throw new Error(`Comic progress rejected for ${slug}`)
+      }
       console.log(`  📊 进度更新: ${slug} - ${status} (${crawledChapters}/${totalChapters})`)
     }
     catch (e) {
       console.warn(`  ⚠️ 进度更新失败:`, e)
+      throw e
     }
   }
 
