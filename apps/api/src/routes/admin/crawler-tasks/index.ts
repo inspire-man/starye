@@ -1859,6 +1859,11 @@ adminCrawlerTasksRoutes.post('/repair-players/scan', validator('json', v.object(
       break
     }
     if (result.kind === 'existing_active_run') {
+      await dispatchCreatedRun(c, repository, {
+        attempt: result.run.attemptNumber,
+        runId: result.run.id,
+        template: 'movie',
+      })
       busy = true
       break
     }
