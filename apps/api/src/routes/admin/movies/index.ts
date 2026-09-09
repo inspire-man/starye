@@ -11,7 +11,7 @@ import type { MovieFilter } from '../../../schemas/admin'
 import type { AppEnv } from '../../../types'
 import { classifyStorageUrlKind } from '@starye/config/storage-purpose-policy'
 import { movies, players } from '@starye/db/schema'
-import { and, asc, count, desc, eq, gt, gte, isNull, like, lte, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gte, isNull, like, lte, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import { nanoid } from 'nanoid'
@@ -265,12 +265,11 @@ function buildMovieFilters(filter: MovieFilter) {
   }
 
   if (filter.hasPlayers === 'false') {
-    // 无播放源：totalPlayers = 0 或 null
-    conditions.push(eq(movies.totalPlayers, 0))
+    // 以 players 表为准，避免历史汇总字段过期。
+    conditions.push(sql`NOT EXISTS (SELECT 1 FROM ${players} WHERE ${players.movieId} = ${movies.id})`)
   }
   else if (filter.hasPlayers === 'true') {
-    // 有播放源：totalPlayers > 0
-    conditions.push(gt(movies.totalPlayers, 0))
+    conditions.push(sql`EXISTS (SELECT 1 FROM ${players} WHERE ${players.movieId} = ${movies.id})`)
   }
 
   return conditions.length > 0 ? and(...conditions) : undefined
