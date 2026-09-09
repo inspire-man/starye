@@ -10,6 +10,52 @@ export interface RepairDiscoveryOptions {
   readonly observedAt?: number
 }
 
+async function discoverJavBusSources(options: RepairDiscoveryOptions): Promise<RepairSourceCandidate[]> {
+  const startUrl = options.javbusUrl!
+  const window = new Window({ url: startUrl, settings: { disableJavaScriptEvaluation: true, disableJavaScriptFileLoading: true, disableCSSFileLoading: true } })
+  const targetCode = options.movieCode.trim().toUpperCase()
+  try {
+    let html = await options.requestHtml(startUrl)
+    window.document.write(html)
+    const match = [...window.document.querySelectorAll('a.movie-box')].find(item =>
+      [...item.querySelectorAll('date')].some(date => date.textContent?.trim().toUpperCase() === targetCode))
+    if (match) {
+      const detail = new URL(match.getAttribute('href') || '', startUrl)
+      if (detail.origin !== new URL(startUrl).origin)
+        throw new Error('repair_source_origin_mismatch')
+      html = await options.requestHtml(detail.href)
+      window.document.open()
+      window.document.write(html)
+    }
+    const code = [...window.document.querySelectorAll('.info p')]
+      .map(item => item.textContent ?? '')
+      .find(text => /識別碼|识别码/u.test(text))
+      ?.split(/[:：]/u)
+      .slice(1)
+      .join(':')
+      .trim()
+      .toUpperCase()
+    if (code !== targetCode)
+      return []
+    const scripts = [...window.document.querySelectorAll('script')].map(item => item.textContent || '').join('\n')
+    const gid = scripts.match(/var\s+gid\s*=\s*(\d+)/u)?.[1]
+    if (gid) {
+      const ajax = new URL('/ajax/uncledatoolsbyajax.php', startUrl)
+      ajax.search = new URLSearchParams({
+        gid,
+        lang: 'zh',
+        uc: scripts.match(/var\s+uc\s*=\s*(\d+)/u)?.[1] ?? '0',
+        img: scripts.match(/var\s+img\s*=\s*['"]([^'"]*)/u)?.[1] ?? '',
+      }).toString()
+      html = await options.requestHtml(ajax.href)
+    }
+    return candidatesFromMagnets(html, 'JavBus')
+  }
+  finally {
+    window.close()
+  }
+}
+
 function candidatesFromMagnets(html: string, provider: string): RepairSourceCandidate[] {
   const seen = new Set<string>()
   const result: RepairSourceCandidate[] = []
@@ -72,14 +118,13 @@ export async function discoverRepairSources(options: RepairDiscoveryOptions): Pr
     }
   }
   if (options.javbusUrl) {
-    let html = ''
     try {
-      html = await options.requestHtml(options.javbusUrl)
+      const candidates = await discoverJavBusSources(options)
+      sources.push(...candidates.map((source, i) => ({ ...source, sortOrder: sources.length + i })))
     }
     catch {
-      html = ''
+      console.warn('[repair-discovery] JavBus discovery failed')
     }
-    sources.push(...candidatesFromMagnets(html, 'JavBus').map((source, i) => ({ ...source, sortOrder: sources.length + i })))
   }
   console.warn(`[repair-discovery] complete code=${options.movieCode} candidates=${sources.length}`)
   return { observedAt: options.observedAt ?? Math.floor(Date.now() / 1000), sources }
