@@ -37,7 +37,16 @@ export async function discoverRepairSources(options: RepairDiscoveryOptions): Pr
       const window = new Window({ url: options.javdbUrl })
       try {
         window.document.write(html)
-        const search = parseJavDBMovieImageSearch(window.document as unknown as Document, options.javdbUrl, options.movieCode)
+        const parsedSearch = parseJavDBMovieImageSearch(window.document as unknown as Document, options.javdbUrl, options.movieCode)
+        const search = parsedSearch ?? (() => {
+          const target = options.movieCode.replace(/\s+/gu, '').toUpperCase()
+          const item = [...window.document.querySelectorAll('.movie-list .item')].find((candidate) => {
+            const code = candidate.querySelector('.video-title strong')?.textContent?.replace(/\s+/gu, '').toUpperCase()
+            return code === target
+          })
+          const href = (item?.querySelector('a.box') as HTMLAnchorElement | null)?.getAttribute('href')
+          return href ? { detailUrl: new URL(href, options.javdbUrl).toString() } : null
+        })()
         let detailHtml = html
         if (search?.detailUrl) {
           try {
