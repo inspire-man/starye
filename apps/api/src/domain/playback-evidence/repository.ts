@@ -397,7 +397,9 @@ export function createPlaybackEvidenceRepository(
         && 'movieId' in parsed.snapshot
         && 'sourceRevision' in parsed.snapshot
         && parsed.snapshot.movieId === candidate.contentId
-        && parsed.snapshot.sourceRevision === candidate.sourceRevision
+        && (binding.operation === 'repair_players'
+          ? parsed.snapshot.sourceRevision <= candidate.sourceRevision
+          : parsed.snapshot.sourceRevision === candidate.sourceRevision)
     }
     catch {
       snapshotOk = false
