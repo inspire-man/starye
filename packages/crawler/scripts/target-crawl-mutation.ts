@@ -660,17 +660,24 @@ async function runClaimedProductionCrawlerMutation(
                 movieCode: snapshot.movieCode ?? snapshot.movieId,
                 javdbUrl: process.env.PLAYER_REPAIR_JAVDB_URL?.replace('{movieId}', encodeURIComponent(snapshot.movieCode ?? snapshot.movieId)),
                 javbusUrl: process.env.PLAYER_REPAIR_JAVBUS_URL?.replace('{movieId}', encodeURIComponent(snapshot.movieCode ?? snapshot.movieId)),
-                requestHtml: async (url) => {
-                  const response = await fetch(url, {
-                    headers: {
-                      'accept': 'text/html,application/xhtml+xml',
-                      'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
-                    },
-                  })
-                  if (!response.ok)
-                    throw new Error(`repair_source_http_${response.status}`)
-                  return response.text()
-                },
+                requestHtml: (() => {
+                  let cookie = ''
+                  return async (url: string) => {
+                    const response = await fetch(url, {
+                      headers: {
+                        'accept': 'text/html,application/xhtml+xml',
+                        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
+                        ...(cookie ? { cookie } : {}),
+                      },
+                    })
+                    const setCookie = response.headers.get('set-cookie')
+                    if (setCookie)
+                      cookie = setCookie.split(';')[0] ?? cookie
+                    if (!response.ok)
+                      throw new Error(`repair_source_http_${response.status}`)
+                    return response.text()
+                  }
+                })(),
               })
             : {
                 observedAt: Math.floor(Date.now() / 1000),

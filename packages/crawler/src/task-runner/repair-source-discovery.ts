@@ -51,6 +51,9 @@ export async function discoverRepairSources(options: RepairDiscoveryOptions): Pr
         if (search?.detailUrl) {
           try {
             detailHtml = await options.requestHtml(search.detailUrl)
+            const over18 = detailHtml.match(/href=["']([^"']*\/over18\?respond=1[^"']*)["']/iu)?.[1]
+            if (over18)
+              detailHtml = await options.requestHtml(new URL(over18.replaceAll('&amp;', '&'), search.detailUrl).toString())
           }
           catch {
             detailHtml = ''
