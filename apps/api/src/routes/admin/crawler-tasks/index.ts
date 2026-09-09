@@ -11,6 +11,7 @@ import * as v from 'valibot'
 import { validateAvailabilityObservation } from '../../../domain/crawler-tasks/availability-contract'
 import { createProviderAssociationSummary, createProviderDispatchInput, createProviderSnapshot, LOCAL_PROOF_POLICY_REFERENCE, LOCAL_PROOF_POLICY_VERSION } from '../../../domain/crawler-tasks/provider-association'
 import { createCrawlerTaskRepository, decodeCrawlerTaskCursor, encodeCrawlerTaskCursor } from '../../../domain/crawler-tasks/repository'
+import { readRepairScanCandidates } from '../../../domain/crawler-tasks/repair-scan'
 import { getCrawlerTaskTemplate, readCrawlerTaskSnapshot } from '../../../domain/crawler-tasks/template-registry'
 import { createServerReadinessProjection } from '../../../domain/movies/source-contract'
 import { createPlaybackArtifactReference, createPlaybackEvidenceRepository } from '../../../domain/playback-evidence/repository'
@@ -1799,34 +1800,42 @@ adminCrawlerTasksRoutes.post('/repair-players', validator('json', RepairPlayersC
 })
 
 // Scheduler entry point: enqueue repair work for movies whose source state needs attention.
-adminCrawlerTasksRoutes.post('/repair-players/scan', async (c) => {
+adminCrawlerTasksRoutes.post('/repair-players/scan', validator('json', v.object({
+  limit: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100)), 25),
+})), async (c) => {
   const internalSecret = c.req.header('x-crawler-secret')
   const configuredSecret = c.env.CRAWLER_SECRET
   const user = internalSecret && configuredSecret && internalSecret === configuredSecret
     ? ({ id: 'crawler-scheduler', role: 'admin' } as SessionUser)
     : await requireSessionUser(c)
   requireTemplateAccess(user, 'movie')
-  const payload = await c.req.json().catch(() => ({})) as { limit?: unknown }
-  const limit = typeof payload.limit === 'number' && Number.isInteger(payload.limit)
-    ? Math.min(Math.max(payload.limit, 1), 100)
-    : 25
-  const rows = await c.get('db').$client.prepare(`
-    SELECT m.id, m.code, m.title, COALESCE(ss.disposition, 'no_source') AS disposition,
-           COALESCE(ss.source_revision, 0) AS source_revision
-    FROM movies m
-    LEFT JOIN movie_source_state ss ON ss.movie_id = m.id
-    WHERE COALESCE(ss.disposition, 'no_source') IN ('no_source', 'source_failed')
-    ORDER BY m.updated_at ASC
-    LIMIT ?
-  `).bind(limit).all<{ id: string, code: string, title: string, disposition: 'no_source' | 'source_failed', source_revision: number }>()
+  const { limit } = c.req.valid('json')
+  const now = Math.floor(Date.now() / 1000)
+  const rows = await readRepairScanCandidates(c.get('db').$client, now, limit)
   const repository = createCrawlerTaskRepository(c.get('db'))
   const queued: string[] = []
   const existing: string[] = []
-  for (const movie of rows.results ?? []) {
+  const conflicts: string[] = []
+  let busy = false
+  for (const movie of rows) {
+    // Bootstrap only truly empty movies; never infer no_source from a missing projection alone.
+    await c.get('db').$client.prepare(`
+      INSERT INTO movie_source_state
+        (movie_id, source_revision, disposition, eligible_count, repairable, reason_code, observed_at)
+      SELECT id, 0, 'no_source', 0, 1, 'no_eligible_source', ? FROM movie
+      WHERE id = ? AND NOT EXISTS (SELECT 1 FROM player WHERE movie_id = movie.id)
+      ON CONFLICT(movie_id) DO NOTHING
+    `).bind(now, movie.id).run()
+    const current = await readRepairMovieLookup(c, movie.id)
+    if (!current || current.source_disposition !== movie.disposition
+      || current.source_revision !== movie.source_revision) {
+      conflicts.push(movie.id)
+      continue
+    }
     const result = await repository.createOrGetActiveRun({
       operationCommand: {
         actor: { id: user.id, kind: 'admin' },
-        idempotencyKey: `repair:${movie.id}:${movie.source_revision}`,
+        idempotencyKey: `repair-scan:${movie.id}:${movie.source_revision}:${movie.last_attempt_at ?? 0}`,
         intent: { kind: 'repair_players', reason: movie.disposition, sourceRevision: movie.source_revision, targetIntent: 'restore_playable_sources' },
         operation: 'repair_players',
         policyReference: 'movies/repair_players',
@@ -1840,11 +1849,20 @@ adminCrawlerTasksRoutes.post('/repair-players/scan', async (c) => {
       targetIntent: 'restore_playable_sources',
       templateKey: 'movie',
     })
-    if (result.kind === 'created')
+    if (result.kind === 'created') {
       queued.push(movie.id)
-    else existing.push(movie.id)
+      break
+    }
+    if (result.kind === 'existing_active_run') {
+      busy = true
+      break
+    }
+    if (result.kind === 'conflict')
+      conflicts.push(movie.id)
+    else
+      existing.push(movie.id)
   }
-  return c.json({ scanned: rows.results?.length ?? 0, queued, existing })
+  return c.json({ scanned: rows.length, queued, existing, conflicts, busy })
 })
 
 adminCrawlerTasksRoutes.post('/video-availability', validator('json', VideoAvailabilityCommandSchema), async (c) => {
