@@ -178,9 +178,10 @@ export function parseJavDBMovieDetail(document: Document, pageUrl: string): Movi
   const actorLinks = panelLinks(panelForLabel(document, '演員'), pageUrl)
   const genreNames = panelLinks(panelForLabel(document, '類別'), pageUrl).map(actor => actor.name)
 
-  const players = [...document.querySelectorAll('#magnets-content .item')]
-    .map((element, index) => {
-      const magnet = (element.querySelector('a[href^="magnet:"]') as HTMLAnchorElement | null)?.getAttribute('href') || ''
+  const players = [...document.querySelectorAll('#magnets-content a[href^="magnet:"]')]
+    .map((anchor, index) => {
+      const element = anchor.closest('.item') || anchor.parentElement || anchor
+      const magnet = anchor.getAttribute('href') || ''
       const name = element.querySelector('.name')?.textContent?.replace(/\s+/gu, ' ').trim() || '磁力链接'
       const quality = element.querySelector('.meta')?.textContent?.replace(/\s+/gu, ' ').trim() || undefined
       return magnet
