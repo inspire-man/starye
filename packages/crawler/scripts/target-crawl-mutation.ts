@@ -661,32 +661,14 @@ async function runClaimedProductionCrawlerMutation(
                 javdbUrl: process.env.PLAYER_REPAIR_JAVDB_URL?.replace('{movieId}', encodeURIComponent(snapshot.movieCode ?? snapshot.movieId)),
                 javbusUrl: process.env.PLAYER_REPAIR_JAVBUS_URL?.replace('{movieId}', encodeURIComponent(snapshot.movieCode ?? snapshot.movieId)),
                 requestHtml: (() => {
-                  let cookie = ''
+                  let manager: BrowserManager | null = null
+                  let page: Page | null = null
                   return async (url: string) => {
-                    let lastError: unknown
-                    for (let attempt = 0; attempt < 3; attempt++) {
-                      try {
-                        const response = await fetch(url, {
-                          headers: {
-                            'accept': 'text/html,application/xhtml+xml',
-                            'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
-                            ...(cookie ? { cookie } : {}),
-                          },
-                        })
-                        const setCookie = response.headers.get('set-cookie')
-                        if (setCookie)
-                          cookie = setCookie.split(';')[0] ?? cookie
-                        if (!response.ok)
-                          throw new Error(`repair_source_http_${response.status}`)
-                        return response.text()
-                      }
-                      catch (error) {
-                        lastError = error
-                        if (attempt < 2)
-                          await new Promise(resolve => setTimeout(resolve, 1_000 * (attempt + 1)))
-                      }
-                    }
-                    throw lastError
+                    manager ??= new BrowserManager()
+                    await manager.launch()
+                    page ??= await manager.createPage()
+                    await page.goto(url, { waitUntil: 'networkidle2', timeout: 90_000 })
+                    return page.content()
                   }
                 })(),
               })
