@@ -21,6 +21,11 @@ export interface RepairPlayersAdapterOptions {
   readonly sources?: readonly RepairSourceCandidate[]
 }
 
+export function parseConfiguredRepairSources(value: string | undefined, movieId: string): RepairSourceCandidate[] {
+  const seen = new Set<string>()
+  return (value ?? '').split(',').map(item => item.trim()).filter(url => /^https?:\/\//i.test(url)).map(url => url.replace('{movieId}', encodeURIComponent(movieId))).filter(url => !seen.has(url) && seen.add(url)).map((sourceUrl, index) => ({ sourceName: `configured-${index + 1}`, sourceType: 'direct' as const, sourceUrl, sortOrder: index }))
+}
+
 type RepairSourceClient = Pick<RunnerClient, 'observeRepairSource'>
 
 function failureCode(response: RepairSourceObservationResponse): RunnerFailureCode {

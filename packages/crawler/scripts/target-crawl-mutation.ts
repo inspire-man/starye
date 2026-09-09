@@ -29,7 +29,7 @@ import { createActionsEventClientFromEnvironment } from '../src/task-runner/acti
 import { createChapterAvailabilityAdapter } from '../src/task-runner/chapter-availability-adapter'
 import { createMangaAdapter } from '../src/task-runner/manga-adapter'
 import { createMovieAdapter } from '../src/task-runner/movie-adapter'
-import { createRepairPlayersAdapter } from '../src/task-runner/repair-adapter'
+import { createRepairPlayersAdapter, parseConfiguredRepairSources } from '../src/task-runner/repair-adapter'
 import { createRunnerClientFromEnvironment } from '../src/task-runner/runner-client'
 import { createTemplateAdapterRegistry } from '../src/task-runner/template-adapters'
 import { createServerVideoAvailabilityAdapters } from '../src/task-runner/video-runner-wiring'
@@ -655,16 +655,7 @@ async function runClaimedProductionCrawlerMutation(
     : {
         discoverSources: async ({ snapshot }) => ({
           observedAt: Math.floor(Date.now() / 1000),
-          sources: (process.env.PLAYER_REPAIR_SOURCES ?? '')
-            .split(',')
-            .map(sourceUrl => sourceUrl.trim())
-            .filter(sourceUrl => /^https?:\/\//i.test(sourceUrl))
-            .map((sourceUrl, index) => ({
-              sourceName: `configured-${index + 1}`,
-              sourceType: 'direct' as const,
-              sourceUrl: sourceUrl.replace('{movieId}', encodeURIComponent(snapshot.movieId)),
-              sortOrder: index,
-            })),
+          sources: parseConfiguredRepairSources(process.env.PLAYER_REPAIR_SOURCES, snapshot.movieId),
         }),
       })
   const adapters = createTemplateAdapterRegistry([
