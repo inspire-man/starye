@@ -479,6 +479,10 @@ function isLocalProofDispatchBinding(binding: DispatchSnapshotBinding): boolean 
     return binding.policyReference === LOCAL_PROOF_POLICY_REFERENCE
       && binding.policyVersion === LOCAL_PROOF_POLICY_VERSION
   }
+  if (binding.operation === 'repair_players') {
+    return binding.policyReference === 'movies/repair_players'
+      && binding.policyVersion === 'v1'
+  }
   return (binding.operation === 'check_video_source'
     || binding.operation === 'recheck_video_source'
     || binding.operation === 'repair_video_source')
