@@ -652,7 +652,21 @@ async function runClaimedProductionCrawlerMutation(
   const config = createCrawlerConfig(context, environment)
   const repairAdapter = createRepairPlayersAdapter(dependencies.discoverRepairSources
     ? { discoverSources: dependencies.discoverRepairSources }
-    : {})
+    : {
+        discoverSources: async ({ snapshot }) => ({
+          observedAt: Math.floor(Date.now() / 1000),
+          sources: (process.env.PLAYER_REPAIR_SOURCES ?? '')
+            .split(',')
+            .map(sourceUrl => sourceUrl.trim())
+            .filter(sourceUrl => /^https?:\/\//i.test(sourceUrl))
+            .map((sourceUrl, index) => ({
+              sourceName: `configured-${index + 1}`,
+              sourceType: 'direct' as const,
+              sourceUrl: sourceUrl.replace('{movieId}', encodeURIComponent(snapshot.movieId)),
+              sortOrder: index,
+            })),
+        }),
+      })
   const adapters = createTemplateAdapterRegistry([
     createMovieAdapter({ ...GITHUB_ACTIONS_CONFIG, ...config } as JavBusCrawlerConfig, dependencies.executeMovie),
     createMangaAdapter(config, dependencies.executeManga),
