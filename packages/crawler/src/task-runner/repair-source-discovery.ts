@@ -1,6 +1,6 @@
 import type { RepairSourceCandidate, RepairSourceObservationInput } from './runner-client'
 import { Window } from 'happy-dom'
-import { parseJavDBMovieDetail } from '../strategies/javdb-parser'
+import { parseJavDBMovieDetail, parseJavDBMovieImageSearch } from '../strategies/javdb-parser'
 
 export interface RepairDiscoveryOptions {
   readonly movieCode: string
@@ -31,7 +31,13 @@ export async function discoverRepairSources(options: RepairDiscoveryOptions): Pr
       const window = new Window({ url: options.javdbUrl })
       try {
         window.document.write(html)
-        const movie = parseJavDBMovieDetail(window.document as unknown as Document, options.javdbUrl)
+        const search = parseJavDBMovieImageSearch(window.document as unknown as Document, options.javdbUrl, options.movieCode)
+        const detailHtml = search?.detailUrl ? await options.requestHtml(search.detailUrl) : html
+        if (detailHtml !== html) {
+          window.document.open()
+          window.document.write(detailHtml)
+        }
+        const movie = parseJavDBMovieDetail(window.document as unknown as Document, search?.detailUrl ?? options.javdbUrl)
         for (const [index, player] of (movie?.players ?? []).entries())
           sources.push({ sourceName: player.sourceName || `JavDB magnet ${index + 1}`, sourceType: 'magnet', sourceUrl: player.sourceUrl, sortOrder: sources.length })
       }
