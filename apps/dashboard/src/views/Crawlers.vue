@@ -1261,6 +1261,7 @@ async function executeClearFailed() {
             <template #cell-status="{ item }">
               <span v-if="latestRunFor(item)" class="ui-status-tag" :class="`ui-status-${latestRunFor(item)!.status}`">{{ taskStatusLabels[latestRunFor(item)!.status] }}</span>
               <span v-else class="ui-status-tag ui-status-neutral">尚未上报</span>
+              <span v-if="item.operation === 'repair_players' && latestRunFor(item)" class="repair-status-inline"> · {{ repairFactLabel(latestRunFor(item)!) }}</span>
             </template>
             <template #cell-updatedAt="{ item }">
               {{ taskUpdatedAt(item) }}
