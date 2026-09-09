@@ -1851,6 +1851,11 @@ adminCrawlerTasksRoutes.post('/repair-players/scan', validator('json', v.object(
     })
     if (result.kind === 'created') {
       queued.push(movie.id)
+      await dispatchCreatedRun(c, repository, {
+        attempt: result.run.attemptNumber,
+        runId: result.run.id,
+        template: 'movie',
+      })
       break
     }
     if (result.kind === 'existing_active_run') {
