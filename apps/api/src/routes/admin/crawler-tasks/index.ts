@@ -1800,7 +1800,11 @@ adminCrawlerTasksRoutes.post('/repair-players', validator('json', RepairPlayersC
 
 // Scheduler entry point: enqueue repair work for movies whose source state needs attention.
 adminCrawlerTasksRoutes.post('/repair-players/scan', async (c) => {
-  const user = await requireSessionUser(c)
+  const internalSecret = c.req.header('x-crawler-secret')
+  const configuredSecret = c.env.CRAWLER_SECRET
+  const user = internalSecret && configuredSecret && internalSecret === configuredSecret
+    ? ({ id: 'crawler-scheduler', role: 'admin' } as SessionUser)
+    : await requireSessionUser(c)
   requireTemplateAccess(user, 'movie')
   const payload = await c.req.json().catch(() => ({})) as { limit?: unknown }
   const limit = typeof payload.limit === 'number' && Number.isInteger(payload.limit)

@@ -1,0 +1,22 @@
+name: Scheduled Player Repair Scan
+
+on:
+  schedule:
+    - cron: '30 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Queue missing and failed player repairs
+        env:
+          API_BASE_URL: ${{ secrets.ACTIONS_CALLBACK_API_BASE_URL }}
+          CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 3 --retry-delay 5 \
+            -X POST "$API_BASE_URL/api/admin/crawler-tasks/repair-players/scan" \
+            -H "x-crawler-secret: $CRAWLER_SECRET" \
+            -H 'content-type: application/json' \
+            -d '{"limit":25}'
