@@ -171,7 +171,7 @@ function aiReviewGateDetail(): string {
         :refresh-evidence-message="props.refreshEvidenceMessage"
       />
       <p class="quant-decision-freshness" aria-label="数据时效">
-        数据时效：{{ freshnessLabel(dataFreshness) }}
+        数据时效：{{ freshnessLabel(dataFreshness) }} · 最新观测已记录
       </p>
 
       <QuantDecisionGuide :decision-guide="decisionGuide" />
