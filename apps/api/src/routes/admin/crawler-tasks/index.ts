@@ -1806,7 +1806,7 @@ adminCrawlerTasksRoutes.post('/repair-players/scan', validator('json', v.object(
   const internalSecret = c.req.header('x-crawler-secret')
   const configuredSecret = c.env.CRAWLER_SECRET
   const user = internalSecret && configuredSecret && internalSecret === configuredSecret
-    ? ({ id: 'crawler-scheduler', role: 'admin' } as SessionUser)
+    ? ({ id: 'github-actions-schedule', role: 'admin' } as SessionUser)
     : await requireSessionUser(c)
   requireTemplateAccess(user, 'movie')
   const { limit } = c.req.valid('json')
