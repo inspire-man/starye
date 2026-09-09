@@ -129,6 +129,7 @@ interface OrdinaryRunnerSnapshot {
 
 export interface RepairRunnerSnapshot extends Omit<OrdinaryRunnerSnapshot, 'operation' | 'templateKey'> {
   readonly movieId: string
+  readonly movieCode?: string
   readonly operation: 'repair_players'
   readonly reason: 'no_source' | 'source_failed'
   readonly sourceRevision: number
@@ -397,6 +398,7 @@ function parseRunnerSnapshot(value: unknown): RunnerSnapshot {
     return {
       entrypoint: 'movie-crawler',
       movieId: value.movieId.trim(),
+      ...(typeof value.movieCode === 'string' && value.movieCode.trim() ? { movieCode: value.movieCode.trim() } : {}),
       operation: 'repair_players',
       permissionResource: 'movie',
       reason: value.reason,

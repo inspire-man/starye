@@ -43,6 +43,7 @@ const MAX_SELECTIONS = 200
 
 export interface RepairPlayersSnapshotInput {
   readonly movieId: string
+  readonly movieCode?: string
   readonly operation: 'repair_players'
   readonly reason: RepairPlayersReason
   readonly sourceRevision: number
@@ -176,6 +177,7 @@ function repairPlayersSnapshot(input: RepairPlayersSnapshotInput): RepairPlayers
   return Object.freeze({
     ...template,
     movieId: input.movieId.trim(),
+    ...(input.movieCode ? { movieCode: input.movieCode.trim() } : {}),
     operation: 'repair_players',
     reason: input.reason,
     sourceRevision: input.sourceRevision,
@@ -294,6 +296,8 @@ export function createCrawlerTaskSnapshot(input: CrawlerTaskTemplateKey | Repair
     throw new Error('repair snapshot requires repair_players operation')
   if (!validIdentifier(input.movieId))
     throw new Error('repair snapshot requires one movie id')
+  if (input.movieCode !== undefined && !validIdentifier(input.movieCode))
+    throw new Error('repair snapshot movie code is invalid')
   if (input.reason !== 'no_source' && input.reason !== 'source_failed')
     throw new Error('repair snapshot reason is invalid')
   if (input.targetIntent !== 'restore_playable_sources')
@@ -331,7 +335,7 @@ export function readCrawlerTaskSnapshot(value: unknown, expectedOperation?: Craw
   if (operation === 'repair_players') {
     if (value.templateKey !== 'movie' || !validIdentifier(value.movieId) || (value.reason !== 'no_source' && value.reason !== 'source_failed') || value.targetIntent !== 'restore_playable_sources' || !validSourceRevision(value.sourceRevision))
       return { ok: false, reason: 'invalid_snapshot' }
-    return { ok: true, operation, snapshot: repairPlayersSnapshot({ movieId: value.movieId, operation, reason: value.reason, sourceRevision: value.sourceRevision, targetIntent: 'restore_playable_sources' }), template }
+    return { ok: true, operation, snapshot: repairPlayersSnapshot({ movieId: value.movieId, ...(typeof value.movieCode === 'string' ? { movieCode: value.movieCode } : {}), operation, reason: value.reason, sourceRevision: value.sourceRevision, targetIntent: 'restore_playable_sources' }), template }
   }
 
   if (isVideoSourceOperation(operation)) {

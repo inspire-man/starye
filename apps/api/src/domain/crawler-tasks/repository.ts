@@ -92,6 +92,7 @@ export interface CrawlerTaskRun {
 export interface CreateCrawlerTaskRunInput {
   readonly idempotencyKey?: string
   readonly movieId?: string
+  readonly movieCode?: string
   readonly operation?: CrawlerTaskOperation
   readonly operationCommand?: CrawlerOperationCommandInput
   readonly reason?: RepairPlayersReason
@@ -1737,6 +1738,7 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
       }
       snapshot = createCrawlerTaskSnapshot({
         movieId: input.movieId,
+        ...(input.movieCode ? { movieCode: input.movieCode } : {}),
         operation: 'repair_players',
         reason: currentState.reason,
         sourceRevision: currentState.sourceRevision,

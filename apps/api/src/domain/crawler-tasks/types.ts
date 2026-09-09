@@ -158,6 +158,7 @@ export interface CrawlerTaskSnapshot {
 
 export interface RepairPlayersTaskSnapshot extends CrawlerTaskSnapshot {
   readonly movieId: string
+  readonly movieCode?: string
   readonly operation: 'repair_players'
   readonly reason: RepairPlayersReason
   readonly sourceRevision: number

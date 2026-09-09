@@ -1843,6 +1843,7 @@ adminCrawlerTasksRoutes.post('/repair-players/scan', validator('json', v.object(
         target: { id: movie.id, kind: 'movie' },
       },
       movieId: movie.id,
+      movieCode: movie.code,
       operation: 'repair_players',
       reason: movie.disposition,
       requestedByUserId: user.id,
