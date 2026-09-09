@@ -286,9 +286,10 @@ describe('runnerClient', () => {
     expect(JSON.stringify(observationBody)).toContain('https://source.example/raw.m3u8')
     expect(JSON.stringify(terminalBody)).not.toContain('https://source.example/raw.m3u8')
     expect(JSON.stringify(terminalBody)).not.toContain('secret')
-    expect(Object.keys(terminalBody).sort()).toEqual(['attempt', 'event_id', 'key_id', 'nonce', 'receipt', 'run_id', 'sequence', 'source_revision', 'timestamp', 'type'])
+    expect(Object.keys(terminalBody).sort()).toEqual(['attempt', 'event_id', 'key_id', 'nonce', 'operation', 'receipt', 'run_id', 'sequence', 'source_revision', 'timestamp', 'type'])
     expect(terminalBody).toMatchObject({
       attempt: 1,
+      operation: 'repair_players',
       receipt: { movieId: 'movie-1', operation: 'repair_players', sourceRevision: 8 },
       run_id: 'run-repair-1',
       sequence: 4,

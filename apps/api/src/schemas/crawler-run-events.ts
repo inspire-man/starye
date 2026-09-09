@@ -184,6 +184,8 @@ export const CrawlerRunClaimResponseSchema = v.strictObject({
 
 export const CrawlerRunLifecycleEventSchema = v.strictObject({
   attempt: Attempt,
+  operation: v.optional(v.literal('repair_players')),
+  source_revision: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000))),
   code: v.optional(v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(100))),
   counts: v.optional(v.record(v.string(), v.pipe(v.number(), v.integer(), v.minValue(0)))),
   event_id: Identifier,
