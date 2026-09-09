@@ -48,8 +48,9 @@ function matchesMovieCode(candidateCode: string, targetCode: string): boolean {
   if (candidateCode === targetCode)
     return true
 
-  // JavDB omits the 300 prefix for some 300MIUM catalogue entries.
-  return targetCode.startsWith('300') && targetCode.slice(3) === candidateCode
+  // JavDB omits catalogue prefixes for some legacy 300/390 entries.
+  return (targetCode.startsWith('300') || targetCode.startsWith('390'))
+    && targetCode.slice(3) === candidateCode
 }
 
 function panelForLabel(document: Document, label: string): Element | undefined {
