@@ -52,9 +52,6 @@ export async function discoverRepairSources(options: RepairDiscoveryOptions): Pr
         if (search?.detailUrl) {
           try {
             detailHtml = await options.requestHtml(search.detailUrl)
-            const over18 = detailHtml.match(/href=["']([^"']*\/over18\?respond=1[^"']*)["']/iu)?.[1]
-            if (over18)
-              detailHtml = await options.requestHtml(new URL(over18.replaceAll('&amp;', '&'), search.detailUrl).toString())
           }
           catch {
             detailHtml = ''
@@ -65,8 +62,12 @@ export async function discoverRepairSources(options: RepairDiscoveryOptions): Pr
           window.document.write(detailHtml)
         }
         const movie = parseJavDBMovieDetail(window.document as unknown as Document, search?.detailUrl ?? options.javdbUrl)
-        for (const [index, player] of (movie?.players ?? []).entries())
+        const matchesTarget = movie?.code.replace(/\s+/gu, '').toUpperCase() === options.movieCode.replace(/\s+/gu, '').toUpperCase()
+        for (const [index, player] of (matchesTarget ? movie?.players ?? [] : []).entries())
           sources.push({ sourceName: player.sourceName || `JavDB magnet ${index + 1}`, sourceType: 'magnet', sourceUrl: player.sourceUrl, sortOrder: sources.length })
+      }
+      catch {
+        console.info('[repair-discovery] JavDB parsing failed')
       }
       finally { window.close() }
     }
