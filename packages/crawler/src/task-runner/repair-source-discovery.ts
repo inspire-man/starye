@@ -1,5 +1,5 @@
+import type { RepairSourceCandidate, RepairSourceObservationInput } from './runner-client'
 import { Window } from 'happy-dom'
-import type { RepairSourceObservationInput, RepairSourceCandidate } from './runner-client'
 import { parseJavDBMovieDetail } from '../strategies/javdb-parser'
 
 export interface RepairDiscoveryOptions {
@@ -15,7 +15,8 @@ function candidatesFromMagnets(html: string, provider: string): RepairSourceCand
   const result: RepairSourceCandidate[] = []
   for (const match of html.matchAll(/href=["'](magnet:\?[^"']+)["']/giu)) {
     const url = match[1].replaceAll('&amp;', '&')
-    if (seen.has(url)) continue
+    if (seen.has(url))
+      continue
     seen.add(url)
     result.push({ sourceName: `${provider} magnet ${result.length + 1}`, sourceType: 'magnet', sourceUrl: url, sortOrder: result.length })
   }
