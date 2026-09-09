@@ -1,0 +1,27 @@
+name: Import Movie By Code
+
+on:
+  workflow_dispatch:
+    inputs:
+      movie_code:
+        description: Movie code to import from JavDB
+        required: true
+        type: string
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    environment: starye-org
+    env:
+      MOVIE_CODE: ${{ inputs.movie_code }}
+      ACTIONS_CALLBACK_API_BASE_URL: https://api.starye.org
+      CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6.0.10
+        with: { version: 10.33.0 }
+      - uses: actions/setup-node@v6.3.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @starye/crawler exec puppeteer browsers install chrome
+      - run: pnpm --filter @starye/crawler exec tsx scripts/import-movie-by-code.ts
