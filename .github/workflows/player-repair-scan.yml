@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Queue missing and failed player repairs
         env:
-          API_BASE_URL: ${{ secrets.ACTIONS_CALLBACK_API_BASE_URL }}
+          API_BASE_URL: ${{ vars.PLAYER_REPAIR_API_BASE_URL || 'https://api.starye.org' }}
           CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
         run: |
           set -euo pipefail
