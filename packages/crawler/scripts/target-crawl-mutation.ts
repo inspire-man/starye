@@ -663,19 +663,30 @@ async function runClaimedProductionCrawlerMutation(
                 requestHtml: (() => {
                   let cookie = ''
                   return async (url: string) => {
-                    const response = await fetch(url, {
-                      headers: {
-                        'accept': 'text/html,application/xhtml+xml',
-                        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
-                        ...(cookie ? { cookie } : {}),
-                      },
-                    })
-                    const setCookie = response.headers.get('set-cookie')
-                    if (setCookie)
-                      cookie = setCookie.split(';')[0] ?? cookie
-                    if (!response.ok)
-                      throw new Error(`repair_source_http_${response.status}`)
-                    return response.text()
+                    let lastError: unknown
+                    for (let attempt = 0; attempt < 3; attempt++) {
+                      try {
+                        const response = await fetch(url, {
+                          headers: {
+                            'accept': 'text/html,application/xhtml+xml',
+                            'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
+                            ...(cookie ? { cookie } : {}),
+                          },
+                        })
+                        const setCookie = response.headers.get('set-cookie')
+                        if (setCookie)
+                          cookie = setCookie.split(';')[0] ?? cookie
+                        if (!response.ok)
+                          throw new Error(`repair_source_http_${response.status}`)
+                        return response.text()
+                      }
+                      catch (error) {
+                        lastError = error
+                        if (attempt < 2)
+                          await new Promise(resolve => setTimeout(resolve, 1_000 * (attempt + 1)))
+                      }
+                    }
+                    throw lastError
                   }
                 })(),
               })
