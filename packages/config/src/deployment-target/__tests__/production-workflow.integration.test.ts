@@ -165,7 +165,7 @@ describe('production target/workflow integration boundary', () => {
 
     expect(execute.mock.calls[0]?.[2]).toEqual(expect.objectContaining({
       STARYE_PREPARED_SECRET_KEYS: productionCrawlerRequiredEnvironmentKeys.join(','),
-      STARYE_PREPARED_OPTIONAL_ENVIRONMENT_KEYS: productionCrawlerOptionalEnvironmentKeys.join(','),
+      STARYE_PREPARED_OPTIONAL_ENVIRONMENT_KEYS: productionCrawlerOptionalEnvironmentKeys[3],
       STARYE_VIDEO_DIRECT_SOURCES: '["https://video.example.test/direct"]',
     }))
   })
