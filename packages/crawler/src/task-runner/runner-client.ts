@@ -912,6 +912,7 @@ export class RunnerClient {
       run_id: candidate.runId,
       sequence,
       type,
+      ...(isRepairRunnerSnapshot(candidate.snapshot) ? { operation: 'repair_players' } : {}),
       ...this.repairSourceRevision(candidate),
     }) as Promise<EventResult>
   }
