@@ -1798,6 +1798,51 @@ adminCrawlerTasksRoutes.post('/repair-players', validator('json', RepairPlayersC
   })
 })
 
+// Scheduler entry point: enqueue repair work for movies whose source state needs attention.
+adminCrawlerTasksRoutes.post('/repair-players/scan', async (c) => {
+  const user = await requireSessionUser(c)
+  requireTemplateAccess(user, 'movie')
+  const payload = await c.req.json().catch(() => ({})) as { limit?: unknown }
+  const limit = typeof payload.limit === 'number' && Number.isInteger(payload.limit)
+    ? Math.min(Math.max(payload.limit, 1), 100)
+    : 25
+  const rows = await c.get('db').$client.prepare(`
+    SELECT m.id, m.code, m.title, COALESCE(ss.disposition, 'no_source') AS disposition,
+           COALESCE(ss.source_revision, 0) AS source_revision
+    FROM movies m
+    LEFT JOIN movie_source_state ss ON ss.movie_id = m.id
+    WHERE COALESCE(ss.disposition, 'no_source') IN ('no_source', 'source_failed')
+    ORDER BY m.updated_at ASC
+    LIMIT ?
+  `).bind(limit).all<{ id: string, code: string, title: string, disposition: 'no_source' | 'source_failed', source_revision: number }>()
+  const repository = createCrawlerTaskRepository(c.get('db'))
+  const queued: string[] = []
+  const existing: string[] = []
+  for (const movie of rows.results ?? []) {
+    const result = await repository.createOrGetActiveRun({
+      operationCommand: {
+        actor: { id: user.id, kind: 'admin' },
+        idempotencyKey: `repair:${movie.id}:${movie.source_revision}`,
+        intent: { kind: 'repair_players', reason: movie.disposition, sourceRevision: movie.source_revision, targetIntent: 'restore_playable_sources' },
+        operation: 'repair_players',
+        policyReference: 'movies/repair_players',
+        policyVersion: 'v1',
+        target: { id: movie.id, kind: 'movie' },
+      },
+      movieId: movie.id,
+      operation: 'repair_players',
+      reason: movie.disposition,
+      requestedByUserId: user.id,
+      targetIntent: 'restore_playable_sources',
+      templateKey: 'movie',
+    })
+    if (result.kind === 'created')
+      queued.push(movie.id)
+    else existing.push(movie.id)
+  }
+  return c.json({ scanned: rows.results?.length ?? 0, queued, existing })
+})
+
 adminCrawlerTasksRoutes.post('/video-availability', validator('json', VideoAvailabilityCommandSchema), async (c) => {
   const user = await requireSessionUser(c)
   requireTemplateAccess(user, 'movie')
