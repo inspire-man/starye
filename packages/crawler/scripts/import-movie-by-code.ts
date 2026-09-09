@@ -1,3 +1,4 @@
+import process from 'node:process'
 import { Window } from 'happy-dom'
 import { parseJavDBMovieDetail, parseJavDBMovieImageSearch } from '../src/strategies/javdb-parser'
 import { BrowserManager } from '../src/utils/browser'
