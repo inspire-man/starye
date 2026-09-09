@@ -26,13 +26,19 @@ function candidatesFromMagnets(html: string, provider: string): RepairSourceCand
 export async function discoverRepairSources(options: RepairDiscoveryOptions): Promise<RepairSourceObservationInput> {
   const sources: RepairSourceCandidate[] = []
   if (options.javdbUrl) {
-    const html = await options.requestHtml(options.javdbUrl)
+    let html = ''
+    try { html = await options.requestHtml(options.javdbUrl) }
+    catch { html = '' }
     if (html) {
       const window = new Window({ url: options.javdbUrl })
       try {
         window.document.write(html)
         const search = parseJavDBMovieImageSearch(window.document as unknown as Document, options.javdbUrl, options.movieCode)
-        const detailHtml = search?.detailUrl ? await options.requestHtml(search.detailUrl) : html
+        let detailHtml = html
+        if (search?.detailUrl) {
+          try { detailHtml = await options.requestHtml(search.detailUrl) }
+          catch { detailHtml = '' }
+        }
         if (detailHtml !== html) {
           window.document.open()
           window.document.write(detailHtml)
@@ -44,7 +50,11 @@ export async function discoverRepairSources(options: RepairDiscoveryOptions): Pr
       finally { window.close() }
     }
   }
-  if (options.javbusUrl)
-    sources.push(...candidatesFromMagnets(await options.requestHtml(options.javbusUrl), 'JavBus').map((source, i) => ({ ...source, sortOrder: sources.length + i })))
+  if (options.javbusUrl) {
+    let html = ''
+    try { html = await options.requestHtml(options.javbusUrl) }
+    catch { html = '' }
+    sources.push(...candidatesFromMagnets(html, 'JavBus').map((source, i) => ({ ...source, sortOrder: sources.length + i })))
+  }
   return { observedAt: options.observedAt ?? Math.floor(Date.now() / 1000), sources }
 }
