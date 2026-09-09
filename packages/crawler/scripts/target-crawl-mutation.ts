@@ -30,6 +30,7 @@ import { createChapterAvailabilityAdapter } from '../src/task-runner/chapter-ava
 import { createMangaAdapter } from '../src/task-runner/manga-adapter'
 import { createMovieAdapter } from '../src/task-runner/movie-adapter'
 import { createRepairPlayersAdapter, parseConfiguredRepairSources } from '../src/task-runner/repair-adapter'
+import { discoverRepairSources } from '../src/task-runner/repair-source-discovery'
 import { createRunnerClientFromEnvironment } from '../src/task-runner/runner-client'
 import { createTemplateAdapterRegistry } from '../src/task-runner/template-adapters'
 import { createServerVideoAvailabilityAdapters } from '../src/task-runner/video-runner-wiring'
@@ -654,8 +655,17 @@ async function runClaimedProductionCrawlerMutation(
     ? { discoverSources: dependencies.discoverRepairSources }
     : {
         discoverSources: async ({ snapshot }) => ({
-          observedAt: Math.floor(Date.now() / 1000),
-          sources: parseConfiguredRepairSources(process.env.PLAYER_REPAIR_SOURCES, snapshot.movieId),
+          ...(process.env.PLAYER_REPAIR_JAVDB_URL || process.env.PLAYER_REPAIR_JAVBUS_URL
+            ? await discoverRepairSources({
+                movieCode: snapshot.movieId,
+                javdbUrl: process.env.PLAYER_REPAIR_JAVDB_URL?.replace('{movieId}', encodeURIComponent(snapshot.movieId)),
+                javbusUrl: process.env.PLAYER_REPAIR_JAVBUS_URL?.replace('{movieId}', encodeURIComponent(snapshot.movieId)),
+                requestHtml: async url => await (await fetch(url)).text(),
+              })
+            : {
+                observedAt: Math.floor(Date.now() / 1000),
+                sources: parseConfiguredRepairSources(process.env.PLAYER_REPAIR_SOURCES, snapshot.movieId),
+              }),
         }),
       })
   const adapters = createTemplateAdapterRegistry([
