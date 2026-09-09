@@ -63,6 +63,9 @@ export const productionCrawlerRequiredEnvironmentKeys = [
 ] as const
 
 export const productionCrawlerOptionalEnvironmentKeys = [
+  'PLAYER_REPAIR_SOURCES',
+  'PLAYER_REPAIR_JAVDB_URL',
+  'PLAYER_REPAIR_JAVBUS_URL',
   'STARYE_VIDEO_DIRECT_SOURCES',
   'STARYE_VIDEO_MAGNET_PROVIDER_RPC_URL',
   'STARYE_VIDEO_MAGNET_PROVIDER_SECRET',
