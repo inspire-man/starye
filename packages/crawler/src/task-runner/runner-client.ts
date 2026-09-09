@@ -641,7 +641,8 @@ function parseRunnerCandidate(value: unknown): RunnerCandidate {
     && (!taskId || !target || sourceRevision === undefined || expectedProjectionVersion === undefined
       || !policyReference || !policyVersion
       || (isVideoRunnerSnapshot(snapshot) && (!contentId || proofProfile !== undefined))
-      || (!isVideoRunnerSnapshot(snapshot) && proofProfile !== 'phase25-movie-availability-v1' && !isComicChapterRunnerSnapshot(snapshot) && !isChapterPageRunnerSnapshot(snapshot)))) {
+      || (isRepairRunnerSnapshot(snapshot) && proofProfile !== undefined)
+      || (!isVideoRunnerSnapshot(snapshot) && !isRepairRunnerSnapshot(snapshot) && proofProfile !== 'phase25-movie-availability-v1' && !isComicChapterRunnerSnapshot(snapshot) && !isChapterPageRunnerSnapshot(snapshot)))) {
     throw new Error('Local proof runner candidate binding is incomplete')
   }
 

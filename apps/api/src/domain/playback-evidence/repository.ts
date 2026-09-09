@@ -406,7 +406,7 @@ export function createPlaybackEvidenceRepository(
       || !snapshotOk || binding.run_status !== 'succeeded') {
       return reject({ ...input, outcome: 'ignored', reason: 'terminal_repair_readback_invalid' })
     }
-    if (binding.receipt_primary_content_id !== candidate.contentId
+    if ((binding.operation !== 'repair_players' && binding.receipt_primary_content_id !== candidate.contentId)
       || binding.receipt_source_revision !== candidate.sourceRevision
       || (binding.operation === 'repair_players'
         ? !hasTerminalRepairReadback(binding, candidate.contentId, candidate.sourceRevision)
