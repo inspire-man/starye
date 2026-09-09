@@ -13,6 +13,8 @@ export * from './types/config'
 export { ApiClient } from './utils/api-client'
 export { BrowserManager } from './utils/browser'
 export { ProgressMonitor } from './utils/progress'
+export { discoverRepairSources } from './task-runner/repair-source-discovery'
+export type { RepairDiscoveryOptions } from './task-runner/repair-source-discovery'
 
 export function getComicCrawlerOptions(env: NodeJS.ProcessEnv = process.env) {
   return {
