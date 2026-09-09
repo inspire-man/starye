@@ -46,6 +46,11 @@ beforeEach(async () => {
 afterEach(() => client.close())
 
 describe('player repair candidate scan', () => {
+  it('can restrict a scan to explicitly selected movie codes', async () => {
+    await movie('one')
+    await movie('two')
+    expect((await readRepairScanCandidates(db, now, 25, ['CODE-two'])).map(row => row.id)).toEqual(['two'])
+  })
   it('uses persisted players when a source projection is absent', async () => {
     await movie('empty')
     await movie('has-player', undefined, true)

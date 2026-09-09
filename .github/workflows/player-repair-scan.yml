@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '30 */6 * * *'
   workflow_dispatch:
+    inputs:
+      movie_code:
+        description: Optional movie code for a targeted repair scan
+        required: false
+        type: string
 
 jobs:
   scan:
@@ -13,10 +18,12 @@ jobs:
         env:
           API_BASE_URL: ${{ vars.PLAYER_REPAIR_API_BASE_URL || 'https://api.starye.org' }}
           CRAWLER_SECRET: ${{ secrets.CRAWLER_SECRET }}
+          MOVIE_CODE: ${{ inputs.movie_code || '' }}
         run: |
           set -euo pipefail
+          payload="$(jq -nc --arg code "$MOVIE_CODE" 'if $code == "" then {limit:25} else {limit:1,movieCodes:[$code]} end')"
           curl --fail-with-body --retry 3 --retry-delay 5 \
             -X POST "$API_BASE_URL/api/admin/crawler-tasks/repair-players/scan" \
             -H "x-crawler-secret: $CRAWLER_SECRET" \
             -H 'content-type: application/json' \
-            -d '{"limit":25}'
+            -d "$payload"
