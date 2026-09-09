@@ -170,6 +170,9 @@ function aiReviewGateDetail(): string {
         :refresh-evidence-error-message="props.refreshEvidenceErrorMessage"
         :refresh-evidence-message="props.refreshEvidenceMessage"
       />
+      <p class="quant-decision-freshness" aria-label="数据时效">
+        数据时效：{{ freshnessLabel(dataFreshness) }}
+      </p>
 
       <QuantDecisionGuide :decision-guide="decisionGuide" />
       <QuantDecisionReadiness :decision-readiness="decisionReadiness" />
