@@ -1803,6 +1803,7 @@ adminCrawlerTasksRoutes.post('/repair-players', validator('json', RepairPlayersC
 adminCrawlerTasksRoutes.post('/repair-players/scan', validator('json', v.object({
   limit: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100)), 25),
   movieCodes: v.optional(v.pipe(v.array(v.pipe(v.string(), v.trim(), v.minLength(2), v.maxLength(40))), v.maxLength(20))),
+  force: v.optional(v.boolean()),
 })), async (c) => {
   const internalSecret = c.req.header('x-crawler-secret')
   const configuredSecret = c.env.CRAWLER_SECRET
@@ -1810,9 +1811,9 @@ adminCrawlerTasksRoutes.post('/repair-players/scan', validator('json', v.object(
     ? ({ id: 'github-actions-schedule', role: 'admin' } as SessionUser)
     : await requireSessionUser(c)
   requireTemplateAccess(user, 'movie')
-  const { limit, movieCodes } = c.req.valid('json')
+  const { limit, movieCodes, force } = c.req.valid('json')
   const now = Math.floor(Date.now() / 1000)
-  const rows = await readRepairScanCandidates(c.get('db').$client, now, limit, movieCodes)
+  const rows = await readRepairScanCandidates(c.get('db').$client, now, limit, movieCodes, force === true)
   const repository = createCrawlerTaskRepository(c.get('db'))
   const queued: string[] = []
   const existing: string[] = []

@@ -17,7 +17,7 @@ interface ScanDatabase {
   }
 }
 
-export async function readRepairScanCandidates(db: ScanDatabase, now: number, limit: number, movieCodes: readonly string[] = []): Promise<RepairScanCandidate[]> {
+export async function readRepairScanCandidates(db: ScanDatabase, now: number, limit: number, movieCodes: readonly string[] = [], force = false): Promise<RepairScanCandidate[]> {
   // Rank terminal attempts per movie, counting only failures after the last non-failure.
   const result = await db.prepare(`
     WITH repair_runs AS (
@@ -64,10 +64,10 @@ export async function readRepairScanCandidates(db: ScanDatabase, now: number, li
         )
     )
     SELECT * FROM candidates
-    WHERE (next_retry_at IS NULL OR next_retry_at <= ?)
+    WHERE (${force && movieCodes.length ? '1 = 1' : '(next_retry_at IS NULL OR next_retry_at <= ?)'})
       ${movieCodes.length ? `AND code IN (${movieCodes.map(() => '?').join(',')})` : ''}
     ORDER BY COALESCE(last_attempt_at, 0), id
     LIMIT ?
-  `).bind(now, now, ...(movieCodes as string[]), limit).all<RepairScanCandidate>()
+  `).bind(now, ...(force && movieCodes.length ? [] : [now]), ...(movieCodes as string[]), limit).all<RepairScanCandidate>()
   return result.results ?? []
 }
