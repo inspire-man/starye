@@ -27,8 +27,12 @@ export async function discoverRepairSources(options: RepairDiscoveryOptions): Pr
   const sources: RepairSourceCandidate[] = []
   if (options.javdbUrl) {
     let html = ''
-    try { html = await options.requestHtml(options.javdbUrl) }
-    catch { html = '' }
+    try {
+      html = await options.requestHtml(options.javdbUrl)
+    }
+    catch {
+      html = ''
+    }
     if (html) {
       const window = new Window({ url: options.javdbUrl })
       try {
@@ -36,8 +40,12 @@ export async function discoverRepairSources(options: RepairDiscoveryOptions): Pr
         const search = parseJavDBMovieImageSearch(window.document as unknown as Document, options.javdbUrl, options.movieCode)
         let detailHtml = html
         if (search?.detailUrl) {
-          try { detailHtml = await options.requestHtml(search.detailUrl) }
-          catch { detailHtml = '' }
+          try {
+            detailHtml = await options.requestHtml(search.detailUrl)
+          }
+          catch {
+            detailHtml = ''
+          }
         }
         if (detailHtml !== html) {
           window.document.open()
@@ -52,8 +60,12 @@ export async function discoverRepairSources(options: RepairDiscoveryOptions): Pr
   }
   if (options.javbusUrl) {
     let html = ''
-    try { html = await options.requestHtml(options.javbusUrl) }
-    catch { html = '' }
+    try {
+      html = await options.requestHtml(options.javbusUrl)
+    }
+    catch {
+      html = ''
+    }
     sources.push(...candidatesFromMagnets(html, 'JavBus').map((source, i) => ({ ...source, sortOrder: sources.length + i })))
   }
   return { observedAt: options.observedAt ?? Math.floor(Date.now() / 1000), sources }
