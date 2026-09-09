@@ -90,7 +90,7 @@ interface ProductionCrawlerResult {
   readonly operation: 'manga-production' | 'movie-production'
   readonly providerRunId: string
   readonly runId: string
-  readonly status: 'cancelled' | 'succeeded'
+  readonly status: 'cancelled' | 'failed' | 'succeeded'
   readonly template: ProductionTemplate
 }
 
@@ -730,7 +730,16 @@ async function runClaimedProductionCrawlerMutation(
       if (!result.repairReceipt) {
         await runner.failed(candidate, sequence++, result.failureCode ?? 'receipt_missing')
         terminalEmitted = true
-        throw new Error('target-crawl-mutation rejected an unvalidated repair receipt.')
+        return {
+          attempt: binding.attempt,
+          contentIds: [],
+          itemCount: 0,
+          operation: production.operation,
+          providerRunId: binding.providerRunId,
+          runId: binding.runId,
+          status: 'failed',
+          template: production.template,
+        }
       }
       const terminal = await runner.succeededRepair(candidate, sequence++, result.repairReceipt)
       if (!terminal.accepted)
