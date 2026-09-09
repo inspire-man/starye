@@ -24,6 +24,7 @@ function candidatesFromMagnets(html: string, provider: string): RepairSourceCand
 }
 
 export async function discoverRepairSources(options: RepairDiscoveryOptions): Promise<RepairSourceObservationInput> {
+  console.warn(`[repair-discovery] start code=${options.movieCode}`)
   const sources: RepairSourceCandidate[] = []
   if (options.javdbUrl) {
     let html = ''
@@ -80,5 +81,6 @@ export async function discoverRepairSources(options: RepairDiscoveryOptions): Pr
     }
     sources.push(...candidatesFromMagnets(html, 'JavBus').map((source, i) => ({ ...source, sortOrder: sources.length + i })))
   }
+  console.warn(`[repair-discovery] complete code=${options.movieCode} candidates=${sources.length}`)
   return { observedAt: options.observedAt ?? Math.floor(Date.now() / 1000), sources }
 }
