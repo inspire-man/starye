@@ -1718,6 +1718,12 @@ export function createCrawlerTaskRepository(db: CrawlerTaskDatabase, options: Cr
     if (operationSnapshot) {
       snapshot = operationSnapshot.template
       requestSnapshotJson = operationSnapshot.requestSnapshotJson
+      if (operation === 'repair_players' && input.movieCode) {
+        snapshot = { ...snapshot, movieCode: input.movieCode } as RepairPlayersTaskSnapshot
+        const persistedOperation = JSON.parse(requestSnapshotJson)
+        persistedOperation.template = snapshot
+        requestSnapshotJson = JSON.stringify(persistedOperation)
+      }
       if (operation === 'repair_players') {
         const intent = operationSnapshot.intent
         const currentState = await readRepairTaskState(operationSnapshot.target.id)
