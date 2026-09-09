@@ -985,7 +985,9 @@ export class RunnerClient {
     if (!response)
       throw new Error('Runner control request did not return a response')
     if (!response.ok && !options.allowNonOk) {
-      throw new Error(`Runner control request failed: ${response.status}`)
+      const error = await response.json().catch(() => null) as { code?: unknown } | null
+      const code = typeof error?.code === 'string' && /^\w{1,80}$/.test(error.code) ? ` (${error.code})` : ''
+      throw new Error(`Runner control request failed: ${response.status}${code}`)
     }
     return response.json()
   }
