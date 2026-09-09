@@ -1774,6 +1774,14 @@ adminCrawlerTasksRoutes.post('/repair-players', validator('json', RepairPlayersC
     throw new HTTPException(409, { message: `Repair operation conflicts with task ${result.taskId}` })
   }
 
+  const dispatch = result.kind === 'created'
+    ? await dispatchCreatedRun(c, repository, {
+        attempt: result.run.attemptNumber,
+        runId: result.run.id,
+        template: 'movie',
+      }, { localProofRequested: isLocalProofOperation(command) || c.env?.CRAWLER_LOCAL_PROOF_ENABLED === 'true' })
+    : { kind: 'existing_active_run' }
+
   const detail = await readRepairTaskResponse(c, {
     movie: { code: currentMovie.code, id: currentMovie.id, title: currentMovie.title },
     taskId: result.run.taskId,
@@ -1792,6 +1800,7 @@ adminCrawlerTasksRoutes.post('/repair-players', validator('json', RepairPlayersC
   })
   return c.json({
     currentAttempt: detail.currentAttempt,
+    dispatch,
     history: detail.history,
     kind: result.kind,
     run: detail.run,
