@@ -111,6 +111,10 @@ export async function discoverRepairSources(options: RepairDiscoveryOptions): Pr
         const matchesTarget = movie?.code.replace(/\s+/gu, '').toUpperCase() === options.movieCode.replace(/\s+/gu, '').toUpperCase()
         for (const [index, player] of (matchesTarget ? movie?.players ?? [] : []).entries())
           sources.push({ sourceName: player.sourceName || `JavDB magnet ${index + 1}`, sourceType: 'magnet', sourceUrl: player.sourceUrl, sortOrder: sources.length })
+        if (!matchesTarget && detailHtml.includes(options.movieCode)) {
+          for (const candidate of candidatesFromMagnets(detailHtml, 'JavDB'))
+            sources.push({ ...candidate, sortOrder: sources.length })
+        }
       }
       catch {
       }
