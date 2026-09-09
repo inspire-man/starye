@@ -657,7 +657,7 @@ async function runClaimedProductionCrawlerMutation(
         discoverSources: async ({ snapshot }) => ({
           ...(process.env.PLAYER_REPAIR_JAVDB_URL || process.env.PLAYER_REPAIR_JAVBUS_URL
             ? await discoverRepairSources({
-                movieCode: snapshot.movieId,
+                movieCode: snapshot.movieCode ?? snapshot.movieId,
                 javdbUrl: process.env.PLAYER_REPAIR_JAVDB_URL?.replace('{movieId}', encodeURIComponent(snapshot.movieCode ?? snapshot.movieId)),
                 javbusUrl: process.env.PLAYER_REPAIR_JAVBUS_URL?.replace('{movieId}', encodeURIComponent(snapshot.movieCode ?? snapshot.movieId)),
                 requestHtml: async url => await (await fetch(url)).text(),
