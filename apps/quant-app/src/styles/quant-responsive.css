@@ -5,6 +5,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .timing-pool-state-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .focus-layout {
     grid-template-columns: 1fr;
   }
@@ -145,6 +149,19 @@
 
   .data-health-list {
     grid-template-columns: 1fr;
+  }
+
+  .timing-pool-state-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .timing-pool-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .timing-pool-summary {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .knowledge-factor-grid {

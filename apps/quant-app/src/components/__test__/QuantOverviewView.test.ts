@@ -79,6 +79,7 @@ function mountView() {
       dataCoverageLabel: '1 / 1',
       latestWatchlistDate: '2026-09-03',
       dataHealthSummary,
+      watchlist: [watchlistItem],
       watchlistEnvironment,
       topCandidates: [candidate],
       riskItems: [{ key: 'clear', tone: 'neutral', title: '暂未触发提示', detail: '风险提示只基于当前已保存的日线数据' }],
@@ -122,5 +123,6 @@ describe('quant overview view', () => {
 
     expect(wrapper.emitted('runDataHealthAction')).toEqual([['refresh-daily']])
     expect(wrapper.find('[aria-label="数据健康状态"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('历史时机样本审计')
   })
 })

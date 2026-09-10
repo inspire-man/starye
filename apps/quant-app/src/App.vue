@@ -3319,6 +3319,7 @@ onUnmounted(() => {
       :data-coverage-label="dataCoverageLabel"
       :latest-watchlist-date="latestWatchlistDate"
       :data-health-summary="dataHealthSummary"
+      :watchlist="watchlist"
       :watchlist-environment="watchlistEnvironment"
       :top-candidates="topCandidates"
       :risk-items="riskItems"

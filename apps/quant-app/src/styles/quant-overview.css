@@ -632,3 +632,135 @@
   background: hsl(var(--status-danger-soft));
   color: hsl(var(--status-danger));
 }
+.timing-pool-section {
+  margin-top: 1.25rem;
+  border-top: 1px solid hsl(var(--border));
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 1.1rem 0;
+}
+
+.timing-pool-section .section-heading {
+  align-items: center;
+}
+
+.timing-pool-empty,
+.timing-pool-progress,
+.timing-pool-stale,
+.timing-pool-note {
+  margin: 0.75rem 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.timing-pool-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.timing-pool-summary-copy {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem;
+  min-width: 0;
+  color: hsl(var(--status-info));
+}
+
+.timing-pool-summary-copy strong {
+  color: hsl(var(--foreground));
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.timing-pool-summary-copy p {
+  margin: 0.25rem 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.timing-pool-hold {
+  flex: 0 0 auto;
+}
+
+.timing-pool-state-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.timing-pool-state-card {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.65rem;
+}
+
+.timing-pool-state-card strong {
+  color: hsl(var(--foreground));
+  font-size: 0.8rem;
+}
+
+.timing-pool-state-card p {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.68rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.timing-pool-table {
+  margin-top: 0.9rem;
+}
+
+.timing-pool-row {
+  display: grid;
+  grid-template-columns: minmax(8.5rem, 1.3fr) 4.6rem minmax(5.5rem, 0.9fr) 6.5rem minmax(7rem, 1fr);
+  gap: 0.55rem;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--border));
+  background: transparent;
+  padding: 0.55rem 0.2rem;
+  color: hsl(var(--foreground));
+  text-align: left;
+}
+
+.timing-pool-row-head {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.timing-pool-row:not(.timing-pool-row-head) {
+  cursor: pointer;
+}
+
+.timing-pool-row:not(.timing-pool-row-head):hover {
+  background: hsl(var(--accent) / 0.42);
+}
+
+.timing-pool-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+}
+
+.timing-pool-row strong,
+.timing-pool-row small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timing-pool-row small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.68rem;
+}
