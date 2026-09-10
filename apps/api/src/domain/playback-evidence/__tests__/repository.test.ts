@@ -210,6 +210,18 @@ function artifact(hash: string): PlaybackArtifactReference {
 }
 
 describe('playback evidence repository', () => {
+  it('accepts a repaired revision after the task snapshot revision and rejects a future snapshot', async () => {
+    const testDb = await createTestDatabase()
+    await testDb.client.execute(`UPDATE crawler_task SET request_snapshot_json = json_set(request_snapshot_json, '$.sourceRevision', 6) WHERE id = 'task-1'`)
+    const repository = createPlaybackEvidenceRepository(testDb.db, {
+      now: () => new Date(now.getTime() + 30_000),
+    })
+    const input = { artifact: artifact('a'), evidence: createEvidence(), runId: 'run-1', taskId: 'task-1' }
+    await expect(repository.accept(input)).resolves.toMatchObject({ kind: 'accepted' })
+    const stored = await testDb.client.execute('SELECT source_revision, playback_status FROM playback_evidence_summary')
+    expect(stored.rows).toEqual([{ source_revision: 7, playback_status: 'playback_verified' }])
+  })
+
   it('accepts once, returns duplicate for identical replay, and records conflict without overwriting', async () => {
     const testDb = await createTestDatabase()
     let nextId = 0
