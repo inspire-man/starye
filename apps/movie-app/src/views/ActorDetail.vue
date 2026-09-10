@@ -71,7 +71,7 @@ onMounted(() => {
           <div class="actor-cover">
             <img
               v-if="canRenderMedia(actor.avatar) && !avatarLoadFailed"
-              :src="actor.avatar"
+              :src="actor.avatar ?? undefined"
               :alt="actor.name"
               @error="avatarLoadFailed = true"
             >
@@ -158,7 +158,7 @@ onMounted(() => {
               <div class="movie-cover">
                 <img
                   v-if="canRenderMedia(movie.coverImage) && !failedMovieCovers.has(movie.id)"
-                  :src="movie.coverImage"
+                  :src="movie.coverImage ?? undefined"
                   :alt="movie.title"
                   @error="markMovieCoverFailed(movie.id)"
                 >
