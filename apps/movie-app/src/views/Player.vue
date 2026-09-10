@@ -1193,7 +1193,7 @@ async function persistProgress(progress: number, duration: number | null, comple
 }
 
 async function flushProgress(reason: 'checkpoint' | 'pause' | 'seeked' | 'pagehide' | 'ended') {
-  if (!userStore.user || !player) {
+  if (!userStore.user || !player || playbackStatus.value === 'failed') {
     return
   }
 
@@ -1318,8 +1318,14 @@ function handlePageHide() {
   void flushProgress('pagehide')
 }
 
+function handleVisibilityChange() {
+  if (document.hidden)
+    void flushProgress('pagehide')
+}
+
 onMounted(() => {
   window.addEventListener('pagehide', handlePageHide)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   fetchMovieAndPlay()
 })
 
@@ -1347,6 +1353,7 @@ watch(
 
 onUnmounted(() => {
   window.removeEventListener('pagehide', handlePageHide)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   void flushProgress('pagehide')
   destroyPlayerInstance()
   clearSaveProgressTimer()

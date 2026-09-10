@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MovieAvailabilityCommandReason, MovieAvailabilitySourceKind, MovieDetail, Player, ReadinessProjection, SourceDisposition, SourceReasonCode } from '../types'
+import type { MovieAvailabilityCommandReason, MovieAvailabilitySourceKind, MovieDetail, Player, ReadinessProjection, SourceDisposition, SourceReasonCode, WatchingProgress } from '../types'
 import type { TorrentFile } from '../utils/torrServerClient'
 import { ConfirmDialog } from '@starye/ui'
 import { ChevronLeft, ChevronRight, X } from 'lucide-vue-next'
@@ -14,7 +14,7 @@ import { useFavorites } from '../composables/useFavorites'
 import { useRating } from '../composables/useRating'
 import { useToast } from '../composables/useToast'
 import { useTorrServer } from '../composables/useTorrServer'
-import { movieApi, ratingApi } from '../lib/api-client'
+import { movieApi, progressApi, ratingApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
 import { copyMagnetLinks, copyToClipboard } from '../utils/clipboard'
 import { isMagnetLink } from '../utils/magnetLink'
@@ -1082,6 +1082,30 @@ function closeFileSelection() {
   fileSelectionModal.value.show = false
 }
 
+const continueWatching = ref<WatchingProgress | null>(null)
+
+function formatWatchPosition(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds))
+  const minutes = Math.floor(total / 60)
+  const remain = total % 60
+  return `${minutes}:${String(remain).padStart(2, '0')}`
+}
+
+async function loadContinueWatching(code: string): Promise<void> {
+  continueWatching.value = null
+  if (!userStore.user)
+    return
+  try {
+    const response = await progressApi.getWatchingProgress(code)
+    const item = response.success ? response.data : null
+    if (item && item.progress > 0 && !item.completed)
+      continueWatching.value = item
+  }
+  catch {
+    continueWatching.value = null
+  }
+}
+
 async function fetchMovieDetail() {
   loading.value = true
   error.value = ''
@@ -1092,8 +1116,8 @@ async function fetchMovieDetail() {
 
     if (response.success && response.data) {
       movie.value = response.data
-      // 检查收藏状态
       await checkFavoriteStatus()
+      await loadContinueWatching(response.data.code)
     }
     else {
       error.value = response.error || '加载失败'
@@ -1497,7 +1521,15 @@ onMounted(() => {
               管理访问状态
             </RouterLink>
             <RouterLink
-              v-if="!r18SourcesHidden && readiness.source.disposition === 'ready' && firstEligibleDirect"
+              v-if="!r18SourcesHidden && continueWatching && readiness.source.disposition === 'ready'"
+              :to="firstEligibleDirect ? playbackRouteFor(firstEligibleDirect, 'direct') : firstControlledFallback ? playbackRouteFor(firstControlledFallback, 'magnet') : `/movie/${movie.code}/play`"
+              data-readiness-action="continue"
+              class="movie-detail-primary-action min-h-11 inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
+            >
+              继续播放 {{ formatWatchPosition(continueWatching.progress) }}
+            </RouterLink>
+            <RouterLink
+              v-if="!r18SourcesHidden && !continueWatching && readiness.source.disposition === 'ready' && firstEligibleDirect"
               :to="playbackRouteFor(firstEligibleDirect, 'direct')"
               data-readiness-action="play"
               :data-content-id="movie.primaryContentId"

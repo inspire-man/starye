@@ -10,12 +10,13 @@ import type { InferInsertModel, SQL } from 'drizzle-orm'
 import type { MovieFilter } from '../../../schemas/admin'
 import type { AppEnv } from '../../../types'
 import { actors, crawlerAvailabilityCurrent, crawlerRuns, crawlerTasks, movies, movieSourceStates, playbackEvidenceSummaries, players } from '@starye/db/schema'
-import { and, asc, count, desc, eq, gte, isNull, like, lte, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gte, inArray, isNull, like, lte, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import { nanoid } from 'nanoid'
 import * as v from 'valibot'
 import { countReceiptFailureReasons, emptyMediaKindCounts, hasManagedMovieMedia, incrementMediaKind, mediaIntegrityKind, normalizeBackfillReceipt } from '../../../domain/movies/media-integrity'
+import { classifyMovieOpsKind, MOVIE_OPS_KINDS } from '../../../domain/movies/movie-ops'
 import { clearGatewayCacheGroup } from '../../../lib/gateway-cache'
 import { captureResourceState, computeChanges, createAuditLog } from '../../../middleware/audit-logger'
 import { requireResource } from '../../../middleware/resource-guard'
@@ -94,6 +95,51 @@ adminMovies.get(
           receipt: run.receiptSummaryJson,
           summary: receiptSummaries[index],
         })),
+      },
+    })
+  },
+)
+
+adminMovies.get(
+  '/ops-batches',
+  describeRoute({
+    summary: '查询电影运管批次',
+    description: '把缺封面/预览回填、播放源重检、元数据同步和关系修复映射到共享 crawler task 批次',
+    tags: ['Admin'],
+    operationId: 'getMovieOpsBatches',
+    security: [{ serviceAuth: [] }],
+    responses: { 200: { description: '电影运管批次' } },
+  }),
+  serviceAuth(['admin']),
+  async (c) => {
+    const db = c.get('db')
+    const tasks = await db.select().from(crawlerTasks).where(eq(crawlerTasks.templateKey, 'movie')).orderBy(desc(crawlerTasks.updatedAt)).limit(30)
+    const runs = tasks.length
+      ? await db.select().from(crawlerRuns).where(inArray(crawlerRuns.taskId, tasks.map(task => task.id))).orderBy(desc(crawlerRuns.updatedAt))
+      : []
+    const latestRun = new Map<string, typeof runs[number]>()
+    for (const run of runs) {
+      if (!latestRun.has(run.taskId))
+        latestRun.set(run.taskId, run)
+    }
+    const batches = tasks.map((task) => {
+      const run = latestRun.get(task.id)
+      const summary = normalizeBackfillReceipt(run?.receiptSummaryJson, run?.failureCode ?? null)
+      return {
+        id: task.id,
+        kind: classifyMovieOpsKind(task.operation, task.requestSnapshotJson),
+        operation: task.operation,
+        status: run?.status ?? 'queued',
+        failureCode: run?.failureCode ?? null,
+        updatedAt: task.updatedAt,
+        summary,
+      }
+    })
+    return c.json({
+      success: true,
+      data: {
+        kinds: MOVIE_OPS_KINDS,
+        batches,
       },
     })
   },

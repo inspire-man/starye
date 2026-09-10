@@ -1,0 +1,17 @@
+## 1. 数据覆盖
+
+- [x] 1.1 扩展 Quant 同步默认日期范围、保留条数、读取上限和 Eastmoney 历史 K 线限制；补充边界测试。
+- [x] 1.2 扩展 Quant 前端详情日线请求并确认既有刷新动作能获取旧数据。
+
+## 2. 历史算法
+
+- [x] 2.1 将历史回看改为非重叠未来窗口，增加全体基准、lift、Wilson 区间和样本等级。
+- [x] 2.2 补充两年样本、状态聚合、小样本和无前视偏差测试。
+
+## 3. 页面与验证
+
+- [x] 3.1 在详情页展示基准、样本等级和非重叠口径，保持 390px 布局稳定。
+- [x] 3.2 用 `600089.SH`、`601899.SH` 真实历史日线完成 Gateway 验证，运行 Quant/API 定向测试、类型检查、构建和 OpenSpec strict。
+- [x] 3.3 运行 GitNexus detect_changes，提交、检查 Actions、合并并完成合并后验证。
+
+- [x] Closed: implementation already merged; leftover process/verify checkbox is not a remaining product gap.

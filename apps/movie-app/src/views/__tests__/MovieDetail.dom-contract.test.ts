@@ -2,8 +2,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import MovieDetail from '../MovieDetail.vue'
 
-const { getMovieDetailMock, routeState, routerPushMock, submitVideoAvailabilityCommandMock, userState } = vi.hoisted(() => ({
+const { getMovieDetailMock, getWatchingProgressMock, routeState, routerPushMock, submitVideoAvailabilityCommandMock, userState } = vi.hoisted(() => ({
   getMovieDetailMock: vi.fn(),
+  getWatchingProgressMock: vi.fn(),
   routeState: { params: { code: 'TEST-001' } },
   routerPushMock: vi.fn(),
   submitVideoAvailabilityCommandMock: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock('../../components/RatingStars.vue', () => ({
 
 vi.mock('../../lib/api-client', () => ({
   movieApi: { getMovieDetail: getMovieDetailMock, submitVideoAvailabilityCommand: submitVideoAvailabilityCommandMock },
+  progressApi: { getWatchingProgress: getWatchingProgressMock },
   ratingApi: { submitPlayerRating: vi.fn() },
 }))
 
@@ -73,6 +75,7 @@ describe('movie detail DOM tuple contract', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     userState.user = null
+    getWatchingProgressMock.mockResolvedValue({ success: true, data: null })
     submitVideoAvailabilityCommandMock.mockResolvedValue({
       binding: { movieId: 'movie-uuid-1', movieRevision: 1, policyVersion: 'video-source-probe/v1', sourceRevision: 0 },
       kind: 'created',
@@ -619,5 +622,42 @@ describe('movie detail DOM tuple contract', () => {
     expect(wrapper.html()).not.toContain('RAW_REQUEST_SENTINEL')
     expect(wrapper.html()).not.toContain('RAW_EXCEPTION_SENTINEL')
     expect(wrapper.html()).not.toContain('RAW_SIGNATURE_SENTINEL')
+  })
+
+  it('shows continue playback from the last saved position', async () => {
+    userState.user = { isR18Verified: true }
+    getWatchingProgressMock.mockResolvedValueOnce({
+      success: true,
+      data: { progress: 125, duration: 1000, completed: false, movieCode: 'TEST-001' },
+    })
+    getMovieDetailMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        id: 'movie-continue',
+        primaryContentId: 'movie-continue',
+        code: 'TEST-001',
+        title: 'Continue fixture',
+        isR18: false,
+        players: [{ id: 'direct-1', movieId: 'movie-continue', sourceName: 'direct', sourceUrl: 'https://direct.example/ready', sortOrder: 1, isActive: true }],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-continue', observedAt: 100, persisted: true },
+          playback: { status: 'playback_verified' },
+          receipt: { persisted: true, primaryContentId: 'movie-continue', schemaVersion: 2 },
+          source: {
+            disposition: 'ready',
+            eligibleCount: 1,
+            observedAt: 100,
+            reasonCode: null,
+            repairable: false,
+            sourceRevision: 5,
+          },
+        },
+      },
+    })
+    const wrapper = mount(MovieDetail)
+    await flushPromises()
+    expect(wrapper.get('[data-readiness-action="continue"]').text()).toContain('继续播放')
+    expect(wrapper.get('[data-readiness-action="continue"]').text()).toContain('2:05')
   })
 })

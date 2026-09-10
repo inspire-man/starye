@@ -15,6 +15,7 @@ vi.mock('@/lib/api', () => ({
       getMovies: vi.fn(),
       getMovie: vi.fn(),
       getMovieMediaIntegrity: vi.fn(),
+      getMovieOpsBatches: vi.fn(),
       getPlayers: vi.fn(),
       saveMovie: vi.fn(),
       deleteMovie: vi.fn(),
@@ -152,6 +153,21 @@ describe('movies.vue 集成测试', () => {
         }],
       },
     })
+    vi.mocked(api.admin.getMovieOpsBatches).mockResolvedValue({
+      success: true,
+      data: {
+        kinds: ['backfill_covers', 'backfill_previews', 'recheck_players', 'sync_metadata', 'repair_relations'],
+        batches: [{
+          id: 'task-1',
+          kind: 'recheck_players',
+          operation: 'repair_players',
+          status: 'failed',
+          failureCode: 'source_failed',
+          updatedAt: '2026-09-10T00:00:00.000Z',
+          summary: { processed: 1, succeeded: 0, failed: 1, skipped: 0, retried: 1, sources: ['movie'], failureReasons: ['source_failed'] },
+        }],
+      },
+    })
   })
 
   afterEach(() => {
@@ -188,6 +204,13 @@ describe('movies.vue 集成测试', () => {
       expect(wrapper.get('[data-testid="movie-media-integrity"]').text()).toContain('2')
       expect(wrapper.get('[data-testid="movie-media-batches"]').text()).toContain('成功 2')
       expect(wrapper.get('[data-testid="movie-media-batches"]').text()).toContain('image_decode_failed')
+    })
+    it('展示电影运管批次失败和重试', async () => {
+      const wrapper = mount(Movies)
+      await flushPromises()
+      expect(wrapper.get('[data-testid="movie-ops-batches"]').text()).toContain('recheck_players')
+      expect(wrapper.get('[data-testid="movie-ops-batches"]').text()).toContain('失败 1')
+      expect(wrapper.get('[data-testid="movie-ops-batches"]').text()).toContain('重试 1')
     })
     it('valid receipt 会直接读取并打开既有电影编辑器', async () => {
       mockRoute.query = { receipt: 'movie-uuid-1' }
