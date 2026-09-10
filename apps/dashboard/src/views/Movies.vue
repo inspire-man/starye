@@ -35,6 +35,7 @@ const { handleError } = useErrorHandler()
 const movies = ref<Movie[]>([])
 const loading = ref(true)
 const error = ref('')
+const mediaIntegrity = ref<Awaited<ReturnType<typeof api.admin.getMovieMediaIntegrity>>['data'] | null>(null)
 
 const isEditModalOpen = ref(false)
 const editingMovie = ref<Movie | null>(null)
@@ -67,6 +68,7 @@ const { filters, applyFilters, resetFilters } = useFilters({
   crawlStatus: '',
   metadataLocked: '',
   hasPlayers: '',
+  playbackAvailability: '',
   actor: '',
   publisher: '',
   genre: '',
@@ -108,6 +110,16 @@ watch(currentPage, () => {
 // 监听 limit 变化时加载数据
 watch(limit, () => {
   loadMovies()
+})
+
+onMounted(async () => {
+  try {
+    const response = await api.admin.getMovieMediaIntegrity()
+    mediaIntegrity.value = response.success ? response.data : null
+  }
+  catch (e) {
+    handleError(e, '加载媒体完整性摘要失败')
+  }
 })
 
 const filterFields = [
@@ -164,6 +176,18 @@ const filterFields = [
     options: [
       { value: 'true', label: '有播放源' },
       { value: 'false', label: '无播放源' },
+    ],
+  },
+  {
+    key: 'playbackAvailability',
+    label: '播放验证',
+    type: 'select' as const,
+    options: [
+      { value: 'verified', label: '验证通过' },
+      { value: 'unverified', label: '未验证' },
+      { value: 'failed', label: '验证失败' },
+      { value: 'magnet_only', label: '仅磁力' },
+      { value: 'stale', label: '验证过期' },
     ],
   },
 ]
@@ -242,6 +266,7 @@ watch(
     () => filters.value.crawlStatus,
     () => filters.value.metadataLocked,
     () => filters.value.hasPlayers,
+    () => filters.value.playbackAvailability,
   ],
   () => {
     loadMovies()
@@ -566,6 +591,79 @@ const tableColumns = [
 
 <template>
   <div class="movies-page dashboard-list-page">
+    <section v-if="mediaIntegrity" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8" data-testid="movie-media-integrity">
+      <div class="rounded-lg border border-border bg-card p-3">
+        <div class="text-xs text-muted-foreground">
+          缺封面
+        </div><div class="mt-1 text-xl font-semibold">
+          {{ mediaIntegrity.movies.missing_value }}
+        </div>
+      </div>
+      <div class="rounded-lg border border-border bg-card p-3">
+        <div class="text-xs text-muted-foreground">
+          外部/非法封面
+        </div><div class="mt-1 text-xl font-semibold">
+          {{ mediaIntegrity.movies.external_url + mediaIntegrity.movies.invalid_url }}
+        </div>
+      </div>
+      <div class="rounded-lg border border-border bg-card p-3">
+        <div class="text-xs text-muted-foreground">
+          缺预览图
+        </div><div class="mt-1 text-xl font-semibold">
+          {{ mediaIntegrity.previews.missing_value }}
+        </div>
+      </div>
+      <div class="rounded-lg border border-border bg-card p-3">
+        <div class="text-xs text-muted-foreground">
+          缺演员头像
+        </div><div class="mt-1 text-xl font-semibold">
+          {{ mediaIntegrity.actors.missing_value }}
+        </div>
+      </div>
+      <div class="rounded-lg border border-border bg-card p-3">
+        <div class="text-xs text-muted-foreground">
+          最近电影批次
+        </div><div class="mt-1 text-xl font-semibold">
+          {{ mediaIntegrity.recentBackfill.length }}
+        </div>
+      </div>
+      <div class="rounded-lg border border-border bg-card p-3">
+        <div class="text-xs text-muted-foreground">
+          HTTP 探测失败
+        </div><div class="mt-1 text-xl font-semibold">
+          {{ mediaIntegrity.probeFailedCount }}
+        </div>
+      </div>
+      <div class="rounded-lg border border-border bg-card p-3">
+        <div class="text-xs text-muted-foreground">
+          非图片/解码失败
+        </div><div class="mt-1 text-xl font-semibold">
+          {{ mediaIntegrity.nonImageCount }}
+        </div>
+      </div>
+      <div class="rounded-lg border border-border bg-card p-3">
+        <div class="text-xs text-muted-foreground">
+          来源暂不可用
+        </div><div class="mt-1 text-xl font-semibold">
+          {{ mediaIntegrity.sourceUnavailableCount }}
+        </div>
+      </div>
+    </section>
+    <section v-if="mediaIntegrity?.recentBackfill.length" class="mb-4 rounded-lg border border-border bg-card p-4" data-testid="movie-media-batches">
+      <h2 class="mb-3 text-sm font-semibold">
+        最近电影回填批次
+      </h2>
+      <div class="space-y-2">
+        <div v-for="batch in mediaIntegrity.recentBackfill" :key="batch.id" class="flex flex-wrap items-center gap-3 text-xs">
+          <span class="font-mono">{{ batch.id }}</span>
+          <span class="rounded px-2 py-0.5 font-medium" :class="batch.status === 'succeeded' ? 'bg-success/15 text-success' : batch.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground'">{{ batch.status }}</span>
+          <span v-if="batch.failureCode" class="text-destructive">{{ batch.failureCode }}</span>
+          <span v-if="batch.summary" class="text-muted-foreground">成功 {{ batch.summary.succeeded }} / 失败 {{ batch.summary.failed }} / 跳过 {{ batch.summary.skipped }} / 重试 {{ batch.summary.retried }}</span>
+          <span v-if="batch.summary?.sources?.length" class="text-muted-foreground">来源 {{ batch.summary.sources.join(', ') }}</span>
+          <span v-if="batch.summary?.failureReasons?.length" class="text-destructive">{{ batch.summary.failureReasons.join(', ') }}</span>
+        </div>
+      </div>
+    </section>
     <div v-if="receiptError" class="receipt-error" role="alert">
       <span>{{ receiptError }}</span>
       <a v-if="receiptReturnPath" :href="receiptReturnPath">返回任务详情</a>

@@ -123,6 +123,7 @@ export const MovieFilterSchema = v.object({
   sortBy: v.optional(v.picklist(['releaseDate', 'createdAt', 'updatedAt', 'sortOrder', 'title']), 'updatedAt'),
   sortOrder: v.optional(v.picklist(['asc', 'desc']), 'desc'),
   hasPlayers: v.optional(v.union([v.picklist(['true', 'false']), v.literal('')])),
+  playbackAvailability: v.optional(v.union([v.picklist(['verified', 'unverified', 'failed', 'magnet_only', 'stale']), v.literal('')])),
 })
 
 export type MovieFilter = v.InferOutput<typeof MovieFilterSchema>

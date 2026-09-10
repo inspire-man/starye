@@ -285,12 +285,21 @@ export class JavBusCrawler extends OptimizedCrawler {
 
           const title = titleEl.textContent?.trim() || ''
           const bigImage = document.querySelector('.bigImage img') as HTMLImageElement
-          const coverImage = bigImage?.src || ''
+          const coverImage = bigImage?.getAttribute('data-src')
+            || bigImage?.getAttribute('data-original')
+            || bigImage?.currentSrc
+            || bigImage?.src
+            || ''
           const previewImages = [...document.querySelectorAll('.sample-box')]
             .map((element) => {
               const anchor = element as HTMLAnchorElement
               const image = element.querySelector('img') as HTMLImageElement | null
-              return anchor.href || image?.currentSrc || image?.src || ''
+              return anchor.href
+                || image?.getAttribute('data-src')
+                || image?.getAttribute('data-original')
+                || image?.currentSrc
+                || image?.src
+                || ''
             })
             .map((imageUrl) => {
               try {

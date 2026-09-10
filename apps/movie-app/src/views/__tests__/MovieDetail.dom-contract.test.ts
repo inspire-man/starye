@@ -251,6 +251,47 @@ describe('movie detail DOM tuple contract', () => {
     expect(wrapper.text()).not.toContain('▶️ 播放')
   })
 
+  it('does not label an unverified ready source as playable', async () => {
+    getMovieDetailMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        id: 'movie-unverified',
+        primaryContentId: 'movie-unverified',
+        code: 'CODE-unverified',
+        title: 'Unverified source fixture',
+        isR18: false,
+        players: [{ id: 'direct-1', movieId: 'movie-unverified', sourceName: 'direct', sourceUrl: 'https://direct.example/ready', sortOrder: 1, isActive: true }],
+        relatedMovies: [],
+        readiness: {
+          metadata: { contentId: 'movie-unverified', observedAt: 100, persisted: true },
+          playback: { status: 'unverified' },
+          receipt: { persisted: true, primaryContentId: 'movie-unverified', schemaVersion: 2 },
+          source: {
+            disposition: 'ready',
+            eligibleCount: 1,
+            observedAt: 100,
+            reasonCode: null,
+            repairable: false,
+            sourceRevision: 5,
+          },
+        },
+        playbackAvailability: {
+          status: 'unverified',
+          hasPlayers: true,
+          lastVerifiedAt: null,
+          lastCheckedAt: 100,
+          stale: true,
+          failureReason: null,
+          nextAction: 'recheck',
+        },
+      },
+    })
+    const wrapper = mount(MovieDetail)
+    await flushPromises()
+    expect(wrapper.get('[data-readiness-status-cards]').text()).toContain('有播放源（未验证）')
+    expect(wrapper.get('[data-readiness-status-cards]').text()).not.toContain('播放验证通过')
+  })
+
   it.each([null, { isR18Verified: false }])('hides restricted images for an unverified session (%j)', async (user) => {
     userState.user = user
     getMovieDetailMock.mockResolvedValueOnce({

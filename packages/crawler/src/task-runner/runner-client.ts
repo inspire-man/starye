@@ -1,4 +1,5 @@
 import process from 'node:process'
+import { sanitizeMediaFailureReasons } from '../lib/media-integrity'
 import { createRunnerEventId, signRunnerBody } from './event-signer'
 
 export type RunnerOperation = 'manga' | 'movie' | 'repair_players' | VideoRunnerOperation | ComicChapterRunnerOperation | ChapterPageRunnerOperation
@@ -734,11 +735,13 @@ export class RunnerClient {
     return this.event(candidate, sequence, 'cancelled', { code: 'cancelled_at_safe_checkpoint' })
   }
 
-  async succeeded(candidate: RunnerCandidate, sequence: number, contentIds: readonly string[]): Promise<EventResult> {
+  async succeeded(candidate: RunnerCandidate, sequence: number, contentIds: readonly string[], mediaFailureReasons: readonly string[] = []): Promise<EventResult> {
+    const reasons = sanitizeMediaFailureReasons(mediaFailureReasons)
     return this.event(candidate, sequence, 'succeeded', {
       receipt: {
         contentIds: contentIds.slice(0, MAX_RECEIPT_CONTENT_IDS),
         templateKey: candidate.snapshot.templateKey,
+        ...(reasons ? { mediaFailureReasons: reasons } : {}),
       },
     })
   }

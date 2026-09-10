@@ -13,6 +13,7 @@ import { createProviderAssociationSummary, createProviderDispatchInput, createPr
 import { readRepairScanCandidates } from '../../../domain/crawler-tasks/repair-scan'
 import { createCrawlerTaskRepository, decodeCrawlerTaskCursor, encodeCrawlerTaskCursor } from '../../../domain/crawler-tasks/repository'
 import { getCrawlerTaskTemplate, readCrawlerTaskSnapshot } from '../../../domain/crawler-tasks/template-registry'
+import { sanitizeMediaFailureReasons } from '../../../domain/movies/media-integrity'
 import { createServerReadinessProjection } from '../../../domain/movies/source-contract'
 import { createPlaybackArtifactReference, createPlaybackEvidenceRepository } from '../../../domain/playback-evidence/repository'
 import { VIDEO_PROBE_POLICY_V1 } from '../../../domain/video-availability/probe-policy'
@@ -307,6 +308,7 @@ interface SafeCrawlerReceipt {
   source?: SourceReadinessProjection
   templateKey: CrawlerTaskTemplateKey
   updatedCount: number
+  mediaFailureReasons?: string[]
 }
 
 interface PersistedReceiptColumns {
@@ -346,6 +348,17 @@ function projectReceipt(status: unknown, raw: unknown, persisted: PersistedRecei
         && persisted.receipt_primary_content_id.length > 0
         && persisted.receipt_primary_content_id !== receipt.primaryContentId)) {
       return null
+    }
+
+    let mediaFailureReasons: string[] | undefined
+    if (receipt.mediaFailureReasons !== undefined) {
+      const sanitized = sanitizeMediaFailureReasons(receipt.mediaFailureReasons)
+      const uniqueIncoming = Array.isArray(receipt.mediaFailureReasons)
+        ? [...new Set(receipt.mediaFailureReasons)]
+        : []
+      if (!sanitized || sanitized.length !== uniqueIncoming.length)
+        return null
+      mediaFailureReasons = sanitized
     }
 
     let source: SourceReadinessProjection | undefined
@@ -392,6 +405,7 @@ function projectReceipt(status: unknown, raw: unknown, persisted: PersistedRecei
       ...(source ? { source } : {}),
       templateKey: receipt.templateKey,
       updatedCount: receipt.updatedCount,
+      ...(mediaFailureReasons ? { mediaFailureReasons } : {}),
     }
   }
   catch {

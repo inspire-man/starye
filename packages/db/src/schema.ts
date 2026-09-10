@@ -366,11 +366,15 @@ export const players = sqliteTable('player', {
   ratingCount: integer('rating_count').default(0), // 评分人数
   reportCount: integer('report_count').default(0), // 失效上报次数
   isActive: integer('is_active', { mode: 'boolean' }).default(true), // 是否有效（超过上报阈值后自动置 false）
+  lastPlaybackStatus: text('last_playback_status', { enum: ['failed'] }),
+  lastPlaybackReason: text('last_playback_reason'),
+  lastPlaybackAt: integer('last_playback_at', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`),
 }, table => [
   index('idx_player_rating').on(table.averageRating),
   index('idx_player_active').on(table.isActive),
+  index('idx_player_last_playback_status').on(table.lastPlaybackStatus),
 ])
 
 export type Player = InferSelectModel<typeof players>

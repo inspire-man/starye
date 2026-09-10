@@ -24,6 +24,7 @@ export { error, hideProgress, hideToast, info, showProgress, showToast, success,
 
 export type { ProgressToast, ToastAction, Toast as ToastData, ToastOptions, ToastType } from './composables/useToast'
 // Utils
+export * from './lib/media-status'
 export * from './lib/utils'
 export type { ErrorType, ParsedError } from './types'
 // 组件相关类型（从独立 .ts 文件导出，避免 vue 通配符 shim 遮蔽命名导出）

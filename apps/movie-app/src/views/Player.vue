@@ -573,6 +573,7 @@ function showPlayerError(kind: ErrorKind, message: string, recoverable = true, f
   clearPlaybackObservationTimer()
 
   reportVideoFailure(kind, finalMessage, finalRecoverable)
+  void persistPlaybackFailure(kind)
 
   errorState.value = {
     visible: true,
@@ -584,6 +585,28 @@ function showPlayerError(kind: ErrorKind, message: string, recoverable = true, f
   if (kind === 'source-invalid') {
     goToDetail()
   }
+}
+
+function playbackFailureReason(kind: ErrorKind): 'playback_failed' | 'source_candidate_invalid' | 'stream_failed' | 'direct_transport_failed' {
+  if (kind === 'source-invalid')
+    return 'source_candidate_invalid'
+  if (kind === 'torrserver')
+    return 'stream_failed'
+  if (kind === 'network')
+    return 'direct_transport_failed'
+  return 'playback_failed'
+}
+
+function persistPlaybackFailure(kind: ErrorKind): void {
+  if (!userStore.user)
+    return
+  const playerId = playbackCandidates.value[currentCandidateIndex.value]?.id
+    || routeQueryString(route.query.player)
+  if (!playerId)
+    return
+  void movieApi.submitPlaybackFailure(playerId, playbackFailureReason(kind)).catch(() => {
+    // Failure persistence is advisory; the local player still shows the next action.
+  })
 }
 
 function reportVideoFailure(kind: ErrorKind, message: string, recoverable: boolean) {

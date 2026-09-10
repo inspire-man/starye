@@ -106,6 +106,17 @@ export interface Player {
 export type SourceDisposition = 'ready' | 'no_source' | 'source_failed' | 'repairing'
 export type SourceReasonCode = 'no_eligible_source' | 'repair_requested' | 'source_candidate_invalid' | 'source_read_failed' | 'source_write_failed'
 export type PlaybackProofStatus = 'playback_verified' | 'unverified'
+export type PlaybackAvailabilityStatus = 'none' | 'unverified' | 'verified' | 'failed' | 'magnet_only'
+
+export interface PlaybackAvailability {
+  status: PlaybackAvailabilityStatus
+  hasPlayers: boolean
+  lastVerifiedAt: number | null
+  lastCheckedAt: number | null
+  stale: boolean
+  failureReason: string | null
+  nextAction: 'none' | 'recheck' | 'repair'
+}
 
 export interface MetadataProjection {
   contentId: string
@@ -274,6 +285,7 @@ export interface MovieDetail extends Movie {
   }>
   primaryContentId: string
   readiness: ReadinessProjection
+  playbackAvailability?: PlaybackAvailability
   availability?: MovieAvailabilityReadback
 }
 

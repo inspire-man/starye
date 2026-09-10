@@ -861,6 +861,8 @@ export const api = {
       return apiFetch<Paginated<Movie>>(`/admin/movies${query ? `?${query}` : ''}`)
     },
 
+    getMovieMediaIntegrity: () => apiFetch<{ success: boolean, data: { generatedAt: string, movies: Record<string, number>, previews: Record<string, number>, actors: Record<string, number>, probeFailedCount: number, nonImageCount: number, decodeFailedCount: number, sourceUnavailableCount: number, recentBackfill: Array<{ id: string, status: string, failureCode: string | null, createdAt: string | Date | null, terminalAt: string | Date | null, receipt: unknown, summary: { processed: number, succeeded: number, failed: number, skipped: number, retried: number, sources: string[], failureReasons: string[] } }> } }>(`/admin/movies/media-integrity`),
+
     getMovie: (id: string) => apiFetch<Movie>(`/admin/movies/${id}`),
 
     updateMovie: (id: string, data: Partial<Movie>) =>

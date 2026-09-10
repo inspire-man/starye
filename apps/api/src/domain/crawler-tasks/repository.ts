@@ -2,6 +2,7 @@ import type { Database } from '@starye/db'
 import type { SourceReadinessProjection } from '../movies/source-contract'
 import type { CrawlerOperationCommandInput } from './operation-registry'
 import type { CrawlerReceiptUnion, CrawlerRunFailureCode, CrawlerRunLogPage, CrawlerRunLogReadModel, CrawlerRunReadModel, CrawlerRunReceipt, CrawlerRunReceiptCandidate, CrawlerRunState, CrawlerRunStatus, CrawlerRunTransitionDecision, CrawlerRunTransitionEvent, CrawlerTaskAuditPage, CrawlerTaskAuditReadModel, CrawlerTaskCursor, CrawlerTaskDetailReadModel, CrawlerTaskLifecycleEvent, CrawlerTaskLifecycleProjection, CrawlerTaskLifecycleStatus, CrawlerTaskListItem, CrawlerTaskListPage, CrawlerTaskOperation, CrawlerTaskRetryProjection, CrawlerTaskRunSummary, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, ProviderName, ProviderRunStatus, RepairPlayersReason, RepairPlayersReceipt, RepairPlayersTargetIntent, RepairPlayersTaskSnapshot, ValidatedCrawlerRunReceipt } from './types'
+import { sanitizeMediaFailureReasons } from '../movies/media-integrity'
 import { SOURCE_REASON_CODES } from '../movies/source-contract'
 import { buildCrawlerOperationSnapshot, readCrawlerOperationServerSnapshot } from './operation-registry'
 import { createLocalProofProviderSnapshot, createProviderAssociationSummary, createProviderSnapshot, LOCAL_PROOF_POLICY_REFERENCE, LOCAL_PROOF_POLICY_VERSION } from './provider-association'
@@ -633,8 +634,10 @@ function parseValidatedReceipt(
         sourceRevision: candidate.sourceRevision,
       } as SourceReadinessProjection
     }
+    const mediaFailureReasons = sanitizeMediaFailureReasons(receipt.mediaFailureReasons)
     return {
       createdCount: receipt.createdCount,
+      ...(mediaFailureReasons ? { mediaFailureReasons } : {}),
       primaryContentId: receipt.primaryContentId,
       ...(receipt.receiptSchemaVersion === 2 ? { receiptSchemaVersion: 2 } : {}),
       ...(source ? { source } : {}),

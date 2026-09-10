@@ -9,3 +9,4 @@
 - ../../openspec/README.md
 
 历史开发日志、未实现提案和一次性设计材料位于 ../archive/。
+- [Movie MVP：目录体验与媒体完整性](./movie-mvp.md)

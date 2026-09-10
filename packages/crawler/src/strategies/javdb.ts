@@ -89,7 +89,12 @@ export class JavDBStrategy implements MovieCrawlStrategy {
 
       const title = document.querySelector('h2.title .current-title')?.textContent?.trim() || ''
       const code = document.querySelector('h2.title strong:first-child')?.textContent?.trim() || ''
-      const coverImage = (document.querySelector('.column-video-cover img') as HTMLImageElement)?.src || undefined
+      const coverElement = document.querySelector('.column-video-cover img') as HTMLImageElement | null
+      const coverImage = coverElement?.getAttribute('data-src')
+        || coverElement?.getAttribute('data-original')
+        || coverElement?.currentSrc
+        || coverElement?.src
+        || undefined
       const previewImages = [...document.querySelectorAll('.tile-images.preview-images a.tile-item')]
         .map((element) => {
           const anchor = element as HTMLAnchorElement

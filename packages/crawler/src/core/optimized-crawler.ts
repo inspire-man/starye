@@ -7,7 +7,8 @@ import type { Page } from 'puppeteer-core'
 import type { ProcessedImage } from '../lib/image-processor'
 import type { MovieInfo } from '../lib/strategy'
 import type { OptimizedCrawlerConfig } from '../types/config'
-import { ImageProcessor } from '../lib/image-processor'
+import { CrawlerImageError, ImageProcessor } from '../lib/image-processor'
+import { retainManagedMediaList, retainManagedMediaUrl } from '../lib/media-integrity'
 import { QueueManager } from '../lib/queue-manager'
 import { DEFAULT_CONCURRENCY, DEFAULT_DELAY, DEFAULT_LIMITS, DEFAULT_OPTIONS } from '../types/config'
 import { ApiClient } from '../utils/api-client'
@@ -15,6 +16,12 @@ import { BrowserManager } from '../utils/browser'
 import { ProgressMonitor } from '../utils/progress'
 
 export abstract class OptimizedCrawler {
+  protected readonly mediaFailureReasons = new Set<string>()
+
+  getMediaFailureReasons(): readonly string[] {
+    return [...this.mediaFailureReasons]
+  }
+
   protected browserManager: BrowserManager
   protected queueManager: QueueManager
   protected imageProcessor: ImageProcessor
@@ -140,14 +147,18 @@ export abstract class OptimizedCrawler {
           return previewImage.url
         }
         catch (error) {
+          const reason = error instanceof CrawlerImageError ? error.code : 'source_unavailable'
+          this.mediaFailureReasons.add(reason)
+          this.progressMonitor.update(`媒体失败 ${filename}: ${reason}`)
           console.warn(`⚠️  图片下载失败 [${filename}]: ${error instanceof Error ? error.message : String(error)}`)
           return null
         }
       }
 
       if (movieInfo.coverImage) {
-        const coverImage = await processManagedImage(movieInfo.coverImage, 'cover')
-        movieInfo.coverImage = coverImage ?? null
+        const sourceCoverImage = movieInfo.coverImage
+        const coverImage = await processManagedImage(sourceCoverImage, 'cover')
+        movieInfo.coverImage = retainManagedMediaUrl(sourceCoverImage, coverImage, url => this.imageProcessor.isManagedUrl(url))
       }
 
       const previewImages = [...new Set(movieInfo.previewImages ?? [])].slice(0, 12)
@@ -155,10 +166,9 @@ export abstract class OptimizedCrawler {
         const managedPreviewImages = await Promise.all(
           previewImages.map((imageUrl, index) => processManagedImage(imageUrl, `overview-${String(index + 1).padStart(2, '0')}`)),
         )
-        // 只有 R2 返回的托管地址才能进入 API；失败项保持为空，等待后续回填。
         movieInfo.previewImages = [...new Set([
           movieInfo.coverImage,
-          ...managedPreviewImages.filter((url): url is string => Boolean(url)),
+          ...retainManagedMediaList(previewImages, managedPreviewImages, url => this.imageProcessor.isManagedUrl(url)),
         ].filter((url): url is string => Boolean(url)))].slice(0, 12)
       }
     }).catch(() => {

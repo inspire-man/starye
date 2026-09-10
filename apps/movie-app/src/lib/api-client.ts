@@ -345,6 +345,13 @@ export const ratingApi = {
   /**
    * 上报播放源失效
    */
+  async submitPlaybackFailure(playerId: string, reason: 'playback_failed' | 'source_candidate_invalid' | 'stream_failed' | 'direct_transport_failed'): Promise<{ playerId: string, movieId: string, lastPlaybackStatus: 'failed', lastPlaybackReason: string, lastPlaybackAt: number }> {
+    return apiFetch(`/movies/players/${encodeURIComponent(playerId)}/playback-failure`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    })
+  },
+
   async reportPlayer(playerId: string): Promise<{ reportCount: number, isActive: boolean }> {
     return apiFetch<{ success: boolean, reportCount: number, isActive: boolean }>(`/movies/players/${playerId}/report`, {
       method: 'POST',

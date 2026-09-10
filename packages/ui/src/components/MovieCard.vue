@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { CalendarDays, ImageOff, LockKeyhole } from 'lucide-vue-next'
 import { ref, watch } from 'vue'
+import { canRenderMedia } from '../lib/media-status'
 
 interface Props {
   title: string
@@ -48,8 +49,8 @@ function formatDate(date?: Date | null) {
   >
     <div class="movie-card-poster relative overflow-hidden rounded-[var(--ui-radius-lg)] border border-border bg-muted shadow-sm transition-all duration-300 group-hover:-translate-y-0.5 group-hover:border-primary/55 group-hover:shadow-md">
       <img
-        v-if="cover && !restricted && !imageFailed"
-        :src="cover"
+        v-if="canRenderMedia(cover, imageFailed) && !restricted"
+        :src="cover || undefined"
         :alt="title"
         loading="lazy"
         class="movie-card-image h-full w-full object-contain transition-transform duration-500 motion-reduce:transition-none"
@@ -98,7 +99,7 @@ function formatDate(date?: Date | null) {
 
 <style scoped>
 .movie-card[data-layout='grid'] .movie-card-poster {
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 3 / 4;
 }
 
 .movie-card[data-layout='list'] {
@@ -119,7 +120,7 @@ function formatDate(date?: Date | null) {
 }
 
 .movie-card[data-layout='list'] .movie-card-poster {
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 3 / 4;
 }
 
 .movie-card[data-layout='list'] .movie-card-overlay {

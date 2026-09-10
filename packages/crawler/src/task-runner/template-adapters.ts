@@ -18,6 +18,7 @@ export interface AdapterExecutionResult {
   readonly contentIds: readonly string[]
   readonly failureCode?: RunnerFailureCode
   readonly repairReceipt?: import('./runner-client').RepairPlayersReceipt
+  readonly mediaFailureReasons?: readonly string[]
 }
 
 export interface TaskRunnerAdapter {

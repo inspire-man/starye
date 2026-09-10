@@ -119,14 +119,19 @@ export class LocalTaskRunner {
             await this.options.client.failed(candidate, terminalSequence(), 'receipt_missing')
           }
           else {
-            const terminal = await this.options.client.succeeded(candidate, terminalSequence(), receiptContentIds)
+            const terminal = result.mediaFailureReasons
+              ? await this.options.client.succeeded(candidate, terminalSequence(), receiptContentIds, result.mediaFailureReasons)
+              : await this.options.client.succeeded(candidate, terminalSequence(), receiptContentIds)
             if (terminal?.accepted ?? true) {
               await this.observeAvailabilityHistory(candidate, result.availabilityObservation, issueSequence, completeSequence)
             }
           }
         }
         else if (contentIds.size > 0) {
-          await this.options.client.succeeded(candidate, terminalSequence(), [...contentIds])
+          if (result.mediaFailureReasons)
+            await this.options.client.succeeded(candidate, terminalSequence(), [...contentIds], result.mediaFailureReasons)
+          else
+            await this.options.client.succeeded(candidate, terminalSequence(), [...contentIds])
         }
         else {
           await this.options.client.failed(candidate, terminalSequence(), 'receipt_missing')
