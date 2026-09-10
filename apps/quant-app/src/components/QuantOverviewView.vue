@@ -5,6 +5,7 @@ import type { CandidateItem, WatchlistItem } from '../lib/quant-view-models'
 import type { WatchlistEnvironment, WatchlistEnvironmentStatus } from '../lib/watchlist-environment'
 import { SkeletonCard } from '@starye/ui'
 import { ArrowUpRight, CalendarDays, ChevronRight, DatabaseZap, Eye, Info, RefreshCw, ShieldAlert, Sparkles } from 'lucide-vue-next'
+import QuantTimingPoolAudit from './QuantTimingPoolAudit.vue'
 
 type RiskTone = 'neutral' | 'warning' | 'danger'
 
@@ -25,6 +26,7 @@ const props = defineProps<{
   dataCoverageLabel: string
   latestWatchlistDate: string
   dataHealthSummary: QuantDataHealthSummary
+  watchlist: WatchlistItem[]
   watchlistEnvironment: WatchlistEnvironment
   topCandidates: CandidateItem[]
   riskItems: RiskNote[]
@@ -159,6 +161,12 @@ const emit = defineEmits<{
         </div>
       </div>
     </section>
+
+    <QuantTimingPoolAudit
+      :watchlist="props.watchlist"
+      :display-stock-name="props.displayStockName"
+      @select-stock="emit('selectStock', $event)"
+    />
 
     <section class="environment-section" aria-labelledby="environment-title">
       <div class="section-heading">
