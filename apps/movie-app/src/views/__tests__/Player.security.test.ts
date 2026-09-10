@@ -9,6 +9,7 @@ const {
   getMovieDetailMock,
   getWatchingProgressMock,
   submitPlaybackEvidenceMock,
+  submitPlaybackFailureMock,
   trackViewMock,
   addMagnetTaskMock,
   resolveTrustedStreamBasesMock,
@@ -24,6 +25,7 @@ const {
   getMovieDetailMock: vi.fn(),
   getWatchingProgressMock: vi.fn(),
   submitPlaybackEvidenceMock: vi.fn(),
+  submitPlaybackFailureMock: vi.fn(),
   trackViewMock: vi.fn(),
   addMagnetTaskMock: vi.fn(),
   resolveTrustedStreamBasesMock: vi.fn(),
@@ -77,6 +79,7 @@ vi.mock('../../lib/api-client', () => ({
   movieApi: {
     getMovieDetail: getMovieDetailMock,
     submitPlaybackEvidence: submitPlaybackEvidenceMock,
+    submitPlaybackFailure: submitPlaybackFailureMock,
     trackView: trackViewMock,
   },
   progressApi: {

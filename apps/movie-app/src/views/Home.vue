@@ -3,7 +3,7 @@ import type { SelectOption } from '@starye/ui'
 import type { GenreItem, Movie, WatchingHistoryItem } from '../types'
 import { MovieCard, Pagination, Select, SkeletonCard, useListQuery } from '@starye/ui'
 import { ArrowDownUp, ArrowUpRight, LayoutGrid, List, Search } from 'lucide-vue-next'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthGuard } from '../composables/useAuthGuard'
 import { genreApi, movieApi, progressApi } from '../lib/api-client'
@@ -16,6 +16,7 @@ const { requireLogin } = useAuthGuard()
 const userStore = useUserStore()
 const movies = ref<Movie[]>([])
 const { page, limit, total, totalPages, loading, error, execute, goToPage, updatePageSize } = useListQuery(20)
+const searchInput = ref<HTMLInputElement | null>(null)
 
 const activeGenre = ref('')
 const showAllGenres = ref(false)
@@ -49,6 +50,7 @@ const continueWatchingList = ref<WatchingHistoryItem[]>([])
 // 猜你喜欢推荐列表
 const recommendedMovies = ref<Movie[]>([])
 const recommendedLoading = ref(false)
+let globalShortcutHandler: ((event: KeyboardEvent) => void) | null = null
 
 // 排序选项配置
 const sortOptions: SelectOption<string>[] = [
@@ -262,6 +264,22 @@ onMounted(() => {
   fetchGenres()
   fetchContinueWatching()
   fetchRecommended()
+
+  globalShortcutHandler = (event: KeyboardEvent) => {
+    if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey)
+      return
+    const target = event.target as HTMLElement | null
+    if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable)
+      return
+    event.preventDefault()
+    searchInput.value?.focus()
+  }
+  window.addEventListener('keydown', globalShortcutHandler)
+})
+
+onBeforeUnmount(() => {
+  if (globalShortcutHandler)
+    window.removeEventListener('keydown', globalShortcutHandler)
 })
 </script>
 
@@ -455,9 +473,11 @@ onMounted(() => {
         <div class="movie-search-field">
           <Search aria-hidden="true" class="movie-search-icon" :size="16" />
           <input
+            ref="searchInput"
             v-model="filters.search"
             type="text"
             placeholder="搜索番号或标题..."
+            aria-label="搜索番号或标题，按 / 快速聚焦"
             class="ui-public-input"
             @keyup.enter="searchMovies"
           >

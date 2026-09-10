@@ -291,3 +291,85 @@ describe('adminMoviesRoutes — GET /missing-images', () => {
     })
   })
 })
+
+describe('adminMoviesRoutes — GET /media-integrity', () => {
+  it('按托管、外部和空值聚合影片、预览图和演员头像，并读回批次失败原因', async () => {
+    let selectCount = 0
+    const db = {
+      select: vi.fn().mockImplementation(() => {
+        const queryNumber = selectCount++
+        const chain = {
+          from: vi.fn().mockImplementation(() => queryNumber === 2
+            ? chain
+            : Promise.resolve(queryNumber === 0
+                ? [
+                    { coverImage: null, previewImages: [] },
+                    { coverImage: 'https://cdn.example/covers/a.webp', previewImages: ['https://img.example/p.jpg'] },
+                  ]
+                : queryNumber === 1
+                  ? [{ avatar: 'https://cdn.example/actors/a.webp' }, { avatar: null }]
+                  : [])),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          orderBy: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue(queryNumber === 2
+            ? [{
+                id: 'run-1',
+                status: 'succeeded',
+                failureCode: null,
+                receiptSummaryJson: { createdCount: 1, mediaFailureReasons: ['image_decode_failed'], source: 'movie' },
+                createdAt: 1,
+                terminalAt: 2,
+              }]
+            : []),
+        }
+        return chain
+      }),
+    } as any
+    const app = createApp(db, null, { CRAWLER_SECRET: 'test-secret', R2_PUBLIC_URL: 'https://cdn.example' })
+
+    const response = await app.fetch(new Request('http://localhost/media-integrity', {
+      headers: { 'x-service-token': 'test-secret' },
+    }))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        movies: { missing_value: 1, managed: 1 },
+        previews: { missing_value: 1, external_url: 1 },
+        actors: { missing_value: 1, managed: 1 },
+        decodeFailedCount: 1,
+        recentBackfill: [{
+          id: 'run-1',
+          summary: {
+            succeeded: 1,
+            failureReasons: ['image_decode_failed'],
+            sources: ['movie'],
+          },
+        }],
+      },
+    })
+  })
+})
+
+describe('adminMoviesRoutes — GET / playbackAvailability', () => {
+  it('接受播放验证筛选参数', async () => {
+    const db = {
+      query: {
+        movies: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+      },
+      select: vi.fn().mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ value: 0 }]),
+        }),
+      }),
+    } as any
+    const app = createApp(db, createMockUser({ role: 'admin' }))
+    const response = await app.fetch(new Request('http://localhost/?playbackAvailability=verified'))
+    expect(response.status).toBe(200)
+    expect(db.query.movies.findMany).toHaveBeenCalled()
+  })
+})

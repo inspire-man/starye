@@ -140,6 +140,35 @@ describe('runnerClient', () => {
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
+  it('includes sanitized media failure reasons on success receipts', async () => {
+    const fetch = vi.fn(async (_url: string, _init: RequestInit) => new Response(JSON.stringify({ accepted: true }), { status: 200 }))
+    const client = new RunnerClient({
+      apiBaseUrl: 'http://localhost:8080',
+      applicationAttempt: 1,
+      applicationRunId: 'run-1',
+      callbackKeyId: 'key-1',
+      callbackSecret: 'secret',
+      fetch: fetch as never,
+    })
+    const candidate: Parameters<typeof client.succeeded>[0] = {
+      attempt: 1,
+      runId: 'run-1',
+      sequence: 2,
+      snapshot: {
+        entrypoint: 'movie-crawler',
+        permissionResource: 'movie',
+        templateKey: 'movie',
+        templateVersion: 1,
+      },
+    }
+
+    await expect(client.succeeded(candidate, 3, ['MOV-1'], ['image_decode_failed', 'raw-error'])).resolves.toMatchObject({ accepted: true })
+    const body = JSON.parse(String((fetch.mock.calls[0]![1] as RequestInit).body)) as {
+      receipt: { contentIds: string[], mediaFailureReasons?: string[] }
+    }
+    expect(body.receipt.mediaFailureReasons).toEqual(['image_decode_failed'])
+  })
+
   it('bounds oversized success receipts to the API content-id limit', async () => {
     const fetch = vi.fn(async (_url: string, _init: RequestInit) => new Response(JSON.stringify({ accepted: true }), { status: 200 }))
     const client = new RunnerClient({

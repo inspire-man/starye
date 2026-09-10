@@ -1,6 +1,6 @@
 import type { SQL } from 'drizzle-orm'
 import type { AppEnv } from '../../../types'
-import { actors, movieActors, moviePublishers, movies, progress, publishers } from '@starye/db/schema'
+import { actors, crawlerAvailabilityCurrent, movieActors, moviePublishers, movies, movieSourceStates, playbackEvidenceSummaries, players, progress, publishers } from '@starye/db/schema'
 import { and, count, desc, eq, gte, inArray, like, lte, notInArray, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
@@ -52,7 +52,7 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
       const db = c.get('db')
       const params = c.req.valid('query')
 
-      const { page, limit, actor, publisher, genre, series, search, sortBy, sortOrder, yearFrom, yearTo, durationMin, durationMax } = params
+      const { page, limit, actor, publisher, genre, series, search, sortBy, sortOrder, yearFrom, yearTo, durationMin, durationMax, playbackAvailability } = params
       const offset = (page - 1) * limit
 
       try {
@@ -96,6 +96,19 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
           const searchCondition = or(
             like(movies.code, `%${search}%`),
             like(movies.title, `%${search}%`),
+            like(movies.series, `%${search}%`),
+            sql`EXISTS (
+              SELECT 1 FROM ${movieActors}
+              INNER JOIN ${actors} ON ${movieActors.actorId} = ${actors.id}
+              WHERE ${movieActors.movieId} = ${movies.id}
+              AND ${actors.name} LIKE ${`%${search}%`}
+            )`,
+            sql`EXISTS (
+              SELECT 1 FROM ${moviePublishers}
+              INNER JOIN ${publishers} ON ${moviePublishers.publisherId} = ${publishers.id}
+              WHERE ${moviePublishers.movieId} = ${movies.id}
+              AND ${publishers.name} LIKE ${`%${search}%`}
+            )`,
           )
           if (searchCondition) {
             conditions.push(searchCondition)
@@ -118,6 +131,34 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
 
         if (durationMax) {
           conditions.push(lte(movies.duration, Number.parseInt(durationMax)))
+        }
+        if (playbackAvailability === 'verified') {
+          conditions.push(sql`EXISTS (SELECT 1 FROM ${playbackEvidenceSummaries} WHERE ${playbackEvidenceSummaries.contentId} = ${movies.id})`)
+        }
+        else if (playbackAvailability === 'failed') {
+          conditions.push(sql`(
+            EXISTS (SELECT 1 FROM ${movieSourceStates} WHERE ${movieSourceStates.movieId} = ${movies.id} AND ${movieSourceStates.disposition} = 'source_failed')
+            OR EXISTS (SELECT 1 FROM ${crawlerAvailabilityCurrent} WHERE ${crawlerAvailabilityCurrent.contentId} = ${movies.id} AND ${crawlerAvailabilityCurrent.status} = 'unavailable')
+            OR EXISTS (SELECT 1 FROM ${players} WHERE ${players.movieId} = ${movies.id} AND ${players.lastPlaybackStatus} = 'failed')
+          )`)
+        }
+        else if (playbackAvailability === 'unverified') {
+          conditions.push(sql`(
+            EXISTS (SELECT 1 FROM ${players} WHERE ${players.movieId} = ${movies.id})
+            AND NOT EXISTS (SELECT 1 FROM ${playbackEvidenceSummaries} WHERE ${playbackEvidenceSummaries.contentId} = ${movies.id})
+          )`)
+        }
+        else if (playbackAvailability === 'magnet_only') {
+          conditions.push(sql`(
+            EXISTS (SELECT 1 FROM ${players} WHERE ${players.movieId} = ${movies.id} AND ${players.isActive} = 1 AND lower(${players.sourceUrl}) LIKE 'magnet:%')
+            AND NOT EXISTS (SELECT 1 FROM ${players} WHERE ${players.movieId} = ${movies.id} AND ${players.isActive} = 1 AND lower(${players.sourceUrl}) NOT LIKE 'magnet:%')
+          )`)
+        }
+        else if (playbackAvailability === 'stale') {
+          conditions.push(sql`(
+            EXISTS (SELECT 1 FROM ${movieSourceStates} WHERE ${movieSourceStates.movieId} = ${movies.id} AND ${movieSourceStates.observedAt} < unixepoch() - 604800)
+            AND NOT EXISTS (SELECT 1 FROM ${playbackEvidenceSummaries} WHERE ${playbackEvidenceSummaries.contentId} = ${movies.id})
+          )`)
         }
 
         const sortField = {

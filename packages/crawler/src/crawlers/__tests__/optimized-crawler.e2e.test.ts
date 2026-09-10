@@ -185,7 +185,7 @@ describe('optimized-crawler E2E', () => {
       )
     })
 
-    it('图片下载失败时应清空媒体字段，避免把源站外链写入数据库', async () => {
+    it('图片下载失败时应保留已有媒体，避免异常结果覆盖已知可用数据', async () => {
       class TestCrawler extends JavBusCrawler {
         protected override async getMovieInfo(): Promise<any> {
           return {

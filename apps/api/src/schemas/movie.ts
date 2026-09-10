@@ -10,6 +10,22 @@ const SourceReasonCodeSchema = v.nullable(v.picklist([
   'source_write_failed',
 ]))
 const PlaybackProofStatusSchema = v.picklist(['playback_verified', 'unverified'])
+const PlaybackAvailabilityStatusSchema = v.picklist(['none', 'unverified', 'verified', 'failed', 'magnet_only'])
+
+export const PlaybackAvailabilitySchema = v.pipe(
+  v.object({
+    status: PlaybackAvailabilityStatusSchema,
+    hasPlayers: v.boolean(),
+    lastVerifiedAt: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(0))),
+    lastCheckedAt: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(0))),
+    stale: v.boolean(),
+    failureReason: v.nullable(v.pipe(v.string(), v.minLength(1))),
+    nextAction: v.picklist(['none', 'recheck', 'repair']),
+  }),
+  v.metadata({ ref: 'PlaybackAvailability' }),
+)
+
+export type PlaybackAvailability = v.InferOutput<typeof PlaybackAvailabilitySchema>
 
 export const MetadataProjectionSchema = v.pipe(
   v.object({
@@ -194,6 +210,7 @@ export const MovieDetailSchema = v.pipe(
     updatedAt: TimestampSchema,
     players: v.array(PlayerItemSchema),
     readiness: ReadinessProjectionSchema,
+    playbackAvailability: v.optional(PlaybackAvailabilitySchema),
     relatedMovies: v.array(MovieItemSchema),
   }),
   v.metadata({ ref: 'MovieDetail' }),
@@ -297,6 +314,7 @@ export const GetMoviesQuerySchema = v.object({
     ),
     'desc',
   ),
+  playbackAvailability: v.optional(v.picklist(['verified', 'unverified', 'failed', 'magnet_only', 'stale'])),
 })
 
 export type GetMoviesQuery = v.InferOutput<typeof GetMoviesQuerySchema>

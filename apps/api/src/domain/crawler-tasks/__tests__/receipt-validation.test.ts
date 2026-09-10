@@ -173,6 +173,39 @@ describe('validateReceiptCandidate', () => {
     })
   })
 
+  it('persists sanitized mediaFailureReasons on ordinary movie receipts', async () => {
+    const result = await validateReceiptCandidate({
+      candidate: {
+        contentIds: ['MOV-001'],
+        createdCount: 1,
+        mediaFailureReasons: ['image_decode_failed', 'raw-error'],
+        templateKey: 'movie',
+        updatedCount: 0,
+      },
+      database: database({
+        movie: [{ code: 'MOV-001', crawled_players: 0, id: 'movie-1', total_players: 0 }],
+        sourceStates: [{
+          disposition: 'no_source',
+          eligible_count: 0,
+          movie_id: 'movie-1',
+          observed_at: 1_725_000_000,
+          reason_code: 'no_eligible_source',
+          repairable: 1,
+          source_revision: 4,
+        }],
+      }),
+      templateKey: 'movie',
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      receipt: {
+        mediaFailureReasons: ['image_decode_failed'],
+        primaryContentId: 'movie-1',
+      },
+    })
+  })
+
   it('sUN-064 reads back zero players as no_source and repairable', async () => {
     const result = await validateReceiptCandidate({
       candidate: {

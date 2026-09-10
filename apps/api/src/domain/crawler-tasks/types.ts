@@ -350,12 +350,14 @@ export interface CrawlerRunState {
 export interface CrawlerRunReceiptCandidate {
   readonly contentIds: readonly string[]
   readonly createdCount?: number
+  readonly mediaFailureReasons?: readonly string[]
   readonly templateKey: CrawlerTaskTemplateKey
   readonly updatedCount?: number
 }
 
 export interface ValidatedCrawlerRunReceipt {
   readonly createdCount: number
+  readonly mediaFailureReasons?: readonly string[]
   readonly primaryContentId: string
   /** Optional while legacy receipt rows are read during the schema boundary rollout. */
   readonly receiptSchemaVersion?: typeof CRAWLER_RECEIPT_SCHEMA_VERSION

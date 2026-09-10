@@ -14,6 +14,7 @@ vi.mock('@/lib/api', () => ({
     admin: {
       getMovies: vi.fn(),
       getMovie: vi.fn(),
+      getMovieMediaIntegrity: vi.fn(),
       getPlayers: vi.fn(),
       saveMovie: vi.fn(),
       deleteMovie: vi.fn(),
@@ -122,13 +123,35 @@ describe('movies.vue 集成测试', () => {
   let mockGetMovie: ReturnType<typeof vi.fn>
 
   beforeEach(async () => {
+    vi.clearAllMocks()
     const { api } = await import('@/lib/api')
     mockGetMovies = vi.mocked(api.admin.getMovies)
     mockGetMovie = vi.mocked(api.admin.getMovie)
     mockRoute.query = {}
     // 默认返回空数据
     mockGetMovies.mockResolvedValue({ data: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0 } })
-    vi.clearAllMocks()
+    vi.mocked(api.admin.getMovieMediaIntegrity).mockResolvedValue({
+      success: true,
+      data: {
+        generatedAt: '2026-09-10T00:00:00.000Z',
+        movies: { missing_value: 1, external_url: 0, invalid_url: 0, managed: 1 },
+        previews: { missing_value: 1, external_url: 0, invalid_url: 0, managed: 1 },
+        actors: { missing_value: 1, external_url: 0, invalid_url: 0, managed: 1 },
+        probeFailedCount: 1,
+        nonImageCount: 1,
+        decodeFailedCount: 1,
+        sourceUnavailableCount: 0,
+        recentBackfill: [{
+          id: 'run-1',
+          status: 'succeeded',
+          failureCode: null,
+          createdAt: '2026-09-10T00:00:00.000Z',
+          terminalAt: '2026-09-10T00:01:00.000Z',
+          receipt: { mediaFailureReasons: ['image_decode_failed'] },
+          summary: { processed: 2, succeeded: 1, failed: 1, skipped: 0, retried: 0, sources: ['movie'], failureReasons: ['image_decode_failed'] },
+        }],
+      },
+    })
   })
 
   afterEach(() => {
@@ -136,6 +159,36 @@ describe('movies.vue 集成测试', () => {
   })
 
   describe('完整流程', () => {
+    it('展示媒体完整性摘要和回填批次计数', async () => {
+      const { api } = await import('@/lib/api')
+      vi.mocked(api.admin.getMovieMediaIntegrity).mockResolvedValue({
+        success: true,
+        data: {
+          generatedAt: '2026-09-10T00:00:00.000Z',
+          movies: { missing_value: 2, external_url: 1, invalid_url: 0, managed: 3 },
+          previews: { missing_value: 2, external_url: 0, invalid_url: 0, managed: 3 },
+          actors: { missing_value: 1, external_url: 0, invalid_url: 0, managed: 4 },
+          probeFailedCount: 0,
+          nonImageCount: 1,
+          decodeFailedCount: 1,
+          sourceUnavailableCount: 0,
+          recentBackfill: [{
+            id: 'run-media-1',
+            status: 'succeeded',
+            failureCode: null,
+            createdAt: '2026-09-10T00:00:00.000Z',
+            terminalAt: '2026-09-10T00:01:00.000Z',
+            receipt: { mediaFailureReasons: ['image_decode_failed'] },
+            summary: { processed: 3, succeeded: 2, failed: 1, skipped: 0, retried: 0, sources: ['movie'], failureReasons: ['image_decode_failed'] },
+          }],
+        },
+      })
+      const wrapper = mount(Movies)
+      await flushPromises()
+      expect(wrapper.get('[data-testid="movie-media-integrity"]').text()).toContain('2')
+      expect(wrapper.get('[data-testid="movie-media-batches"]').text()).toContain('成功 2')
+      expect(wrapper.get('[data-testid="movie-media-batches"]').text()).toContain('image_decode_failed')
+    })
     it('valid receipt 会直接读取并打开既有电影编辑器', async () => {
       mockRoute.query = { receipt: 'movie-uuid-1' }
       mockGetMovie.mockResolvedValue({ id: 'movie-uuid-1', code: 'TEST-001', title: 'Receipt Movie', isR18: false })

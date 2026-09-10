@@ -9,13 +9,13 @@
 import type { InferInsertModel, SQL } from 'drizzle-orm'
 import type { MovieFilter } from '../../../schemas/admin'
 import type { AppEnv } from '../../../types'
-import { classifyStorageUrlKind } from '@starye/config/storage-purpose-policy'
-import { movies, players } from '@starye/db/schema'
+import { actors, crawlerAvailabilityCurrent, crawlerRuns, crawlerTasks, movies, movieSourceStates, playbackEvidenceSummaries, players } from '@starye/db/schema'
 import { and, asc, count, desc, eq, gte, isNull, like, lte, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import { nanoid } from 'nanoid'
 import * as v from 'valibot'
+import { countReceiptFailureReasons, emptyMediaKindCounts, hasManagedMovieMedia, incrementMediaKind, mediaIntegrityKind, normalizeBackfillReceipt } from '../../../domain/movies/media-integrity'
 import { clearGatewayCacheGroup } from '../../../lib/gateway-cache'
 import { captureResourceState, computeChanges, createAuditLog } from '../../../middleware/audit-logger'
 import { requireResource } from '../../../middleware/resource-guard'
@@ -24,20 +24,80 @@ import { AddPlayerSchema, BatchImportPlayersSchema, BatchOperationMoviesSchema, 
 
 const adminMovies = new Hono<AppEnv>()
 
-function hasManagedMovieMedia(
-  coverImage: string | null | undefined,
-  previewImages: unknown,
-  r2PublicUrl?: string | null,
-): boolean {
-  return classifyStorageUrlKind(coverImage, r2PublicUrl) === 'managed'
-    && (previewImages == null || (Array.isArray(previewImages)
-      && previewImages.every(image => typeof image === 'string' && classifyStorageUrlKind(image, r2PublicUrl) === 'managed')))
-}
-
 async function invalidateMovieGatewayCache(env: AppEnv['Bindings']): Promise<void> {
   const deleted = await clearGatewayCacheGroup(env.CACHE, 'movies')
   console.log('[Admin/Movies] Cleared gateway movie cache', { deleted })
 }
+
+// 统一返回影片/预览图/演员头像的媒体完整性摘要，供管理端和后续回填任务使用。
+adminMovies.get(
+  '/media-integrity',
+  describeRoute({
+    summary: '查询电影媒体完整性摘要',
+    description: '按托管状态聚合影片封面、预览图和演员头像，并返回最近回填批次入口',
+    tags: ['Admin'],
+    operationId: 'getMovieMediaIntegrity',
+    security: [{ serviceAuth: [] }],
+    responses: { 200: { description: '媒体完整性摘要' } },
+  }),
+  serviceAuth(['admin']),
+  async (c) => {
+    const db = c.get('db')
+    const r2PublicUrl = c.env.R2_PUBLIC_URL?.trim().replace(/\/+$/u, '')
+    const movieCounts = emptyMediaKindCounts()
+    const previewCounts = emptyMediaKindCounts()
+    const actorCounts = emptyMediaKindCounts()
+
+    const [movieRows, actorRows, recentRuns] = await Promise.all([
+      db.select({ coverImage: movies.coverImage, previewImages: movies.previewImages }).from(movies),
+      db.select({ avatar: actors.avatar }).from(actors),
+      db.select({
+        id: crawlerRuns.id,
+        status: crawlerRuns.status,
+        failureCode: crawlerRuns.failureCode,
+        receiptSummaryJson: crawlerRuns.receiptSummaryJson,
+        createdAt: crawlerRuns.createdAt,
+        terminalAt: crawlerRuns.terminalAt,
+      }).from(crawlerRuns).innerJoin(crawlerTasks, eq(crawlerRuns.taskId, crawlerTasks.id)).where(eq(crawlerTasks.templateKey, 'movie')).orderBy(desc(crawlerRuns.createdAt)).limit(10),
+    ])
+    const receiptSummaries = recentRuns.map(run => normalizeBackfillReceipt(run.receiptSummaryJson, run.failureCode))
+    const failureReasonCount = (code: 'http_probe_failed' | 'non_image' | 'image_decode_failed' | 'source_unavailable') => countReceiptFailureReasons(receiptSummaries, code)
+    for (const row of movieRows) {
+      incrementMediaKind(movieCounts, mediaIntegrityKind(row.coverImage, r2PublicUrl))
+      const previews = Array.isArray(row.previewImages) ? row.previewImages : []
+      if (previews.length === 0) {
+        incrementMediaKind(previewCounts, 'missing_value')
+      }
+      else {
+        for (const preview of previews) incrementMediaKind(previewCounts, mediaIntegrityKind(preview, r2PublicUrl))
+      }
+    }
+    for (const row of actorRows) incrementMediaKind(actorCounts, mediaIntegrityKind(row.avatar, r2PublicUrl))
+
+    return c.json({
+      success: true,
+      data: {
+        generatedAt: new Date().toISOString(),
+        movies: movieCounts,
+        previews: previewCounts,
+        actors: actorCounts,
+        probeFailedCount: failureReasonCount('http_probe_failed'),
+        nonImageCount: failureReasonCount('non_image') + failureReasonCount('image_decode_failed'),
+        decodeFailedCount: failureReasonCount('image_decode_failed'),
+        sourceUnavailableCount: failureReasonCount('source_unavailable'),
+        recentBackfill: recentRuns.map((run, index) => ({
+          id: run.id,
+          status: run.status,
+          failureCode: run.failureCode,
+          createdAt: run.createdAt,
+          terminalAt: run.terminalAt,
+          receipt: run.receiptSummaryJson,
+          summary: receiptSummaries[index],
+        })),
+      },
+    })
+  },
+)
 
 // 获取缺少媒体字段的历史影片，供生产电影任务按番号回填媒体。
 adminMovies.get(
@@ -270,6 +330,36 @@ function buildMovieFilters(filter: MovieFilter) {
   }
   else if (filter.hasPlayers === 'true') {
     conditions.push(sql`EXISTS (SELECT 1 FROM ${players} WHERE ${players.movieId} = ${movies.id})`)
+  }
+
+  if (filter.playbackAvailability === 'verified') {
+    conditions.push(sql`EXISTS (SELECT 1 FROM ${playbackEvidenceSummaries} WHERE ${playbackEvidenceSummaries.contentId} = ${movies.id})`)
+  }
+  else if (filter.playbackAvailability === 'failed') {
+    conditions.push(sql`(
+      EXISTS (SELECT 1 FROM ${movieSourceStates} WHERE ${movieSourceStates.movieId} = ${movies.id} AND ${movieSourceStates.disposition} = 'source_failed')
+      OR EXISTS (SELECT 1 FROM ${crawlerAvailabilityCurrent} WHERE ${crawlerAvailabilityCurrent.contentId} = ${movies.id} AND ${crawlerAvailabilityCurrent.status} = 'unavailable')
+      OR EXISTS (SELECT 1 FROM ${players} WHERE ${players.movieId} = ${movies.id} AND ${players.lastPlaybackStatus} = 'failed')
+    )`)
+  }
+  else if (filter.playbackAvailability === 'unverified') {
+    conditions.push(sql`(
+      EXISTS (SELECT 1 FROM ${players} WHERE ${players.movieId} = ${movies.id})
+      AND NOT EXISTS (SELECT 1 FROM ${playbackEvidenceSummaries} WHERE ${playbackEvidenceSummaries.contentId} = ${movies.id})
+      AND NOT EXISTS (SELECT 1 FROM ${movieSourceStates} WHERE ${movieSourceStates.movieId} = ${movies.id} AND ${movieSourceStates.disposition} = 'source_failed')
+    )`)
+  }
+  else if (filter.playbackAvailability === 'magnet_only') {
+    conditions.push(sql`(
+      EXISTS (SELECT 1 FROM ${players} WHERE ${players.movieId} = ${movies.id} AND ${players.isActive} = 1 AND lower(${players.sourceUrl}) LIKE 'magnet:%')
+      AND NOT EXISTS (SELECT 1 FROM ${players} WHERE ${players.movieId} = ${movies.id} AND ${players.isActive} = 1 AND lower(${players.sourceUrl}) NOT LIKE 'magnet:%')
+    )`)
+  }
+  else if (filter.playbackAvailability === 'stale') {
+    conditions.push(sql`(
+      EXISTS (SELECT 1 FROM ${movieSourceStates} WHERE ${movieSourceStates.movieId} = ${movies.id} AND ${movieSourceStates.observedAt} < unixepoch() - 604800)
+      AND NOT EXISTS (SELECT 1 FROM ${playbackEvidenceSummaries} WHERE ${playbackEvidenceSummaries.contentId} = ${movies.id})
+    )`)
   }
 
   return conditions.length > 0 ? and(...conditions) : undefined

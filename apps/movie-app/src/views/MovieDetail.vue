@@ -18,6 +18,7 @@ import { movieApi, ratingApi } from '../lib/api-client'
 import { useUserStore } from '../stores/user'
 import { copyMagnetLinks, copyToClipboard } from '../utils/clipboard'
 import { isMagnetLink } from '../utils/magnetLink'
+import { canRenderMedia } from '../utils/media-status'
 import {
   buildPlaybackRoute,
   classifyPlaybackSource,
@@ -299,13 +300,16 @@ const movieUsageSummary = computed<MovieUsageSummary>(() => {
   }
 
   if (source.disposition === 'ready' && firstEligibleDirect.value) {
+    const verified = readiness.value?.playback.status === 'playback_verified'
     return {
-      description: '已找到可直接播放的来源，点击“立即播放”即可开始观看。',
-      entryDescription: '浏览器可以直接打开',
-      entryTitle: '直接播放',
+      description: verified
+        ? '播放验证已通过。打开播放器后，就可以开始观看。'
+        : '已有播放源，但还没有真实播放验证，不要把“有 players 行”当成可播放。',
+      entryDescription: verified ? '使用当前的直接入口' : '先验证再播放，或继续尝试当前入口',
+      entryTitle: verified ? '直接播放' : '未验证播放源',
       sourceDescription: `${source.eligibleCount} 个候选来源`,
-      sourceTitle: '可播放',
-      title: '现在可以直接观看',
+      sourceTitle: verified ? '播放验证通过' : '有播放源（未验证）',
+      title: verified ? '现在可以直接观看' : '有播放源，尚未验证可播放',
     }
   }
 
@@ -350,6 +354,26 @@ const movieUsageSummary = computed<MovieUsageSummary>(() => {
     sourceTitle: source.disposition === 'source_failed' ? '来源失败' : '需要处理',
     title: '现在可以怎么用',
   }
+})
+
+const playbackAvailabilitySummary = computed(() => {
+  const availability = movie.value?.playbackAvailability
+  if (!availability)
+    return '尚未完成播放验证'
+  if (availability.status === 'verified') {
+    return availability.lastVerifiedAt
+      ? (`最近验证时间 ${new Date(availability.lastVerifiedAt * 1000).toLocaleString()}`)
+      : '播放验证已通过'
+  }
+  if (availability.status === 'failed') {
+    const reason = availability.failureReason ? (`：${availability.failureReason}`) : ''
+    return `播放验证失败${reason}`
+  }
+  if (availability.status === 'magnet_only')
+    return '有磁力但没有直接播放'
+  if (availability.status === 'none')
+    return '没有播放源'
+  return availability.stale ? '播放源未验证，状态可能已过期' : '播放源未验证'
 })
 
 function releaseDateValue(value: number | string | null | undefined): number | null {
@@ -1197,7 +1221,7 @@ onMounted(() => {
           <!-- 封面：完整展示横版原图（400:267） -->
           <div class="movie-detail-cover shrink-0 w-full md:w-72 lg:w-80">
             <img
-              v-if="movie.coverImage && !r18SourcesHidden"
+              v-if="canRenderMedia(movie.coverImage) && !r18SourcesHidden"
               :src="movie.coverImage"
               :alt="movie.title"
               class="aspect-[4/3] w-full rounded-lg shadow-md object-cover"
@@ -1534,7 +1558,7 @@ onMounted(() => {
           <div class="movie-detail-status-card">
             <span class="movie-detail-status-label">播放验证</span>
             <strong>{{ r18SourcesHidden ? '需先开启' : readiness.playback.status === 'playback_verified' ? '已验证' : '未验证' }}</strong>
-            <span>{{ r18SourcesHidden ? '开启 R18 访问后再检查' : readiness.playback.status === 'playback_verified' ? '最近有真实播放记录' : '首次播放后会更新' }}</span>
+            <span>{{ r18SourcesHidden ? '开启 R18 访问后再检查' : playbackAvailabilitySummary }}</span>
           </div>
           <div class="movie-detail-status-card">
             <span class="movie-detail-status-label">推荐入口</span>
@@ -2335,7 +2359,7 @@ onMounted(() => {
             <div class="relative overflow-hidden rounded-lg shadow-md group-hover:shadow-xl transition-shadow duration-300">
               <div class="aspect-3/4 bg-gray-700">
                 <img
-                  v-if="related.coverImage && (!related.isR18 || userStore.user?.isR18Verified)"
+                  v-if="canRenderMedia(related.coverImage) && (!related.isR18 || userStore.user?.isR18Verified)"
                   :src="related.coverImage"
                   :alt="related.title"
                   class="w-full h-full object-cover object-right group-hover:scale-105 transition-transform duration-300"

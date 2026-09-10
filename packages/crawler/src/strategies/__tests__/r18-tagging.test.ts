@@ -31,7 +31,7 @@ describe('crawler source tagging -> isR18', () => {
     document.title = 'ABP-123 Test Movie'
     document.body.innerHTML = `
       <h3>ABP-123 Test Movie</h3>
-      <div class="bigImage"><img src="https://www.javbus.com/cover.jpg"></div>
+      <div class="bigImage"><img data-src="https://www.javbus.com/cover-lazy.jpg" src=""></div>
       <a class="sample-box" href="https://pics.example/abp-123-1.jpg"><img src="/sample/abp-123-1.jpg"></a>
       <a class="sample-box" href="https://pics.example/abp-123-2.jpg"><img src="/sample/abp-123-2.jpg"></a>
       <a class="sample-box" href="https://pics.example/abp-123-1.jpg"><img src="/sample/abp-123-1.jpg"></a>
@@ -59,6 +59,7 @@ describe('crawler source tagging -> isR18', () => {
     const info = await strategy.getMovieInfo('https://www.javbus.com/ABP-123', createMockPage())
 
     expect(info.code).toBe('ABP-123')
+    expect(info.coverImage).toBe('https://www.javbus.com/cover-lazy.jpg')
     expect(info.isR18).toBe(true)
     expect(info.genres).toEqual(expect.arrayContaining(['字幕', '巨乳']))
     expect(info.publisher).toBe('S1')
@@ -75,7 +76,7 @@ describe('crawler source tagging -> isR18', () => {
         <strong>XYZ-789</strong>
         <span class="current-title">JavDB Movie</span>
       </h2>
-      <div class="column-video-cover"><img src="https://javdb.com/cover.jpg"></div>
+      <div class="column-video-cover"><img data-src="https://javdb.com/cover-lazy.jpg" src=""></div>
       <div class="tile-images preview-images">
         <a class="preview-video-container" href="/login"><img src="https://javdb.com/video-cover.jpg"></a>
         <a class="tile-item" href="https://c0.jdbstatic.com/samples/xyz-1.jpg"><img src="https://c0.jdbstatic.com/samples/xyz-1-small.jpg"></a>
@@ -105,6 +106,7 @@ describe('crawler source tagging -> isR18', () => {
     const info = await strategy.getMovieInfo('https://javdb.com/v/xyz-789', createMockPage())
 
     expect(info.code).toBe('XYZ-789')
+    expect(info.coverImage).toBe('https://javdb.com/cover-lazy.jpg')
     expect(info.isR18).toBe(true)
     expect(info.publisher).toBe('MOODYZ')
     expect(info.genres).toEqual(expect.arrayContaining(['中文字幕', '高清']))

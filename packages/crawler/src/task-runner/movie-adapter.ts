@@ -20,8 +20,12 @@ export function createMovieAdapter(config: JavBusCrawlerConfig, execute?: (conte
           context.observe(movieInfo.code)
         }
       }
-      await new ObservedJavBusCrawler(config).run()
-      return { contentIds: [...contentIds] }
+      const crawler = new ObservedJavBusCrawler(config)
+      await crawler.run()
+      const mediaFailureReasons = crawler.getMediaFailureReasons()
+      return mediaFailureReasons.length > 0
+        ? { contentIds: [...contentIds], mediaFailureReasons }
+        : { contentIds: [...contentIds] }
     },
   }
 }

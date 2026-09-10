@@ -1,4 +1,5 @@
 import type { CrawlerImagePurpose } from '@starye/config/storage-purpose-policy'
+import type { CrawlerImageFailureCode } from './media-integrity'
 import { Agent as HttpAgent } from 'node:http'
 import { Agent as HttpsAgent } from 'node:https'
 import { S3Client } from '@aws-sdk/client-s3'
@@ -8,6 +9,7 @@ import CacheableLookup from 'cacheable-lookup'
 import got from 'got'
 import sharp from 'sharp'
 import * as v from 'valibot'
+import { classifyFetchedImage } from './media-integrity'
 
 // Configuration Schema (使用 looseObject 允许未来扩展配置项)
 export const R2ConfigSchema = v.looseObject({
@@ -21,6 +23,14 @@ export const R2ConfigSchema = v.looseObject({
 export type R2Config = v.InferOutput<typeof R2ConfigSchema>
 
 export type ImageVariant = 'thumb' | 'preview' | 'original'
+export type { CrawlerImageFailureCode }
+
+export class CrawlerImageError extends Error {
+  constructor(public readonly code: CrawlerImageFailureCode, message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'CrawlerImageError'
+  }
+}
 
 export interface ProcessedImage {
   key: string
@@ -113,6 +123,13 @@ export class ImageProcessor {
     this.dnsCache.install(this.httpsAgent)
   }
 
+  isManagedUrl(url: string | null | undefined): boolean {
+    if (!url)
+      return false
+    const base = this.publicUrl.replace(/\/+$/u, '')
+    return url === base || url.startsWith(`${base}/`)
+  }
+
   /**
    * Process an image URL: download, resize/convert, and upload to R2
    * @param target Purpose-aware upload target
@@ -125,25 +142,64 @@ export class ImageProcessor {
     const parsedUrl = new URL(target.imageUrl)
     const defaultReferer = `${parsedUrl.origin}/`
 
-    const imageBuffer = target.imageData ?? await got(target.imageUrl, {
-      agent: {
-        http: this.httpAgent,
-        https: this.httpsAgent,
-      },
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        'Referer': target.refererUrl || defaultReferer,
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-      },
-      timeout: {
-        request: 60000, // Increased timeout
-      },
-      retry: {
-        limit: 5, // Increased retries
-        methods: ['GET'], // 只对 GET 请求重试
-      },
-    }).buffer()
+    let imageBuffer: Uint8Array
+    let contentType: string | undefined
+    let statusCode = 0
+    try {
+      if (target.imageData) {
+        imageBuffer = target.imageData
+      }
+      else {
+        const response = await got(target.imageUrl, {
+          agent: {
+            http: this.httpAgent,
+            https: this.httpsAgent,
+          },
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Referer': target.refererUrl || defaultReferer,
+            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+          },
+          responseType: 'buffer',
+          timeout: {
+            request: 60000, // Increased timeout
+          },
+          retry: {
+            limit: 5, // Increased retries
+            methods: ['GET'], // only retry GET
+          },
+        })
+        imageBuffer = response.body
+        contentType = typeof response.headers['content-type'] === 'string' ? response.headers['content-type'] : undefined
+        statusCode = response.statusCode
+      }
+    }
+    catch (error) {
+      const errorStatus = typeof error === 'object' && error !== null && 'response' in error
+        ? Number((error as { response?: { statusCode?: number } }).response?.statusCode)
+        : 0
+      throw new CrawlerImageError(errorStatus >= 400 ? 'http_probe_failed' : 'source_unavailable', `image_source_fetch_failed:${target.imageUrl}`, { cause: error })
+    }
+
+    let metadata: { format?: string, width?: number, height?: number } | null = null
+    let decodeError = false
+    try {
+      metadata = await sharp(imageBuffer, { failOn: 'none' }).metadata()
+    }
+    catch {
+      decodeError = true
+      metadata = null
+    }
+    const classified = classifyFetchedImage({
+      statusCode,
+      contentType,
+      hasBuffer: imageBuffer.byteLength > 0,
+      metadata,
+      decodeError,
+    })
+    if (classified !== 'ok')
+      throw new CrawlerImageError(classified, `image_${classified}:${target.imageUrl}`)
 
     // 2. Create the main pipeline from buffer
     const pipeline = sharp(imageBuffer, { failOn: 'none' })
@@ -160,7 +216,9 @@ export class ImageProcessor {
     }
     catch (error) {
       console.error(`Failed to process image ${target.imageUrl}:`, error)
-      throw error
+      if (error instanceof CrawlerImageError)
+        throw error
+      throw new CrawlerImageError('upload_failed', `image_upload_failed:${target.imageUrl}`, { cause: error })
     }
   }
 

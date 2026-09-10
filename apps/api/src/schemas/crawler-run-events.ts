@@ -197,6 +197,13 @@ export const CrawlerRunLifecycleEventSchema = v.strictObject({
     v.strictObject({
       contentIds: v.pipe(v.array(Identifier), v.minLength(1), v.maxLength(100)),
       createdCount: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000))),
+      mediaFailureReasons: v.optional(v.pipe(v.array(v.picklist([
+        'source_unavailable',
+        'http_probe_failed',
+        'non_image',
+        'image_decode_failed',
+        'upload_failed',
+      ])), v.maxLength(32))),
       templateKey: v.picklist(['movie', 'manga']),
       updatedCount: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000))),
     }),

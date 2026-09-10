@@ -1,6 +1,7 @@
 import type { Database } from '@starye/db'
 import type { SourceCandidate, SourceHealthProjection } from '../movies/source-contract'
 import type { ChapterPageTaskSnapshot, ComicChapterTaskSnapshot, CrawlerReceiptUnion, CrawlerRunReceiptCandidate, CrawlerTaskSnapshotUnion, CrawlerTaskTemplateKey, RepairPlayersReceipt } from './types'
+import { sanitizeMediaFailureReasons } from '../movies/media-integrity'
 import { deriveSourceReadiness } from '../movies/source-contract'
 import { readRepairSourceReadback } from '../movies/source-reconciliation'
 import { readCrawlerTaskSnapshot } from './template-registry'
@@ -270,10 +271,12 @@ export async function validateReceiptCandidate(input: {
 
     const source = await readMovieSource(input.database, row.id)
 
+    const mediaFailureReasons = sanitizeMediaFailureReasons(candidate.mediaFailureReasons)
     return {
       ok: true,
       receipt: {
         createdCount: safeCount(candidate.createdCount, 1),
+        ...(mediaFailureReasons ? { mediaFailureReasons } : {}),
         primaryContentId: row.id,
         receiptSchemaVersion: CRAWLER_RECEIPT_SCHEMA_VERSION,
         source,

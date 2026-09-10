@@ -4,6 +4,7 @@ import type { ProviderName } from '../../../domain/crawler-tasks/types'
 import { movies as moviesTable } from '@starye/db/schema'
 import { and, count, desc, eq, notInArray, sql } from 'drizzle-orm'
 import { createAvailabilityRepository } from '../../../domain/crawler-tasks/availability-repository'
+import { derivePlaybackAvailability, isMagnetPlaybackUrl } from '../../../domain/movies/playback-availability'
 import { createServerReadinessProjection } from '../../../domain/movies/source-contract'
 import { createPlaybackEvidenceRepository } from '../../../domain/playback-evidence/repository'
 import { VIDEO_PROBE_POLICY_V1 } from '../../../domain/video-availability/probe-policy'
@@ -69,6 +70,7 @@ interface MovieDetailResult extends Omit<Movie, 'actors' | 'publishers'> {
     coverImage: string | null
     isR18: boolean
   }>
+  playbackAvailability: ReturnType<typeof derivePlaybackAvailability>
 }
 
 interface VideoLayerFact {
@@ -380,6 +382,42 @@ export async function getMovies(options: GetMoviesOptions): Promise<GetMoviesRes
   }
 }
 
+function playbackAvailabilityFromMovie(input: {
+  readonly players: readonly {
+    readonly isActive?: boolean | null
+    readonly sourceUrl?: string | null
+    readonly lastPlaybackStatus?: 'failed' | null
+    readonly lastPlaybackReason?: string | null
+    readonly lastPlaybackAt?: Date | number | null
+  }[]
+  readonly readiness: ReturnType<typeof createServerReadinessProjection>
+  readonly availability: MovieAvailabilityReadback
+}) {
+  const eligible = input.players.filter(player => player.isActive === true && typeof player.sourceUrl === 'string' && player.sourceUrl.trim().length > 0)
+  const fact = input.availability.current.direct ?? input.availability.current.magnet
+  const failedPlayer = input.players
+    .filter(player => player.lastPlaybackStatus === 'failed')
+    .map(player => ({
+      reason: player.lastPlaybackReason ?? 'playback_failed',
+      at: player.lastPlaybackAt instanceof Date ? Math.floor(player.lastPlaybackAt.getTime() / 1000) : Number(player.lastPlaybackAt ?? 0),
+    }))
+    .sort((left, right) => right.at - left.at)[0]
+  return derivePlaybackAvailability({
+    hasPlayers: input.players.length > 0,
+    hasEligibleDirect: eligible.some(player => !isMagnetPlaybackUrl(player.sourceUrl)),
+    hasEligibleMagnet: eligible.some(player => isMagnetPlaybackUrl(player.sourceUrl)),
+    sourceDisposition: input.readiness.source.disposition,
+    playbackStatus: input.readiness.playback.status,
+    lastVerifiedAt: input.readiness.playback.evidence?.observedAt ?? null,
+    lastCheckedAt: fact?.observedAt ?? input.readiness.source.observedAt,
+    availabilityStatus: fact?.status ?? null,
+    availabilityReason: fact?.reasonCode ?? null,
+    playerPlaybackFailed: Boolean(failedPlayer),
+    playerPlaybackFailureReason: failedPlayer?.reason ?? null,
+    playerPlaybackFailedAt: failedPlayer?.at || null,
+  })
+}
+
 export interface GetMovieByIdentifierOptions {
   db: Database
   identifier: string
@@ -407,6 +445,9 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
           ratingCount: true,
           reportCount: true,
           isActive: true,
+          lastPlaybackStatus: true,
+          lastPlaybackReason: true,
+          lastPlaybackAt: true,
         },
         orderBy: (players, { asc }) => [asc(players.sortOrder)],
       },
@@ -637,6 +678,7 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
       availability,
       primaryContentId: movie.id,
       readiness,
+      playbackAvailability: playbackAvailabilityFromMovie({ players: [], readiness, availability }),
       coverImage: null,
       previewImages: [],
       players: [],
@@ -652,6 +694,11 @@ export async function getMovieByIdentifier(options: GetMovieByIdentifierOptions)
     availability,
     primaryContentId: movie.id,
     readiness,
+    playbackAvailability: playbackAvailabilityFromMovie({
+      players: movie.players ?? [],
+      readiness,
+      availability,
+    }),
     previewImages,
     players: playersWithRatings ?? [],
     actors: actorsData,

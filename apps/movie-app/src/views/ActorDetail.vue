@@ -4,11 +4,14 @@ import { onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import ActorRelations from '../components/ActorRelations.vue'
 import { actorApi } from '../lib/api-client'
+import { canRenderMedia } from '../utils/media-status'
 
 const route = useRoute()
 const loading = ref(true)
 const actor = ref<ActorDetail | null>(null)
 const error = ref('')
+const avatarLoadFailed = ref(false)
+const failedMovieCovers = ref(new Set<string>())
 
 async function fetchActorDetail() {
   loading.value = true
@@ -39,6 +42,10 @@ function formatDate(timestamp?: number) {
   return new Date(timestamp * 1000).toLocaleDateString('zh-CN')
 }
 
+function markMovieCoverFailed(movieId: string): void {
+  failedMovieCovers.value = new Set(failedMovieCovers.value).add(movieId)
+}
+
 onMounted(() => {
   fetchActorDetail()
 })
@@ -63,9 +70,10 @@ onMounted(() => {
         <div class="actor-header">
           <div class="actor-cover">
             <img
-              v-if="actor.avatar"
+              v-if="canRenderMedia(actor.avatar) && !avatarLoadFailed"
               :src="actor.avatar"
               :alt="actor.name"
+              @error="avatarLoadFailed = true"
             >
             <div v-else class="cover-placeholder">
               {{ actor.name[0] }}
@@ -149,9 +157,10 @@ onMounted(() => {
             >
               <div class="movie-cover">
                 <img
-                  v-if="movie.coverImage"
+                  v-if="canRenderMedia(movie.coverImage) && !failedMovieCovers.has(movie.id)"
                   :src="movie.coverImage"
                   :alt="movie.title"
+                  @error="markMovieCoverFailed(movie.id)"
                 >
                 <div v-else class="cover-placeholder">
                   {{ movie.title[0] }}
