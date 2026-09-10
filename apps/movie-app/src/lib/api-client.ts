@@ -129,6 +129,17 @@ export const movieApi = {
         // 埋点失败静默，不影响播放体验
       })
   },
+
+  /**
+   * 上报播放源失效
+   */
+  async submitPlaybackFailure(playerId: string, reason: 'playback_failed' | 'source_candidate_invalid' | 'stream_failed' | 'direct_transport_failed'): Promise<{ playerId: string, movieId: string, lastPlaybackStatus: 'failed', lastPlaybackReason: string, lastPlaybackAt: number }> {
+    return apiFetch(`/movies/players/${encodeURIComponent(playerId)}/playback-failure`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    })
+  },
+
 }
 
 // ─── Series API ────────────────────────────────────────────────────────────
@@ -340,16 +351,6 @@ export const ratingApi = {
       body: JSON.stringify({ playerId, score }),
     })
     return data.data
-  },
-
-  /**
-   * 上报播放源失效
-   */
-  async submitPlaybackFailure(playerId: string, reason: 'playback_failed' | 'source_candidate_invalid' | 'stream_failed' | 'direct_transport_failed'): Promise<{ playerId: string, movieId: string, lastPlaybackStatus: 'failed', lastPlaybackReason: string, lastPlaybackAt: number }> {
-    return apiFetch(`/movies/players/${encodeURIComponent(playerId)}/playback-failure`, {
-      method: 'POST',
-      body: JSON.stringify({ reason }),
-    })
   },
 
   async reportPlayer(playerId: string): Promise<{ reportCount: number, isActive: boolean }> {

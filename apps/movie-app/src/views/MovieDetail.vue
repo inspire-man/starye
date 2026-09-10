@@ -1222,7 +1222,7 @@ onMounted(() => {
           <div class="movie-detail-cover shrink-0 w-full md:w-72 lg:w-80">
             <img
               v-if="canRenderMedia(movie.coverImage) && !r18SourcesHidden"
-              :src="movie.coverImage"
+              :src="movie.coverImage ?? undefined"
               :alt="movie.title"
               class="aspect-[4/3] w-full rounded-lg shadow-md object-cover"
             >
@@ -2360,7 +2360,7 @@ onMounted(() => {
               <div class="aspect-3/4 bg-gray-700">
                 <img
                   v-if="canRenderMedia(related.coverImage) && (!related.isR18 || userStore.user?.isR18Verified)"
-                  :src="related.coverImage"
+                  :src="related.coverImage ?? undefined"
                   :alt="related.title"
                   class="w-full h-full object-cover object-right group-hover:scale-105 transition-transform duration-300"
                   loading="lazy"
