@@ -1078,8 +1078,34 @@ onBeforeUnmount(() => {
     justify-content: flex-start;
   }
 
+  .movie-library-shortcut {
+    min-height: 2.75rem;
+  }
+
+  .movie-catalog-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .movie-search-field,
+  .movie-sort-select {
+    min-width: 100%;
+    flex: 1 1 auto;
+  }
+
   .movie-clear-button {
     margin-left: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .movie-library-page {
+    overflow-x: hidden;
+  }
+
+  .movie-library-shortcut,
+  .movie-sort-order {
+    min-height: 2.75rem;
   }
 }
 </style>

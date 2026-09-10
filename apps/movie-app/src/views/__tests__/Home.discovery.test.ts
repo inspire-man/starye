@@ -65,4 +65,12 @@ describe('movie home discovery', () => {
     expect(wrapper.get('[data-recommendation-strategy]').text()).toContain('公开策略')
     expect(wrapper.get('[data-recommendation-strategy]').text()).not.toContain('猜你喜欢')
   })
+
+  it('keeps discovery filters and search stretched on a 390px-class layout', async () => {
+    const wrapper = mount(Home)
+    await flushPromises()
+    expect(wrapper.get('[data-discovery-entries]').classes()).toEqual(expect.arrayContaining(['flex', 'flex-wrap']))
+    expect(wrapper.get('.movie-search-field').exists()).toBe(true)
+    expect(wrapper.get('.movie-catalog-toolbar').exists()).toBe(true)
+  })
 })
