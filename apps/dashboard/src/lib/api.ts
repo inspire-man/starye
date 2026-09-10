@@ -862,6 +862,7 @@ export const api = {
     },
 
     getMovieMediaIntegrity: () => apiFetch<{ success: boolean, data: { generatedAt: string, movies: Record<string, number>, previews: Record<string, number>, actors: Record<string, number>, probeFailedCount: number, nonImageCount: number, decodeFailedCount: number, sourceUnavailableCount: number, recentBackfill: Array<{ id: string, status: string, failureCode: string | null, createdAt: string | Date | null, terminalAt: string | Date | null, receipt: unknown, summary: { processed: number, succeeded: number, failed: number, skipped: number, retried: number, sources: string[], failureReasons: string[] } }> } }>(`/admin/movies/media-integrity`),
+    getMovieOpsBatches: () => apiFetch<{ success: boolean, data: { kinds: string[], batches: Array<{ id: string, kind: string, operation: string, status: string, failureCode: string | null, updatedAt: string | Date | null, summary: { processed: number, succeeded: number, failed: number, skipped: number, retried: number, sources: string[], failureReasons: string[] } }> } }>(`/admin/movies/ops-batches`),
 
     getMovie: (id: string) => apiFetch<Movie>(`/admin/movies/${id}`),
 

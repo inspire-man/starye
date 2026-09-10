@@ -373,3 +373,53 @@ describe('adminMoviesRoutes — GET / playbackAvailability', () => {
     expect(db.query.movies.findMany).toHaveBeenCalled()
   })
 })
+
+describe('adminMoviesRoutes — GET /ops-batches', () => {
+  it('maps movie crawler tasks onto shared ops batches', async () => {
+    let selectCount = 0
+    const db = {
+      select: vi.fn().mockImplementation(() => {
+        const queryNumber = selectCount++
+        const chain = {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          orderBy: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockImplementation(() => queryNumber === 0
+            ? Promise.resolve([{
+                id: 'task-1',
+                operation: 'repair_players',
+                requestSnapshotJson: { intent: { kind: 'repair_players' } },
+                updatedAt: 1,
+              }])
+            : chain),
+        }
+        if (queryNumber === 1) {
+          chain.orderBy = vi.fn().mockResolvedValue([{
+            taskId: 'task-1',
+            status: 'failed',
+            failureCode: 'source_failed',
+            receiptSummaryJson: { failed: 1, retried: 1 },
+          }])
+        }
+        return chain
+      }),
+    } as any
+    const app = createApp(db, null, { CRAWLER_SECRET: 'test-secret' })
+    const response = await app.fetch(new Request('http://localhost/ops-batches', {
+      headers: { 'x-service-token': 'test-secret' },
+    }))
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        kinds: ['backfill_covers', 'backfill_previews', 'recheck_players', 'sync_metadata', 'repair_relations'],
+        batches: [{
+          id: 'task-1',
+          kind: 'recheck_players',
+          status: 'failed',
+          summary: { failed: 1, retried: 1 },
+        }],
+      },
+    })
+  })
+})

@@ -5,6 +5,7 @@ import { and, count, desc, eq, gte, inArray, like, lte, notInArray, or, sql } fr
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import * as v from 'valibot'
+import { movieSearchPattern } from '../../../domain/movies/movie-search'
 import { GetMovieParamSchema, GetMoviesQuerySchema, MovieDetailSchema, MovieItemSchema, MoviesListDataSchema } from '../../../schemas/movie'
 import { ErrorResponseSchema, SuccessResponseSchema } from '../../../schemas/responses'
 import { getMovieDetail } from '../../movies/handlers/movies.handler'
@@ -93,21 +94,22 @@ export const publicMoviesRoutes = new Hono<AppEnv>()
         }
 
         if (search) {
+          const pattern = movieSearchPattern(search)
           const searchCondition = or(
-            like(movies.code, `%${search}%`),
-            like(movies.title, `%${search}%`),
-            like(movies.series, `%${search}%`),
+            like(movies.code, pattern),
+            like(movies.title, pattern),
+            like(movies.series, pattern),
             sql`EXISTS (
               SELECT 1 FROM ${movieActors}
               INNER JOIN ${actors} ON ${movieActors.actorId} = ${actors.id}
               WHERE ${movieActors.movieId} = ${movies.id}
-              AND ${actors.name} LIKE ${`%${search}%`}
+              AND ${actors.name} LIKE ${pattern}
             )`,
             sql`EXISTS (
               SELECT 1 FROM ${moviePublishers}
               INNER JOIN ${publishers} ON ${moviePublishers.publisherId} = ${publishers.id}
               WHERE ${moviePublishers.movieId} = ${movies.id}
-              AND ${publishers.name} LIKE ${`%${search}%`}
+              AND ${publishers.name} LIKE ${pattern}
             )`,
           )
           if (searchCondition) {

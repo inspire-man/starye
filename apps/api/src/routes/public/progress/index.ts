@@ -5,6 +5,7 @@ import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import { nanoid } from 'nanoid'
 import * as v from 'valibot'
+import { deriveWatchCompleted } from '../../../domain/movies/watch-progress'
 import {
   GetReadingProgressQuerySchema,
   GetWatchingProgressQuerySchema,
@@ -335,6 +336,7 @@ publicProgress.post(
     const db = c.get('db')
     const user = c.get('user')!
     const { movieCode, currentTime, duration, completed } = c.req.valid('json')
+    const resolvedCompleted = deriveWatchCompleted(currentTime, duration, completed)
 
     try {
       const movie = await db.query.movies.findFirst({
@@ -354,7 +356,7 @@ publicProgress.post(
           contentId: movieCode,
           position: currentTime,
           duration: duration ?? null,
-          completed,
+          completed: resolvedCompleted,
           updatedAt: new Date(),
         })
         .onConflictDoUpdate({
@@ -362,7 +364,7 @@ publicProgress.post(
           set: {
             position: currentTime,
             duration: duration ?? null,
-            completed,
+            completed: resolvedCompleted,
             updatedAt: new Date(),
           },
         })

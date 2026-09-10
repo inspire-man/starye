@@ -62,6 +62,7 @@ export const movieApi = {
     yearTo?: number
     durationMin?: number
     durationMax?: number
+    playbackAvailability?: 'verified' | 'unverified' | 'failed' | 'magnet_only' | 'stale'
   }): Promise<PaginatedResponse<Movie>> {
     const res = await client.api.public.movies.$get({
       query: {
@@ -78,6 +79,7 @@ export const movieApi = {
         yearTo: params?.yearTo?.toString(),
         durationMin: params?.durationMin?.toString(),
         durationMax: params?.durationMax?.toString(),
+        playbackAvailability: params?.playbackAvailability,
       },
     })
     const data = await res.json()

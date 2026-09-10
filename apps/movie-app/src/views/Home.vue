@@ -29,6 +29,7 @@ const filters = reactive({
   yearFrom: '' as number | '',
   yearTo: '' as number | '',
   duration: '' as '' | 'short' | 'medium' | 'long',
+  playbackAvailability: '' as '' | 'verified',
 })
 
 // Genre 标签数据
@@ -50,6 +51,7 @@ const continueWatchingList = ref<WatchingHistoryItem[]>([])
 // 猜你喜欢推荐列表
 const recommendedMovies = ref<Movie[]>([])
 const recommendedLoading = ref(false)
+const recommendedStrategy = ref<'hot' | 'personalized' | 'recent'>('hot')
 let globalShortcutHandler: ((event: KeyboardEvent) => void) | null = null
 
 // 排序选项配置
@@ -80,6 +82,8 @@ async function syncUrl(pageNumber = page.value): Promise<void> {
       yearFrom: filters.yearFrom ? String(filters.yearFrom) : undefined,
       yearTo: filters.yearTo ? String(filters.yearTo) : undefined,
       duration: filters.duration || undefined,
+      playbackAvailability: filters.playbackAvailability || undefined,
+      view: viewMode.value !== 'grid' ? viewMode.value : undefined,
     },
   })
 }
@@ -109,6 +113,7 @@ async function fetchMovies() {
     yearTo: filters.yearTo || undefined,
     durationMin,
     durationMax,
+    playbackAvailability: filters.playbackAvailability || undefined,
   }).then((response) => {
     if (!response.success)
       throw new Error('加载影片失败')
@@ -149,15 +154,12 @@ async function fetchContinueWatching() {
 }
 
 async function fetchRecommended() {
-  if (!userStore.user) {
-    return
-  }
   recommendedLoading.value = true
   try {
     const response = await movieApi.getRecommended()
     if (response.success && response.data) {
-      // 推荐最多展示 12 部
       recommendedMovies.value = response.data.slice(0, 12)
+      recommendedStrategy.value = response.meta?.strategy === 'personalized' ? 'personalized' : 'hot'
     }
   }
   catch {
@@ -166,6 +168,19 @@ async function fetchRecommended() {
   finally {
     recommendedLoading.value = false
   }
+}
+
+function applyDiscovery(kind: 'createdAt' | 'updatedAt' | 'verified') {
+  if (kind === 'verified') {
+    filters.playbackAvailability = 'verified'
+    filters.sortBy = 'updatedAt'
+  }
+  else {
+    filters.playbackAvailability = ''
+    filters.sortBy = kind
+  }
+  filters.sortOrder = 'desc'
+  void applyFilters()
 }
 
 async function applyFilters(): Promise<void> {
@@ -255,6 +270,9 @@ onMounted(() => {
   filters.yearFrom = route.query.yearFrom && !Array.isArray(route.query.yearFrom) ? Number(route.query.yearFrom) : ''
   filters.yearTo = route.query.yearTo && !Array.isArray(route.query.yearTo) ? Number(route.query.yearTo) : ''
   filters.duration = (typeof route.query.duration === 'string' ? route.query.duration : '') as typeof filters.duration
+  filters.playbackAvailability = route.query.playbackAvailability === 'verified' ? 'verified' : ''
+  if (route.query.view === 'list' || route.query.view === 'grid')
+    viewMode.value = route.query.view
   const storedViewMode = localStorage.getItem('movie-view-mode')
   if (storedViewMode === 'grid' || storedViewMode === 'list')
     viewMode.value = storedViewMode
@@ -314,6 +332,18 @@ onBeforeUnmount(() => {
           </RouterLink>
         </nav>
       </div>
+      <nav class="movie-library-shortcuts mt-4 flex flex-wrap gap-2" data-discovery-entries aria-label="发现入口">
+        <button type="button" class="movie-library-shortcut" data-discovery="createdAt" @click="applyDiscovery('createdAt')">
+          最近新增
+        </button>
+        <button type="button" class="movie-library-shortcut" data-discovery="updatedAt" @click="applyDiscovery('updatedAt')">
+          最近更新
+        </button>
+        <button type="button" class="movie-library-shortcut" data-discovery="verified" @click="applyDiscovery('verified')">
+          播放验证通过
+        </button>
+        <a href="#continue-watching" class="movie-library-shortcut" data-discovery="continue">继续观看</a>
+      </nav>
     </header>
 
     <!-- R18 Status Banner (if logged in and not verified) -->
@@ -332,7 +362,7 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- 继续观看板块（仅登录用户，且有未完成记录时显示） -->
-    <section v-if="continueWatchingList.length > 0" class="continue-watching">
+    <section v-if="continueWatchingList.length > 0" id="continue-watching" class="continue-watching">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold text-white">
           继续观看
@@ -375,10 +405,10 @@ onBeforeUnmount(() => {
     </section>
 
     <!-- 猜你喜欢板块（仅登录用户显示） -->
-    <section v-if="userStore.user && (recommendedMovies.length > 0 || recommendedLoading)" class="continue-watching">
+    <section v-if="recommendedMovies.length > 0 || recommendedLoading" class="continue-watching" data-recommendation-strategy>
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold text-white">
-          猜你喜欢
+          {{ recommendedStrategy === 'personalized' ? '根据观看历史推荐' : '热门（公开策略，非个性化）' }}
         </h2>
       </div>
       <div v-if="recommendedLoading" class="continue-list">

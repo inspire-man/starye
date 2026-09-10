@@ -36,6 +36,7 @@ const movies = ref<Movie[]>([])
 const loading = ref(true)
 const error = ref('')
 const mediaIntegrity = ref<Awaited<ReturnType<typeof api.admin.getMovieMediaIntegrity>>['data'] | null>(null)
+const opsBatches = ref<Awaited<ReturnType<typeof api.admin.getMovieOpsBatches>>['data'] | null>(null)
 
 const isEditModalOpen = ref(false)
 const editingMovie = ref<Movie | null>(null)
@@ -114,8 +115,12 @@ watch(limit, () => {
 
 onMounted(async () => {
   try {
-    const response = await api.admin.getMovieMediaIntegrity()
-    mediaIntegrity.value = response.success ? response.data : null
+    const [mediaResponse, opsResponse] = await Promise.all([
+      api.admin.getMovieMediaIntegrity(),
+      api.admin.getMovieOpsBatches(),
+    ])
+    mediaIntegrity.value = mediaResponse.success ? mediaResponse.data : null
+    opsBatches.value = opsResponse.success ? opsResponse.data : null
   }
   catch (e) {
     handleError(e, '加载媒体完整性摘要失败')
@@ -646,6 +651,23 @@ const tableColumns = [
           来源暂不可用
         </div><div class="mt-1 text-xl font-semibold">
           {{ mediaIntegrity.sourceUnavailableCount }}
+        </div>
+      </div>
+    </section>
+    <section v-if="opsBatches?.batches.length" class="mb-4 rounded-lg border border-border bg-card p-4" data-testid="movie-ops-batches">
+      <h2 class="mb-3 text-sm font-semibold">
+        电影运管批次
+      </h2>
+      <p class="mb-2 text-xs text-muted-foreground">
+        缺封面/预览回填、播放源重检、元数据同步和关系修复共用任务批次。
+      </p>
+      <div class="space-y-2">
+        <div v-for="batch in opsBatches.batches" :key="batch.id" class="flex flex-wrap items-center gap-3 text-xs">
+          <span class="rounded bg-muted px-2 py-0.5">{{ batch.kind }}</span>
+          <span class="font-mono">{{ batch.id }}</span>
+          <span>{{ batch.status }}</span>
+          <span v-if="batch.failureCode" class="text-destructive">{{ batch.failureCode }}</span>
+          <span class="text-muted-foreground">成功 {{ batch.summary.succeeded }} / 失败 {{ batch.summary.failed }} / 跳过 {{ batch.summary.skipped }} / 重试 {{ batch.summary.retried }}</span>
         </div>
       </div>
     </section>
