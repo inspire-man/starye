@@ -3,8 +3,13 @@ export type MediaStatus = 'missing_value' | 'external_url' | 'managed' | 'load_f
 export function classifyMediaStatus(url: string | null | undefined): MediaStatus {
   if (!url || url.trim().length === 0)
     return 'missing_value'
+
+  const value = url.trim()
+  if (value.startsWith('/') && !value.startsWith('//'))
+    return 'managed'
+
   try {
-    const parsed = new URL(url)
+    const parsed = new URL(value)
     return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? 'external_url' : 'load_failed'
   }
   catch {
