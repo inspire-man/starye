@@ -36,6 +36,10 @@ const isMergeDialogOpen = ref(false)
 const mergeSourceId = ref<string>('')
 const mergeTargetId = ref<string>('')
 const mergingPublishers = ref(false)
+const isCreateOpen = ref(false)
+const newPublisherName = ref('')
+const creatingPublisher = ref(false)
+const deletingPublisher = ref(false)
 
 // 国家选项列表
 const countries = ref<string[]>([])
@@ -205,6 +209,44 @@ async function handleUpdate() {
   }
 }
 
+async function handleCreate() {
+  const name = newPublisherName.value.trim()
+  if (!name)
+    return
+  creatingPublisher.value = true
+  try {
+    await api.admin.createPublisher({ name })
+    success('厂商已创建')
+    isCreateOpen.value = false
+    newPublisherName.value = ''
+    await loadPublishers()
+  }
+  catch (e) {
+    handleError(e, '创建厂商失败')
+  }
+  finally {
+    creatingPublisher.value = false
+  }
+}
+
+async function handleDelete() {
+  if (!editingPublisher.value?.id)
+    return
+  deletingPublisher.value = true
+  try {
+    await api.admin.deletePublisher(editingPublisher.value.id)
+    success('厂商已删除')
+    isEditModalOpen.value = false
+    await loadPublishers()
+  }
+  catch (e) {
+    handleError(e, '删除厂商失败')
+  }
+  finally {
+    deletingPublisher.value = false
+  }
+}
+
 function openMergeDialog(publisherId: string) {
   mergeSourceId.value = publisherId
   mergeTargetId.value = ''
@@ -291,6 +333,9 @@ onMounted(() => {
       <div class="list-toolbar-group">
         <button class="list-toolbar-secondary" type="button" :disabled="loading" @click="loadPublishers">
           刷新
+        </button>
+        <button class="list-toolbar-primary" type="button" @click="isCreateOpen = true">
+          新增
         </button>
       </div>
     </div>
@@ -438,6 +483,23 @@ onMounted(() => {
             保存
           </button>
         </div>
+      </div>
+    </DetailDrawer>
+
+    <DetailDrawer
+      :open="isCreateOpen"
+      title="新增厂商"
+      @update:open="isCreateOpen = $event"
+    >
+      <div class="form-field">
+        <label>名称</label>
+        <input v-model="newPublisherName" class="form-input" type="text">
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" type="button" @click="isCreateOpen = false">取消</button>
+        <button class="btn-primary" type="button" :disabled="creatingPublisher" @click="handleCreate">
+          {{ creatingPublisher ? '创建中...' : '创建' }}
+        </button>
       </div>
     </DetailDrawer>
 

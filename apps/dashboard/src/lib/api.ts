@@ -932,6 +932,9 @@ export const api = {
         body: JSON.stringify(data),
       }),
 
+    deleteActor: (id: string) =>
+      apiFetch('/admin/actors/' + id, { method: 'DELETE' }),
+
     batchRecrawlActors: (ids: string[]) =>
       apiFetch<{ success: boolean, total: number, marked: number, message: string }>('/admin/actors/batch-recrawl', {
         method: 'POST',
@@ -970,6 +973,9 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+
+    deletePublisher: (id: string) =>
+      apiFetch('/admin/publishers/' + id, { method: 'DELETE' }),
 
     updateMoviePublishers: (movieId: string, publishers: { id: string, name: string, sortOrder: number }[]) =>
       apiFetch(`/admin/movies/${movieId}/publishers`, {

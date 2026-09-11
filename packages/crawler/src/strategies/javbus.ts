@@ -1,6 +1,8 @@
 /* eslint-disable no-console */
 import type { Page } from 'puppeteer-core'
 import type { MovieCrawlStrategy, MovieInfo } from '../lib/strategy'
+import { Window } from 'happy-dom'
+import { parseJavBusPublisherDetails } from './javbus-parser'
 
 export class JavBusStrategy implements MovieCrawlStrategy {
   name = 'javbus'
@@ -352,10 +354,11 @@ export class JavBusStrategy implements MovieCrawlStrategy {
         if (!magnetLink)
           return
 
-        const magnetUrl = magnetLink.href.split('&')[0]
-        if (seen.has(magnetUrl))
+        const magnetUrl = magnetLink.href
+        const hash = (magnetUrl.match(/urn:btih:([a-zA-Z0-9]+)/i) || [])[1]?.toLowerCase() || magnetUrl
+        if (seen.has(hash))
           return
-        seen.add(magnetUrl)
+        seen.add(hash)
 
         const tds = row.querySelectorAll('td')
         const nameEl = tds[0]?.querySelector('a')
@@ -680,13 +683,11 @@ export class JavBusStrategy implements MovieCrawlStrategy {
       await this._smartDelay() // 请求延迟（任务 3.10）
       await this._preparePage(page, url)
 
-      // 等待内容加载
       try {
-        await page.waitForSelector('.logo', { timeout: 10000 })
+        await page.waitForSelector('.logo, .movie-box, title', { timeout: 10000 })
       }
       catch {
-        console.warn(`[JavBus] 厂商详情页加载超时: ${url}`)
-        return null // 失败降级（任务 3.8）
+        console.warn(`[JavBus] 厂商页加载超时: ${url}`)
       }
 
       const publisherInfo = await page.evaluate(() => {
@@ -726,24 +727,30 @@ export class JavBusStrategy implements MovieCrawlStrategy {
         }
       })
 
-      if (!publisherInfo) {
-        return null
+      const html = await page.content()
+      const window = new Window({ url })
+      let identity = null
+      try {
+        window.document.write(html)
+        identity = parseJavBusPublisherDetails(window.document as unknown as Document, url)
+      }
+      finally {
+        window.close()
       }
 
-      // 从 URL 提取 sourceId
-      const urlParts = url.split('/')
-      const sourceId = urlParts.at(-1) || ''
+      const sourceId = identity?.sourceId || url.split('/').filter(Boolean).pop() || ''
+      if (!publisherInfo && !identity)
+        return null
 
       return {
         source: 'javbus',
         sourceId,
         sourceUrl: url,
-        // 规范化 logo URL，避免镜像站域名入库
-        logo: this._normalizeImageUrl(publisherInfo.logo),
-        website: publisherInfo.website || undefined,
-        description: publisherInfo.description || undefined,
-        foundedYear: publisherInfo.foundedYear ? Number.parseInt(publisherInfo.foundedYear) : undefined,
-        country: publisherInfo.country || undefined,
+        logo: this._normalizeImageUrl(publisherInfo?.logo || identity?.logo),
+        website: publisherInfo?.website || undefined,
+        description: publisherInfo?.description || undefined,
+        foundedYear: publisherInfo?.foundedYear ? Number.parseInt(publisherInfo.foundedYear) : undefined,
+        country: publisherInfo?.country || undefined,
       }
     }
     catch (e: any) {

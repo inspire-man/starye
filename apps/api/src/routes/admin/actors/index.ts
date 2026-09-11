@@ -1221,4 +1221,73 @@ adminActors.post(
   },
 )
 
+
+adminActors.delete(
+  '/:id',
+  describeRoute({
+    summary: '删除演员',
+    description: '删除演员记录，关联 movie_actor 级联删除',
+    tags: ['Admin'],
+    operationId: 'deleteAdminActor',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '删除成功' },
+      404: { description: '演员不存在' },
+    },
+  }),
+  async (c) => {
+    const actorId = c.req.param('id')
+    const db = c.get('db')
+    const before = await captureResourceState(c, 'actor', actorId)
+    if (!before)
+      return c.json({ error: 'Actor not found' }, 404)
+
+    await db.delete(actors).where(eq(actors.id, actorId))
+    await createAuditLog(c, {
+      action: 'DELETE',
+      resourceType: 'actor',
+      resourceId: actorId,
+      resourceIdentifier: before.name,
+      changes: { before, after: {} },
+    })
+    const cache = new CacheManager(c.env.CACHE)
+    await Promise.all([
+      cache.delete(CacheKeys.actorDetail(actorId)),
+      cache.deleteByPrefix('actors:list:'),
+      cache.delete(CacheKeys.actorStats()),
+    ])
+    return c.json({ success: true })
+  },
+)
+
+adminActors.post(
+  '/bulk-delete',
+  describeRoute({
+    summary: '批量删除演员',
+    tags: ['Admin'],
+    operationId: 'bulkDeleteAdminActors',
+    security: [{ cookieAuth: [] }],
+    responses: { 200: { description: '删除完成' } },
+  }),
+  validator('json', BatchDeleteSchema),
+  async (c) => {
+    const { ids } = c.req.valid('json')
+    const db = c.get('db')
+    const existing = await db.select({ id: actors.id, name: actors.name }).from(actors).where(inArray(actors.id, ids))
+    if (existing.length === 0)
+      return c.json({ success: true, deleted: 0 })
+    await db.delete(actors).where(inArray(actors.id, existing.map(item => item.id)))
+    for (const actor of existing) {
+      await createAuditLog(c, {
+        action: 'DELETE',
+        resourceType: 'actor',
+        resourceId: actor.id,
+        resourceIdentifier: actor.name,
+        changes: { before: actor, after: {} },
+      })
+    }
+    return c.json({ success: true, deleted: existing.length })
+  },
+)
+
 export const adminActorsRoutes = adminActors

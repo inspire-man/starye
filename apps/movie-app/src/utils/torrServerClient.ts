@@ -51,7 +51,7 @@ export class TorrServerClient {
 
   constructor(config: TorrServerClientConfig) {
     this.config = {
-      timeout: 15000,
+      timeout: 45000,
       ...config,
     }
   }
@@ -152,6 +152,22 @@ export class TorrServerClient {
    */
   async getVersion(): Promise<string> {
     return await this.get<string>('/echo')
+  }
+
+  /**
+   * 轮询种子文件列表，等待 TorrServer 解析磁力元数据
+   */
+  async waitForFiles(hash: string, options?: { attempts?: number, intervalMs?: number }): Promise<TorrentFile[]> {
+    const attempts = options?.attempts ?? 8
+    const intervalMs = options?.intervalMs ?? 2500
+    for (let index = 0; index < attempts; index++) {
+      if (index > 0)
+        await new Promise(resolve => setTimeout(resolve, intervalMs))
+      const info = await this.getTorrentInfo(hash)
+      if (info.file_stats && info.file_stats.length > 0)
+        return info.file_stats
+    }
+    return []
   }
 
   /**

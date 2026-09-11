@@ -171,21 +171,9 @@ export function useTorrServer() {
       throw new Error('磁力链接无效或无法解析')
     }
 
-    // 获取文件列表（addTorrent 可能已包含，否则重新获取）
     let files = torrentInfo.file_stats
-    if (!files || files.length === 0) {
-      // 等一会儿让 TorrServer 解析种子元数据
-      await sleep(2000)
-      const info = await client.value.getTorrentInfo(torrentInfo.hash)
-      files = info.file_stats
-    }
-
-    if (!files || files.length === 0) {
-      // 再等一会儿
-      await sleep(3000)
-      const info = await client.value.getTorrentInfo(torrentInfo.hash)
-      files = info.file_stats
-    }
+    if (!files || files.length === 0)
+      files = await client.value.waitForFiles(torrentInfo.hash)
 
     if (!files || files.length === 0) {
       throw new Error('无法获取种子文件列表，种子可能无法解析')
@@ -275,6 +263,3 @@ export function useTorrServer() {
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}

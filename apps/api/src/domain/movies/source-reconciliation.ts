@@ -743,8 +743,9 @@ export async function reconcileMovieSources(input: ReconcileMovieSourcesInput): 
         sortOrder: player.sortOrder ?? index,
         ...(player.isActive !== undefined ? { isActive: player.isActive } : {}),
       }))
-      if (values.length > 0)
-        await input.db.insert(players).values(values)
+      const PLAYER_INSERT_CHUNK = 8
+      for (let index = 0; index < values.length; index += PLAYER_INSERT_CHUNK)
+        await input.db.insert(players).values(values.slice(index, index + PLAYER_INSERT_CHUNK))
     }
 
     operation = 'source_read_failed'

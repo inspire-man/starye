@@ -318,13 +318,14 @@ export async function syncMovieData(options: SyncMovieDataOptions): Promise<Sync
         }
       }
 
-      // 写入厂商关联（独立 try-catch，失败不影响影片元数据）
-      if (publisher) {
+      // 写入厂商关联：製作商和發行商都入库
+      const publisherNames = [...new Set([publisher, series].map(value => value?.trim()).filter((value): value is string => Boolean(value)))]
+      for (const publisherName of publisherNames) {
         try {
-          await syncPublisher(db, movieId, publisher, isR18 ?? false)
+          await syncPublisher(db, movieId, publisherName, isR18 ?? false)
         }
         catch (publisherErr) {
-          console.warn(`[SyncService] ⚠️ 厂商关联写入失败 (${code}):`, publisherErr instanceof Error ? publisherErr.message : String(publisherErr))
+          console.warn(`[SyncService] ⚠️ 厂商关联写入失败 (${code}/${publisherName}):`, publisherErr instanceof Error ? publisherErr.message : String(publisherErr))
         }
       }
 
