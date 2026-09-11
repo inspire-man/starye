@@ -468,6 +468,13 @@ onMounted(() => {
           <div class="form-actions">
             <button
               class="btn-danger"
+              :disabled="deletingPublisher"
+              @click="handleDelete"
+            >
+              {{ deletingPublisher ? '删除中...' : '删除' }}
+            </button>
+            <button
+              class="btn-danger"
               @click="openMergeDialog(editingPublisher!.id)"
             >
               合并重复
@@ -496,7 +503,9 @@ onMounted(() => {
         <input v-model="newPublisherName" class="form-input" type="text">
       </div>
       <div class="modal-footer">
-        <button class="btn-secondary" type="button" @click="isCreateOpen = false">取消</button>
+        <button class="btn-secondary" type="button" @click="isCreateOpen = false">
+          取消
+        </button>
         <button class="btn-primary" type="button" :disabled="creatingPublisher" @click="handleCreate">
           {{ creatingPublisher ? '创建中...' : '创建' }}
         </button>
