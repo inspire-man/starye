@@ -103,7 +103,7 @@ describe('javbus parser', () => {
     const magnets = parseJavBusMagnetLinks('<a href="magnet:?xt=urn:btih:ABCDEF1234567890ABCDEF1234567890ABCDEF12&amp;dn=SNOS-313">SNOS-313</a>')
     expect(magnets).toHaveLength(1)
     expect(magnets[0].sourceUrl).toContain('dn=SNOS-313')
-    expect(magnets[0].sourceUrl).toContain('tr=' + encodeURIComponent('udp://tracker.opentrackr.org:1337/announce'))
+    expect(magnets[0].sourceUrl).toContain(`tr=${encodeURIComponent('udp://tracker.opentrackr.org:1337/announce')}`)
   })
 
   it('parses magnet anchors in Node instead of the page sandbox', () => {
@@ -114,6 +114,6 @@ describe('javbus parser', () => {
     expect(magnets).toHaveLength(1)
     expect(magnets[0].sourceName).toBe('SNOS-313 [HD]')
     expect(magnets[0].sourceUrl).toContain('dn=SNOS-313')
-    expect(magnets[0].sourceUrl).toContain('tr=' + encodeURIComponent('udp://tracker.opentrackr.org:1337/announce'))
+    expect(magnets[0].sourceUrl).toContain(`tr=${encodeURIComponent('udp://tracker.opentrackr.org:1337/announce')}`)
   })
 })
