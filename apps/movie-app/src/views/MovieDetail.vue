@@ -1303,7 +1303,7 @@ onMounted(() => {
 
               <div v-if="movie.duration" class="flex items-center text-sm">
                 <span class="text-gray-300 w-24 font-medium">时长：</span>
-                <span class="text-white">{{ Math.floor(movie.duration / 60) }} 分钟</span>
+                <span class="text-white">{{ movie.duration }} 分钟</span>
               </div>
 
               <div class="flex items-start text-sm">

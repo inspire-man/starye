@@ -157,6 +157,34 @@ describe('torrServerClient', () => {
     })
   })
 
+
+  describe('waitForFiles', () => {
+    it('returns files after TorrServer finishes metadata lookup', async () => {
+      const client = new TorrServerClient({ serverUrl: 'http://localhost:8090' })
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          statusText: 'OK',
+          text: () => Promise.resolve(JSON.stringify({ title: 'pending', hash: 'abc', stat: 1, file_stats: [] })),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          statusText: 'OK',
+          text: () => Promise.resolve(JSON.stringify({
+            title: 'ready',
+            hash: 'abc',
+            stat: 3,
+            file_stats: [{ id: 0, path: 'SNOS-313.mp4', length: 1000 }],
+          })),
+        })
+      vi.stubGlobal('fetch', fetchMock)
+
+      const files = await client.waitForFiles('abc', { attempts: 2, intervalMs: 1 })
+      expect(files).toEqual([{ id: 0, path: 'SNOS-313.mp4', length: 1000 }])
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+  })
+
   describe('formatTorrentFileSize', () => {
     it('应该格式化 0 字节', () => {
       expect(formatTorrentFileSize(0)).toBe('0 B')

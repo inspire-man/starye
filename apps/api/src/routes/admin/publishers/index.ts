@@ -16,6 +16,7 @@ import { CacheKeys, CacheManager, CacheTTL, withCache } from '../../../lib/cache
 import { captureResourceState, createAuditLog } from '../../../middleware/audit-logger'
 import { requireResource } from '../../../middleware/resource-guard'
 import {
+  BatchDeleteSchema,
   BatchQueryPublisherStatusSchema,
   BatchSyncPublishersSchema,
   CreatePublisherSchema,
@@ -862,6 +863,75 @@ adminPublishers.post(
       console.error('[Admin/Publishers] ❌ Failed to create publisher:', message)
       return c.json({ error: message }, 500)
     }
+  },
+)
+
+
+adminPublishers.delete(
+  '/:id',
+  describeRoute({
+    summary: '删除厂商',
+    description: '删除厂商记录，关联 movie_publisher 级联删除',
+    tags: ['Admin'],
+    operationId: 'deleteAdminPublisher',
+    security: [{ cookieAuth: [] }],
+    responses: {
+      200: { description: '删除成功' },
+      404: { description: '厂商不存在' },
+    },
+  }),
+  async (c) => {
+    const publisherId = c.req.param('id')
+    const db = c.get('db')
+    const before = await captureResourceState(c, 'publisher', publisherId)
+    if (!before)
+      return c.json({ error: 'Publisher not found' }, 404)
+
+    await db.delete(publishers).where(eq(publishers.id, publisherId))
+    await createAuditLog(c, {
+      action: 'DELETE',
+      resourceType: 'publisher',
+      resourceId: publisherId,
+      resourceIdentifier: before.name,
+      changes: { before, after: {} },
+    })
+    const cache = new CacheManager(c.env.CACHE)
+    await Promise.all([
+      cache.delete(CacheKeys.publisherDetail(publisherId)),
+      cache.deleteByPrefix('publishers:list:'),
+      cache.delete(CacheKeys.publisherStats()),
+    ])
+    return c.json({ success: true })
+  },
+)
+
+adminPublishers.post(
+  '/bulk-delete',
+  describeRoute({
+    summary: '批量删除厂商',
+    tags: ['Admin'],
+    operationId: 'bulkDeleteAdminPublishers',
+    security: [{ cookieAuth: [] }],
+    responses: { 200: { description: '删除完成' } },
+  }),
+  validator('json', BatchDeleteSchema),
+  async (c) => {
+    const { ids } = c.req.valid('json')
+    const db = c.get('db')
+    const existing = await db.select({ id: publishers.id, name: publishers.name }).from(publishers).where(inArray(publishers.id, ids))
+    if (existing.length === 0)
+      return c.json({ success: true, deleted: 0 })
+    await db.delete(publishers).where(inArray(publishers.id, existing.map(item => item.id)))
+    for (const publisher of existing) {
+      await createAuditLog(c, {
+        action: 'DELETE',
+        resourceType: 'publisher',
+        resourceId: publisher.id,
+        resourceIdentifier: publisher.name,
+        changes: { before: publisher, after: {} },
+      })
+    }
+    return c.json({ success: true, deleted: existing.length })
   },
 )
 

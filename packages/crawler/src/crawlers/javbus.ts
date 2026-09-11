@@ -21,9 +21,11 @@ import {
 import { OptimizedCrawler } from '../core/optimized-crawler'
 import { FailedTaskRecorder } from '../lib/anti-detection'
 import { JavDBImageStrategy } from '../strategies/javdb-image'
+import { collectJavBusPublisherRecords, isJavBusMovieDetailUrl, keepCompleteMagnetUrl, parseJavBusMagnetAnchors, parseJavBusMagnetLinks, resolveJavBusSeedMovieUrls } from '../strategies/javbus-parser'
 
 export interface JavBusCrawlerConfig extends OptimizedCrawlerConfig {
   startUrl?: string
+  seedMovieUrls?: string[]
   useRandomMirror?: boolean
   recoveryMode?: boolean
   startPage?: number
@@ -53,6 +55,7 @@ export class JavBusCrawler extends OptimizedCrawler {
 
   // 系列名到厂商名的映射（用于建立映射表）
   private seriesPublisherMap?: Map<string, string>
+  private seedMovieUrls: string[]
 
   private async backfillIncompleteImages(): Promise<Set<string>> {
     const maxMovies = this.config.limits?.maxMovies ?? 0
@@ -92,13 +95,18 @@ export class JavBusCrawler extends OptimizedCrawler {
   constructor(config: JavBusCrawlerConfig) {
     super(config)
 
+    this.seedMovieUrls = resolveJavBusSeedMovieUrls(config)
+
     // 选择镜像站点
     if (config.useRandomMirror) {
       this.currentMirror = JAVBUS_MIRRORS[Math.floor(Math.random() * JAVBUS_MIRRORS.length)]
       console.log(`🔄 使用随机镜像: ${this.currentMirror}`)
     }
+    else if (config.startUrl && !isJavBusMovieDetailUrl(config.startUrl)) {
+      this.currentMirror = config.startUrl
+    }
     else {
-      this.currentMirror = config.startUrl || JAVBUS_MIRRORS[0]
+      this.currentMirror = JAVBUS_MIRRORS[0]
     }
 
     this.currentPage = config.startPage || 1
@@ -233,20 +241,9 @@ export class JavBusCrawler extends OptimizedCrawler {
         }
       }
 
-      // 收集厂商信息（使用製作商而非發行商）
-      if (movieInfo.publisher) {
-        // 優先使用製作商URL（studioUrl），其次是發行商URL（seriesUrl）
-        const publisherUrl = movieInfo.studioUrl || movieInfo.publisherUrl
-
-        if (publisherUrl) {
-          // 从 URL 提取 sourceId (如 https://www.javbus.com/studio/6m8 -> 6m8)
-          const sourceId = publisherUrl.split('/').pop() || movieInfo.publisher
-          this.collectedPublisherUrls.set(movieInfo.publisher, {
-            name: movieInfo.publisher,
-            sourceUrl: publisherUrl,
-            sourceId,
-          })
-        }
+      // 收集製作商和發行商，SNOS-313 的 label/9x 必须入库
+      for (const publisher of collectJavBusPublisherRecords(movieInfo)) {
+        this.collectedPublisherUrls.set(publisher.name, publisher)
       }
 
       // 收集系列到厂商的映射（如果系列和厂商不同）
@@ -440,10 +437,12 @@ export class JavBusCrawler extends OptimizedCrawler {
             console.log(`[JavBusCrawler] 🧲 找到 ${magnetPlayers.length} 个磁力链接: ${movieInfo.code}`)
           }
           else {
+            delete movieInfo.players
             console.log(`[JavBusCrawler] ℹ️ 暂无磁力链接: ${movieInfo.code}`)
           }
         }
         catch (e: any) {
+          delete movieInfo.players
           console.warn(`[JavBusCrawler] ⚠️ 磁链抓取失败 (${movieInfo?.code}): ${e.message}`)
         }
       }
@@ -486,59 +485,55 @@ export class JavBusCrawler extends OptimizedCrawler {
       return { gid, uc, img }
     })
 
+    try {
+      await page.waitForSelector('a[href^="magnet:"]', { timeout: 8000 })
+    }
+    catch {
+      // 页面可能尚未注入磁链，继续走 AJAX 回退
+    }
+
+    const existingAnchors = await page.evaluate(() => {
+      return [...document.querySelectorAll('a[href^="magnet:"]')].map((element) => {
+        const anchor = element as HTMLAnchorElement
+        return {
+          href: (anchor.getAttribute('href') || anchor.href || '').trim(),
+          name: (anchor.textContent || '').replace(/\s+/g, ' ').trim(),
+        }
+      })
+    })
+    const existingMagnets = parseJavBusMagnetAnchors(existingAnchors)
+    if (existingMagnets.length > 0)
+      return existingMagnets
+
     if (!ajaxParams.gid) {
       return []
     }
 
     const ajaxUrl = `${origin}/ajax/uncledatoolsbyajax.php?gid=${ajaxParams.gid}&lang=zh&img=${ajaxParams.img}&uc=${ajaxParams.uc}&floor=${Date.now()}`
 
-    const magnets = await page.evaluate(async (fetchUrl: string) => {
-      const resp = await fetch(fetchUrl, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    let magnets: MovieInfo['players'] = []
+    try {
+      const cookies = await page.cookies()
+      const cookieHeader = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ')
+      const resp = await fetch(ajaxUrl, {
+        headers: {
+          'User-Agent': USER_AGENT,
+          Referer: pageUrl,
+          Cookie: cookieHeader,
+          'X-Requested-With': 'XMLHttpRequest',
+        },
       })
-      if (!resp.ok)
-        return []
-
-      const html = await resp.text()
-      const parser = new DOMParser()
-      // AJAX 返回的是 <tr> 片段，需包裹 <table> 才能正确解析
-      const doc = parser.parseFromString(`<table><tbody>${html}</tbody></table>`, 'text/html')
-      const rows = doc.querySelectorAll('tr')
-
-      const seen = new Set<string>()
-      const results: Array<{ sourceName: string, sourceUrl: string, quality: string, sortOrder: number }> = []
-      let sortIdx = 0
-
-      rows.forEach((row) => {
-        const magnetLink = row.querySelector('a[href^="magnet:"]') as HTMLAnchorElement | null
-        if (!magnetLink)
-          return
-
-        const magnetUrl = magnetLink.href.split('&')[0]
-        if (seen.has(magnetUrl))
-          return
-        seen.add(magnetUrl)
-
-        const tds = row.querySelectorAll('td')
-        const nameEl = tds[0]?.querySelector('a')
-        const name = nameEl?.textContent?.trim() || ''
-        const sizeEl = tds[1]
-        const size = sizeEl?.textContent?.trim() || ''
-
-        const hasSubtitle = row.querySelector('.is-warning') !== null
-        const label = hasSubtitle ? `磁力(字幕) - ${name}` : `磁力 - ${name}`
-
-        results.push({
-          sourceName: label.substring(0, 100),
-          sourceUrl: magnetUrl,
-          quality: size,
-          sortOrder: sortIdx++,
-        })
-      })
-
-      return results
-    }, ajaxUrl)
-
+      if (resp.ok) {
+        const html = await resp.text()
+        magnets = parseJavBusMagnetLinks(html).map(magnet => ({
+          ...magnet,
+          sourceUrl: keepCompleteMagnetUrl(magnet.sourceUrl),
+        }))
+      }
+    }
+    catch (error) {
+      console.warn('[JavBusCrawler] AJAX 磁链请求失败:', error instanceof Error ? error.message : String(error))
+    }
     return magnets || []
   }
 
@@ -549,6 +544,11 @@ export class JavBusCrawler extends OptimizedCrawler {
     // 恢复模式：加载失败任务并重试
     if ((this.config as JavBusCrawlerConfig).recoveryMode) {
       await this.runRecoveryMode()
+      return
+    }
+
+    if (this.seedMovieUrls.length > 0) {
+      await this.runSeedMovies()
       return
     }
 
@@ -718,6 +718,44 @@ export class JavBusCrawler extends OptimizedCrawler {
         await this.failedTasks.saveToFile(this.failedTasksFile)
       }
 
+      await this.cleanup()
+    }
+  }
+
+  /**
+   * 种子影片模式：只爬取指定详情 URL，用于 SNOS-313 这类闭环验收
+   */
+  private async runSeedMovies(): Promise<void> {
+    console.log(`🎯 种子影片模式: ${this.seedMovieUrls.length} 部`)
+    await this.init()
+
+    try {
+      for (const movieUrl of this.seedMovieUrls) {
+        this.progressMonitor.incrementMoviesFound(1)
+        this.queueManager.addDetailPageTask(async () => {
+          const detailPage = await this.createPage()
+          try {
+            console.log(`🎬 种子影片: ${movieUrl}`)
+            await this.processMovie(movieUrl, detailPage)
+          }
+          finally {
+            await detailPage.close()
+          }
+        })
+      }
+
+      await this.queueManager.waitForAll()
+      this.progressMonitor.printStats()
+      await this.syncActorsAndPublishers()
+    }
+    catch (error) {
+      console.error('\n❌ 种子影片爬取失败:', error)
+      throw error
+    }
+    finally {
+      this.failedTasks.printSummary()
+      if (this.failedTasks.getFailedTasks().length > 0)
+        await this.failedTasks.saveToFile(this.failedTasksFile)
       await this.cleanup()
     }
   }

@@ -42,6 +42,11 @@ const selectedActors = ref<Set<string>>(new Set())
 const isBatchOperating = ref(false)
 const isRecrawlConfirmOpen = ref(false)
 
+const isCreateOpen = ref(false)
+const newActorName = ref('')
+const creatingActor = ref(false)
+const deletingActor = ref(false)
+
 // 国籍选项列表
 const nationalities = ref<string[]>([])
 const loadingNationalities = ref(false)
@@ -211,6 +216,44 @@ async function handleUpdate() {
   }
 }
 
+async function handleCreate() {
+  const name = newActorName.value.trim()
+  if (!name)
+    return
+  creatingActor.value = true
+  try {
+    await api.admin.createActor({ name })
+    success('女优已创建')
+    isCreateOpen.value = false
+    newActorName.value = ''
+    await loadActors()
+  }
+  catch (e) {
+    handleError(e, '创建女优失败')
+  }
+  finally {
+    creatingActor.value = false
+  }
+}
+
+async function handleDelete() {
+  if (!editingActor.value?.id)
+    return
+  deletingActor.value = true
+  try {
+    await api.admin.deleteActor(editingActor.value.id)
+    success('女优已删除')
+    isEditModalOpen.value = false
+    await loadActors()
+  }
+  catch (e) {
+    handleError(e, '删除女优失败')
+  }
+  finally {
+    deletingActor.value = false
+  }
+}
+
 function openMergeDialog(actorId: string) {
   mergeSourceId.value = actorId
   mergeTargetId.value = ''
@@ -344,6 +387,9 @@ onMounted(() => {
         <span v-if="hasSelection" class="list-toolbar-text">已选择 {{ selectedActors.size }} 个</span>
         <button class="list-toolbar-secondary" type="button" :disabled="loading" @click="loadActors">
           刷新
+        </button>
+        <button class="list-toolbar-primary" type="button" @click="isCreateOpen = true">
+          新增
         </button>
         <template v-if="hasSelection">
           <button class="list-toolbar-primary" type="button" :disabled="isBatchOperating" @click="handleBatchRecrawl">
@@ -497,6 +543,13 @@ onMounted(() => {
           <div class="form-actions">
             <button
               class="btn-danger"
+              :disabled="deletingActor"
+              @click="handleDelete"
+            >
+              {{ deletingActor ? '删除中...' : '删除' }}
+            </button>
+            <button
+              class="btn-danger"
               @click="openMergeDialog(editingActor!.id)"
             >
               合并重复
@@ -512,6 +565,23 @@ onMounted(() => {
             保存
           </button>
         </div>
+      </div>
+    </DetailDrawer>
+
+    <DetailDrawer
+      :open="isCreateOpen"
+      title="新增女优"
+      @update:open="isCreateOpen = $event"
+    >
+      <div class="form-field">
+        <label>名称</label>
+        <input v-model="newActorName" class="form-input" type="text">
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" type="button" @click="isCreateOpen = false">取消</button>
+        <button class="btn-primary" type="button" :disabled="creatingActor" @click="handleCreate">
+          {{ creatingActor ? '创建中...' : '创建' }}
+        </button>
       </div>
     </DetailDrawer>
 
