@@ -866,7 +866,6 @@ adminPublishers.post(
   },
 )
 
-
 adminPublishers.delete(
   '/:id',
   describeRoute({

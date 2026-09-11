@@ -97,14 +97,21 @@ export class ApiClient {
 
   async syncMovie(movieData: unknown): Promise<any> {
     const movie = movieData && typeof movieData === 'object'
-      ? { ...(movieData as Record<string, unknown>) }
+      ? this.omitEmptyPlayers({ ...(movieData as Record<string, unknown>) })
       : movieData
-    if (movie && typeof movie === 'object' && Array.isArray(movie.players) && movie.players.length === 0)
-      delete movie.players
     return this.sync('/api/movies/sync', {
       movies: [movie],
       mode: 'upsert',
     })
+  }
+
+  private omitEmptyPlayers(movie: Record<string, unknown>): Record<string, unknown> {
+    if (!Array.isArray(movie.players) || movie.players.length > 0)
+      return movie
+
+    return Object.fromEntries(
+      Object.entries(movie).filter(([key]) => key !== 'players'),
+    )
   }
 
   /**

@@ -1221,7 +1221,6 @@ adminActors.post(
   },
 )
 
-
 adminActors.delete(
   '/:id',
   describeRoute({
