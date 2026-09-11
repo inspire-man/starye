@@ -437,12 +437,12 @@ export class JavBusCrawler extends OptimizedCrawler {
             console.log(`[JavBusCrawler] 🧲 找到 ${magnetPlayers.length} 个磁力链接: ${movieInfo.code}`)
           }
           else {
-            delete movieInfo.players
+            movieInfo.players = []
             console.log(`[JavBusCrawler] ℹ️ 暂无磁力链接: ${movieInfo.code}`)
           }
         }
         catch (e: any) {
-          delete movieInfo.players
+          movieInfo.players = []
           console.warn(`[JavBusCrawler] ⚠️ 磁链抓取失败 (${movieInfo?.code}): ${e.message}`)
         }
       }
