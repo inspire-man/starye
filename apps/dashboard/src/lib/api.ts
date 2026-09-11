@@ -933,7 +933,7 @@ export const api = {
       }),
 
     deleteActor: (id: string) =>
-      apiFetch('/admin/actors/' + id, { method: 'DELETE' }),
+      apiFetch(`/admin/actors/${id}`, { method: 'DELETE' }),
 
     batchRecrawlActors: (ids: string[]) =>
       apiFetch<{ success: boolean, total: number, marked: number, message: string }>('/admin/actors/batch-recrawl', {
@@ -975,7 +975,7 @@ export const api = {
       }),
 
     deletePublisher: (id: string) =>
-      apiFetch('/admin/publishers/' + id, { method: 'DELETE' }),
+      apiFetch(`/admin/publishers/${id}`, { method: 'DELETE' }),
 
     updateMoviePublishers: (movieId: string, publishers: { id: string, name: string, sortOrder: number }[]) =>
       apiFetch(`/admin/movies/${movieId}/publishers`, {

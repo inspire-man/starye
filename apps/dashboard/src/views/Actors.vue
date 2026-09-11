@@ -578,7 +578,9 @@ onMounted(() => {
         <input v-model="newActorName" class="form-input" type="text">
       </div>
       <div class="modal-footer">
-        <button class="btn-secondary" type="button" @click="isCreateOpen = false">取消</button>
+        <button class="btn-secondary" type="button" @click="isCreateOpen = false">
+          取消
+        </button>
         <button class="btn-primary" type="button" :disabled="creatingActor" @click="handleCreate">
           {{ creatingActor ? '创建中...' : '创建' }}
         </button>
