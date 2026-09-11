@@ -355,7 +355,7 @@ export class JavBusStrategy implements MovieCrawlStrategy {
           return
 
         const magnetUrl = magnetLink.href
-        const hash = (magnetUrl.match(/urn:btih:([a-zA-Z0-9]+)/i) || [])[1]?.toLowerCase() || magnetUrl
+        const hash = (magnetUrl.match(/urn:btih:([a-z0-9]+)/i) || [])[1]?.toLowerCase() || magnetUrl
         if (seen.has(hash))
           return
         seen.add(hash)

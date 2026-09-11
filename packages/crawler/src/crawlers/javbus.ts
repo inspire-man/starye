@@ -20,8 +20,8 @@ import {
 } from '../constants'
 import { OptimizedCrawler } from '../core/optimized-crawler'
 import { FailedTaskRecorder } from '../lib/anti-detection'
-import { JavDBImageStrategy } from '../strategies/javdb-image'
 import { collectJavBusPublisherRecords, isJavBusMovieDetailUrl, keepCompleteMagnetUrl, parseJavBusMagnetAnchors, parseJavBusMagnetLinks, resolveJavBusSeedMovieUrls } from '../strategies/javbus-parser'
+import { JavDBImageStrategy } from '../strategies/javdb-image'
 
 export interface JavBusCrawlerConfig extends OptimizedCrawlerConfig {
   startUrl?: string
@@ -518,8 +518,8 @@ export class JavBusCrawler extends OptimizedCrawler {
       const resp = await fetch(ajaxUrl, {
         headers: {
           'User-Agent': USER_AGENT,
-          Referer: pageUrl,
-          Cookie: cookieHeader,
+          'Referer': pageUrl,
+          'Cookie': cookieHeader,
           'X-Requested-With': 'XMLHttpRequest',
         },
       })

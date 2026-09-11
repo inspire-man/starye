@@ -230,7 +230,7 @@ function decodeMagnetHref(raw: string): string {
 }
 
 function magnetHash(url: string): string {
-  return url.match(/urn:btih:([a-zA-Z0-9]+)/i)?.[1]?.toLowerCase() || url
+  return url.match(/urn:btih:([a-z0-9]+)/i)?.[1]?.toLowerCase() || url
 }
 
 export function parseJavBusMagnetAnchors(anchors: ReadonlyArray<{ href?: string | null, name?: string | null }>): JavBusMagnetLink[] {
@@ -252,23 +252,24 @@ export function parseJavBusMagnetLinks(html: string): JavBusMagnetLink[] {
   const decoded = decodeMagnetHref(html)
   const selected = new Map<string, JavBusMagnetLink>()
   const magnetRe = /href\s*=\s*["'](magnet:[^"']+)["'][^>]*>([^<]*)/gi
-  let match: RegExpExecArray | null
+  let match = magnetRe.exec(decoded)
   let sortIdx = 0
-  while ((match = magnetRe.exec(decoded))) {
+  while (match) {
     const sourceUrl = decodeMagnetHref(match[1] || '')
-    if (!sourceUrl.startsWith('magnet:'))
-      continue
-    const key = magnetHash(sourceUrl)
-    const sourceName = (match[2] || '').replace(/\s+/gu, ' ').trim() || `磁力 ${sortIdx + 1}`
-    const current = selected.get(key)
-    if (!current || sourceUrl.length > current.sourceUrl.length) {
-      selected.set(key, {
-        sourceName: sourceName.slice(0, 100),
-        sourceUrl: enrichMagnetTrackers(sourceUrl),
-        quality: null,
-        sortOrder: current?.sortOrder ?? sortIdx++,
-      })
+    if (sourceUrl.startsWith('magnet:')) {
+      const key = magnetHash(sourceUrl)
+      const sourceName = (match[2] || '').replace(/\s+/gu, ' ').trim() || `磁力 ${sortIdx + 1}`
+      const current = selected.get(key)
+      if (!current || sourceUrl.length > current.sourceUrl.length) {
+        selected.set(key, {
+          sourceName: sourceName.slice(0, 100),
+          sourceUrl: enrichMagnetTrackers(sourceUrl),
+          quality: null,
+          sortOrder: current?.sortOrder ?? sortIdx++,
+        })
+      }
     }
+    match = magnetRe.exec(decoded)
   }
   return [...selected.values()].sort((left, right) => left.sortOrder - right.sortOrder)
 }
@@ -290,4 +291,3 @@ export function enrichMagnetTrackers(magnet: string): string {
     return sourceUrl
   return sourceUrl + DEFAULT_MAGNET_TRACKERS.map(tracker => `&tr=${encodeURIComponent(tracker)}`).join('')
 }
-
