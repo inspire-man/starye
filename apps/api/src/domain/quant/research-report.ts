@@ -5,6 +5,7 @@ import type { QuantFinancialQualitySnapshot, QuantValuationSnapshot } from './pr
 import type { QuantShareholderReturnItem } from './shareholder-return'
 import type { DailyBar, MomentumCandidate } from './types'
 import { buildQuantDecisionProjection } from './decision-recommendation'
+import { buildTimingHistory, currentTimingHistoryBucket, TIMING_HISTORY_FORMULA_VERSION, timingHistoryEdgeDetail, timingHistoryEdgeStatus } from './timing-history'
 
 export const QUANT_RESEARCH_REPORT_V1_VERSION = 'research-report-v1' as const
 export const QUANT_RESEARCH_REPORT_VERSION = 'research-report-v2' as const
@@ -544,6 +545,39 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     observedAt: latestTradeDate,
     formulaVersion: candidate?.factorVersion ?? 'momentum-v1',
     detail: return20 !== null && return20 >= 0 ? '近一个月价格方向未走弱' : '近一个月价格方向偏弱',
+  }))
+
+  const timingHistory = buildTimingHistory(bars)
+  const timingBucket = currentTimingHistoryBucket(timingHistory)
+  evidenceItems.push(evidence({
+    key: 'timing-history-windows',
+    dimension: 'trend',
+    label: '历史时机截点',
+    status: timingHistory.evaluatedWindows > 0 ? 'pass' : 'missing',
+    value: timingHistory.evaluatedWindows,
+    threshold: '非重叠 20 日窗口',
+    source: '本地 Quant 日线历史回看',
+    observedAt: latestTradeDate,
+    formulaVersion: TIMING_HISTORY_FORMULA_VERSION,
+    optional: true,
+    detail: timingHistory.evaluatedWindows > 0
+      ? `有效日线 ${timingHistory.availableBars} 根，非重叠截点 ${timingHistory.evaluatedWindows} 个`
+      : '日线不足以形成非重叠 20 日历史窗口',
+  }))
+  evidenceItems.push(evidence({
+    key: 'timing-history-edge',
+    dimension: 'trend',
+    label: `历史时机：${timingHistory.currentLabel}`,
+    status: timingHistoryEdgeStatus(timingBucket?.edgeAssessment ?? 'insufficient'),
+    value: timingBucket?.positiveRateLift === null || timingBucket?.positiveRateLift === undefined ? null : round(timingBucket.positiveRateLift * 100),
+    threshold: '样本至少 6；区间完全高于基准为支持，完全低于为偏弱',
+    source: '本地 Quant 日线历史回看',
+    observedAt: latestTradeDate,
+    formulaVersion: TIMING_HISTORY_FORMULA_VERSION,
+    optional: true,
+    detail: timingBucket
+      ? `${timingBucket.label} 样本 ${timingBucket.sampleSize}，${timingHistoryEdgeDetail(timingBucket.edgeAssessment)}`
+      : '当前时机状态没有可核对的历史样本',
   }))
 
   const peTtm = finite(input.valuation?.peTtm)

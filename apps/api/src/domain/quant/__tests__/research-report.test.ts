@@ -695,4 +695,40 @@ describe('quant research report', () => {
     ]))
     expect(report.factorModel?.factors.find(factor => factor.key === 'shareholder-return')?.evidenceKeys).toEqual(['shareholder-yield'])
   })
+
+  it('adds optional timing-history evidence without changing the deterministic recommendation keys', () => {
+    const input = {
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-1',
+      candidate,
+      valuation,
+      financialReports: [financial],
+      shareholderReturn,
+    }
+    const small = buildQuantResearchReport({ ...input, dailyBars: bars(80) })
+    const smallWindows = small.evidence.find(item => item.key === 'timing-history-windows')
+    const smallEdge = small.evidence.find(item => item.key === 'timing-history-edge')
+    expect(smallWindows).toMatchObject({ optional: true, formulaVersion: 'timing-history-v1' })
+    expect(smallEdge).toMatchObject({ optional: true, formulaVersion: 'timing-history-v1', status: 'missing' })
+    expect(small.decision?.evidenceKeys).not.toContain('timing-history-windows')
+    expect(small.decision?.evidenceKeys).not.toContain('timing-history-edge')
+
+    const large = buildQuantResearchReport({ ...input, dailyBars: bars(520) })
+    const largeWindows = large.evidence.find(item => item.key === 'timing-history-windows')
+    const largeEdge = large.evidence.find(item => item.key === 'timing-history-edge')
+    expect(largeWindows).toMatchObject({ optional: true, status: 'pass', formulaVersion: 'timing-history-v1' })
+    expect(largeWindows?.value).toBeGreaterThanOrEqual(6)
+    expect(largeEdge).toMatchObject({ optional: true, status: 'caution', formulaVersion: 'timing-history-v1' })
+    expect(largeEdge?.detail).toContain('区间重叠')
+    expect(large.action).toBe(small.action)
+    expect(large.status).toBe(small.status)
+    expect(large.decision?.action).toBe(small.decision?.action)
+    expect(large.evidence.filter(item => !item.optional).map(item => item.key)).toEqual(
+      small.evidence.filter(item => !item.optional).map(item => item.key),
+    )
+    expect(large.decision?.evidenceKeys).not.toContain('timing-history-windows')
+    expect(large.decision?.evidenceKeys).not.toContain('timing-history-edge')
+  })
 })
