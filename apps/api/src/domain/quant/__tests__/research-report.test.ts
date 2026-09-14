@@ -730,5 +730,11 @@ describe('quant research report', () => {
     )
     expect(large.decision?.evidenceKeys).not.toContain('timing-history-windows')
     expect(large.decision?.evidenceKeys).not.toContain('timing-history-edge')
+
+    const smallCalibration = small.evidence.find(item => item.key === 'timing-history-calibration')
+    const largeCalibration = large.evidence.find(item => item.key === 'timing-history-calibration')
+    expect(smallCalibration).toMatchObject({ optional: true, formulaVersion: 'timing-history-calibration-v1', status: 'missing' })
+    expect(largeCalibration).toMatchObject({ optional: true, formulaVersion: 'timing-history-calibration-v1', status: 'missing' })
+    expect(large.decision?.evidenceKeys).not.toContain('timing-history-calibration')
   })
 })

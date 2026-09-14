@@ -5,7 +5,7 @@ import type { QuantFinancialQualitySnapshot, QuantValuationSnapshot } from './pr
 import type { QuantShareholderReturnItem } from './shareholder-return'
 import type { DailyBar, MomentumCandidate } from './types'
 import { buildQuantDecisionProjection } from './decision-recommendation'
-import { buildTimingHistory, currentTimingHistoryBucket, TIMING_HISTORY_FORMULA_VERSION, timingHistoryEdgeDetail, timingHistoryEdgeStatus } from './timing-history'
+import { buildTimingHistory, calibrateTimingHistoryEdge, currentTimingHistoryBucket, TIMING_HISTORY_CALIBRATION_FORMULA_VERSION, TIMING_HISTORY_FORMULA_VERSION, timingHistoryEdgeDetail, timingHistoryEdgeStatus } from './timing-history'
 
 export const QUANT_RESEARCH_REPORT_V1_VERSION = 'research-report-v1' as const
 export const QUANT_RESEARCH_REPORT_VERSION = 'research-report-v2' as const
@@ -578,6 +578,22 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     detail: timingBucket
       ? `${timingBucket.label} 样本 ${timingBucket.sampleSize}，${timingHistoryEdgeDetail(timingBucket.edgeAssessment)}`
       : '当前时机状态没有可核对的历史样本',
+  }))
+  const timingCalibration = calibrateTimingHistoryEdge(timingHistory)
+  evidenceItems.push(evidence({
+    key: 'timing-history-calibration',
+    dimension: 'trend',
+    label: `时机校准：${timingHistory.currentLabel}`,
+    status: timingHistoryEdgeStatus(timingCalibration.edgeAssessment),
+    value: timingCalibration.positiveRateLift === null ? null : round(timingCalibration.positiveRateLift * 100),
+    threshold: '当前状态与其他状态样本均至少 6；区间完全高于对照为支持，完全低于为偏弱',
+    source: '本地 Quant 日线历史回看',
+    observedAt: latestTradeDate,
+    formulaVersion: TIMING_HISTORY_CALIBRATION_FORMULA_VERSION,
+    optional: true,
+    detail: timingCalibration.edgeAssessment === 'insufficient'
+      ? `当前状态样本 ${timingCalibration.currentSampleSize}，对照样本 ${timingCalibration.complementSampleSize}，不足以做留一状态校准`
+      : `当前状态样本 ${timingCalibration.currentSampleSize}，对照样本 ${timingCalibration.complementSampleSize}，${timingHistoryEdgeDetail(timingCalibration.edgeAssessment)}`,
   }))
 
   const peTtm = finite(input.valuation?.peTtm)
