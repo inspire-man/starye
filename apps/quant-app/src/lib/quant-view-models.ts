@@ -578,6 +578,37 @@ export interface QuantResearchMarker {
   updatedAt: string | null
 }
 
+export type QuantScheduledResearchReason = 'overdue' | 'today' | 'stale-daily' | 'insufficient-data'
+export type QuantScheduledResearchStage = 'watchlist' | 'data' | 'research' | 'ai' | 'completed' | 'error' | 'skipped'
+export type QuantScheduledResearchAiStatus = 'pending' | 'running' | 'success' | 'skipped' | 'error'
+export type QuantScheduledResearchStatus = 'running' | 'completed' | 'partial' | 'failed'
+
+export interface QuantScheduledResearchItem {
+  tsCode: string
+  name: string | null
+  reasons: QuantScheduledResearchReason[]
+  stage: QuantScheduledResearchStage
+  aiStatus: QuantScheduledResearchAiStatus
+  errorStage: 'watchlist' | 'data' | 'research' | 'ai' | null
+  errorCode: string | null
+  researchRunId: string | null
+  reviewDateBefore: string | null
+  reviewDateAfter: string | null
+}
+
+export interface QuantScheduledResearchRun {
+  id: string
+  status: QuantScheduledResearchStatus
+  dueCount: number
+  processedCount: number
+  completedCount: number
+  failedCount: number
+  skippedCount: number
+  startedAt: string
+  completedAt: string | null
+  items: QuantScheduledResearchItem[]
+}
+
 export interface CapabilityState {
   key: CapabilityKey
   label: string

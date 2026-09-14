@@ -38,6 +38,7 @@ const responseSchemas: Record<string, Parameters<typeof resolver>[0]> = {
   QuantResearchSummaryResponseSchema: quantSchemas.QuantResearchSummaryResponseSchema,
   QuantResearchSummaryStreamEventSchema: quantSchemas.QuantResearchSummaryStreamEventSchema,
   QuantShareholderReturnsResponseSchema: quantSchemas.QuantShareholderReturnsResponseSchema,
+  QuantScheduledResearchResponseSchema: quantSchemas.QuantScheduledResearchResponseSchema,
   QuantStockBasicResponseSchema: quantSchemas.QuantStockBasicResponseSchema,
   QuantSyncResultResponseSchema: quantSchemas.QuantSyncResultResponseSchema,
   QuantSyncStateResponseSchema: quantSchemas.QuantSyncStateResponseSchema,

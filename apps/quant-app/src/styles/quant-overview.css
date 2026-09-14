@@ -764,3 +764,9 @@
   color: hsl(var(--muted-foreground));
   font-size: 0.68rem;
 }
+.scheduled-research-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+

@@ -1070,6 +1070,53 @@ export const quantResearchRuns = sqliteTable('quant_research_run', {
 export type QuantResearchRun = InferSelectModel<typeof quantResearchRuns>
 export type NewQuantResearchRun = InferInsertModel<typeof quantResearchRuns>
 
+export const quantScheduledResearchRuns = sqliteTable('quant_scheduled_research_run', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  status: text('status', { enum: ['running', 'completed', 'partial', 'failed'] }).notNull(),
+  dueCount: integer('due_count').notNull().default(0),
+  processedCount: integer('processed_count').notNull().default(0),
+  completedCount: integer('completed_count').notNull().default(0),
+  failedCount: integer('failed_count').notNull().default(0),
+  skippedCount: integer('skipped_count').notNull().default(0),
+  cursorTsCode: text('cursor_ts_code'),
+  leaseExpiresAt: integer('lease_expires_at', { mode: 'timestamp' }),
+  startedAt: integer('started_at', { mode: 'timestamp' }).notNull(),
+  completedAt: integer('completed_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  index('idx_quant_scheduled_research_run_user_started_at').on(table.userId, table.startedAt),
+  index('idx_quant_scheduled_research_run_user_status').on(table.userId, table.status),
+])
+
+export type QuantScheduledResearchRun = InferSelectModel<typeof quantScheduledResearchRuns>
+export type NewQuantScheduledResearchRun = InferInsertModel<typeof quantScheduledResearchRuns>
+
+export const quantScheduledResearchItems = sqliteTable('quant_scheduled_research_item', {
+  id: text('id').primaryKey(),
+  runId: text('run_id').notNull().references(() => quantScheduledResearchRuns.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  tsCode: text('ts_code').notNull(),
+  name: text('name'),
+  reasonsJson: text('reasons_json').notNull(),
+  stage: text('stage', { enum: ['watchlist', 'data', 'research', 'ai', 'completed', 'error', 'skipped'] }).notNull(),
+  aiStatus: text('ai_status', { enum: ['pending', 'running', 'success', 'skipped', 'error'] }).notNull(),
+  errorStage: text('error_stage'),
+  errorCode: text('error_code'),
+  researchRunId: text('research_run_id'),
+  reviewDateBefore: text('review_date_before'),
+  reviewDateAfter: text('review_date_after'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  uniqueIndex('idx_quant_scheduled_research_item_run_ts_code').on(table.runId, table.tsCode),
+  index('idx_quant_scheduled_research_item_user_run').on(table.userId, table.runId),
+])
+
+export type QuantScheduledResearchItem = InferSelectModel<typeof quantScheduledResearchItems>
+export type NewQuantScheduledResearchItem = InferInsertModel<typeof quantScheduledResearchItems>
+
 export const quantResearchSummaries = sqliteTable('quant_research_summary', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
@@ -1248,6 +1295,25 @@ export const quantResearchRunsRelations = relations(quantResearchRuns, ({ one, m
   aiRunAudits: many(quantAiRunAudits),
   decisionRecords: many(quantDecisionRecords),
   decisionAssessments: many(quantDecisionAssessments),
+}))
+
+export const quantScheduledResearchRunsRelations = relations(quantScheduledResearchRuns, ({ one, many }) => ({
+  user: one(user, {
+    fields: [quantScheduledResearchRuns.userId],
+    references: [user.id],
+  }),
+  items: many(quantScheduledResearchItems),
+}))
+
+export const quantScheduledResearchItemsRelations = relations(quantScheduledResearchItems, ({ one }) => ({
+  user: one(user, {
+    fields: [quantScheduledResearchItems.userId],
+    references: [user.id],
+  }),
+  run: one(quantScheduledResearchRuns, {
+    fields: [quantScheduledResearchItems.runId],
+    references: [quantScheduledResearchRuns.id],
+  }),
 }))
 
 export const quantResearchSummariesRelations = relations(quantResearchSummaries, ({ one }) => ({

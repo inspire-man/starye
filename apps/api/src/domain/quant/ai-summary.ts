@@ -156,7 +156,7 @@ export function buildQuantAiSummaryPrompt(report: QuantResearchReport): string {
     'overview 用 1-3 句说明当前证据代表什么；supports、concerns、nextChecks 都写成可核对的短句。',
     'factorReviews 必须逐项复核 factorModel 中每个权重大于 0 的因子，不得遗漏；每项字段是 factor、stance、confidence、rationale、citedEvidenceKeys。stance 只能是 support、caution、oppose、insufficient；引用只能使用该因子自己的 evidenceKeys。',
     '因子数据缺失、来源不可用或无法核对时使用 insufficient，不要猜测；不要输出 accepted，accepted 会由服务端根据数据、引用和置信度重新计算。',
-    'decisionReview 必须是对象或 null。对象字段必须是 decisionVersion、recommendation、confidence、rationale、invalidationConditions、citedEvidenceKeys；recommendation 只能是 bullish、bearish、watch，confidence 为 0-100 的数字。',
+    'decisionReview 必须是对象或 null。对象字段必须是 decisionVersion、recommendation、confidence、rationale、invalidationConditions、citedEvidenceKeys；decisionVersion 必须精确等于 "ai-decision-v1"，不要复制报告里的 research-decision-v1；recommendation 只能是 bullish、bearish、watch，confidence 为 0-100 的数字。',
     'decisionReview 只能复核报告已有证据；如果报告确定性推荐为 watch 或数据覆盖度不足，不得升级为 bullish/bearish。不要添加报告中不存在的数值、来源或证据 key。',
     '如果报告包含 factorModel.configuration，必须按该报告快照解释权重和确定性分数，不要用当前配置替换历史报告配置。',
     '对于 optional 的 AkShare 证据，必须保留 source、observedAt 和 formulaVersion；报告期不同或 provider 数值不同只能表述为交叉核对线索，并明确需要人工核对。',
@@ -511,7 +511,11 @@ function decisionReview(value: unknown, report: QuantResearchReport, reviews: re
     return null
   const parsed = record(value)
   const decisionVersion = parsed ? fieldValue(parsed, 'decisionVersion', 'decision_version') : undefined
-  if (!parsed || decisionVersion !== QUANT_AI_DECISION_VERSION)
+  const versionOk = decisionVersion === undefined
+    || decisionVersion === null
+    || decisionVersion === QUANT_AI_DECISION_VERSION
+    || decisionVersion === 'research-decision-v1'
+  if (!parsed || !versionOk)
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI decision review version is invalid', 502)
   const confidence = fieldValue(parsed, 'confidence')
   if (typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 100)

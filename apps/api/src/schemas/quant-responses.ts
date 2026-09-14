@@ -364,6 +364,37 @@ export const QuantResearchRunsResponseSchema = v.object({
   data: v.array(QuantResearchRunSchema),
 })
 
+const QuantScheduledResearchItemSchema = v.object({
+  tsCode: v.string(),
+  name: v.nullable(v.string()),
+  reasons: v.array(v.picklist(['overdue', 'today', 'stale-daily', 'insufficient-data'])),
+  stage: v.picklist(['watchlist', 'data', 'research', 'ai', 'completed', 'error', 'skipped']),
+  aiStatus: v.picklist(['pending', 'running', 'success', 'skipped', 'error']),
+  errorStage: v.nullable(v.picklist(['watchlist', 'data', 'research', 'ai'])),
+  errorCode: v.nullable(v.string()),
+  researchRunId: v.nullable(v.string()),
+  reviewDateBefore: v.nullable(v.string()),
+  reviewDateAfter: v.nullable(v.string()),
+})
+
+const QuantScheduledResearchRunSchema = v.object({
+  id: v.string(),
+  status: v.picklist(['running', 'completed', 'partial', 'failed']),
+  dueCount: v.number(),
+  processedCount: v.number(),
+  completedCount: v.number(),
+  failedCount: v.number(),
+  skippedCount: v.number(),
+  startedAt: v.string(),
+  completedAt: v.nullable(v.string()),
+  items: v.array(QuantScheduledResearchItemSchema),
+})
+
+export const QuantScheduledResearchResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.nullable(QuantScheduledResearchRunSchema),
+})
+
 const QuantResearchSummarySchema = v.object({
   id: v.string(),
   researchRunId: v.string(),

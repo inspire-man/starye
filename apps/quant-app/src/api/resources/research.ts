@@ -21,6 +21,12 @@ import type {
   QuantResearchRun,
   QuantResearchSource,
   QuantResearchSummary,
+  QuantScheduledResearchAiStatus,
+  QuantScheduledResearchItem,
+  QuantScheduledResearchReason,
+  QuantScheduledResearchRun,
+  QuantScheduledResearchStage,
+  QuantScheduledResearchStatus,
   ResearchMarkerStatus,
 } from '../../lib/quant-view-models'
 import type { QuantRequestOptions } from '../http-client'
@@ -652,9 +658,69 @@ async function readQuantAiSummaryStream(
   return completed
 }
 
+const SCHEDULED_REASONS = new Set(['overdue', 'today', 'stale-daily', 'insufficient-data'])
+const SCHEDULED_STAGES = new Set(['watchlist', 'data', 'research', 'ai', 'completed', 'error', 'skipped'])
+const SCHEDULED_AI = new Set(['pending', 'running', 'success', 'skipped', 'error'])
+const SCHEDULED_STATUS = new Set(['running', 'completed', 'partial', 'failed'])
+
+function parseScheduledResearchItem(value: unknown): QuantScheduledResearchItem | null {
+  if (!isRecord(value))
+    return null
+  const tsCode = readString(value, 'tsCode', 'ts_code')
+  const stage = readString(value, 'stage')
+  const aiStatus = readString(value, 'aiStatus', 'ai_status')
+  if (!tsCode || !stage || !SCHEDULED_STAGES.has(stage) || !aiStatus || !SCHEDULED_AI.has(aiStatus))
+    return null
+  const errorStage = readString(value, 'errorStage', 'error_stage')
+  return {
+    tsCode,
+    name: readString(value, 'name'),
+    reasons: readStringList(value, 'reasons').filter((reason): reason is QuantScheduledResearchReason => SCHEDULED_REASONS.has(reason)),
+    stage: stage as QuantScheduledResearchStage,
+    aiStatus: aiStatus as QuantScheduledResearchAiStatus,
+    errorStage: errorStage === 'watchlist' || errorStage === 'data' || errorStage === 'research' || errorStage === 'ai' ? errorStage : null,
+    errorCode: readString(value, 'errorCode', 'error_code'),
+    researchRunId: readString(value, 'researchRunId', 'research_run_id'),
+    reviewDateBefore: readString(value, 'reviewDateBefore', 'review_date_before'),
+    reviewDateAfter: readString(value, 'reviewDateAfter', 'review_date_after'),
+  }
+}
+
+function parseScheduledResearch(payload: unknown): QuantScheduledResearchRun | null {
+  const data = unwrapData(payload)
+  if (data === null)
+    return null
+  if (!isRecord(data))
+    throw new QuantApiError('后台研究状态格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  const id = readString(data, 'id')
+  const status = readString(data, 'status')
+  const startedAt = readString(data, 'startedAt', 'started_at')
+  if (!id || !status || !SCHEDULED_STATUS.has(status) || !startedAt)
+    throw new QuantApiError('后台研究状态格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  return {
+    id,
+    status: status as QuantScheduledResearchStatus,
+    dueCount: readNumber(data, 'dueCount', 'due_count') ?? 0,
+    processedCount: readNumber(data, 'processedCount', 'processed_count') ?? 0,
+    completedCount: readNumber(data, 'completedCount', 'completed_count') ?? 0,
+    failedCount: readNumber(data, 'failedCount', 'failed_count') ?? 0,
+    skippedCount: readNumber(data, 'skippedCount', 'skipped_count') ?? 0,
+    startedAt,
+    completedAt: readString(data, 'completedAt', 'completed_at'),
+    items: readList(data, 'items').flatMap((item) => {
+      const parsed = parseScheduledResearchItem(item)
+      return parsed ? [parsed] : []
+    }),
+  }
+}
+
 export const quantResearchApi = {
   async getResearchMarkers(options: QuantRequestOptions = {}): Promise<QuantResearchMarker[]> {
     return parseResearchMarkers(await requestJson('/research', options.signal ? { signal: options.signal } : undefined))
+  },
+
+  async getScheduledResearch(options: QuantRequestOptions = {}): Promise<QuantScheduledResearchRun | null> {
+    return parseScheduledResearch(await requestJson('/research/schedule', options.signal ? { signal: options.signal } : undefined))
   },
 
   async generateResearchRun(tsCode: string): Promise<QuantResearchRun> {

@@ -211,6 +211,13 @@
       "when": 1789036800000,
       "tag": "0050_player_playback_failure",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1789344000000,
+      "tag": "0051_quant_scheduled_research",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { QuantDataHealthAction, QuantDataHealthFreshness, QuantDataHealthStatus, QuantDataHealthSummary } from '../lib/data-health'
 import type { QuantView } from '../lib/quant-view'
-import type { CandidateItem, WatchlistItem } from '../lib/quant-view-models'
+import type { CandidateItem, QuantScheduledResearchRun, WatchlistItem } from '../lib/quant-view-models'
 import type { WatchlistEnvironment, WatchlistEnvironmentStatus } from '../lib/watchlist-environment'
 import { SkeletonCard } from '@starye/ui'
 import { ArrowUpRight, CalendarDays, ChevronRight, DatabaseZap, Eye, Info, RefreshCw, ShieldAlert, Sparkles } from 'lucide-vue-next'
@@ -46,6 +46,7 @@ const props = defineProps<{
   riskToneClass: (tone: RiskTone) => string
   riskLabel: (item: CandidateItem) => string
   researchPriorityDetail: (item: CandidateItem) => string
+  scheduledResearch?: QuantScheduledResearchRun | null
 }>()
 
 const emit = defineEmits<{
@@ -54,6 +55,31 @@ const emit = defineEmits<{
   runDataHealthAction: [action: QuantDataHealthAction | null]
   recoverDataHealth: []
 }>()
+
+function scheduledStatusLabel(status: QuantScheduledResearchRun['status']): string {
+  return { running: '运行中', completed: '已完成', partial: '部分完成', failed: '失败' }[status]
+}
+
+function scheduledStageLabel(stage: NonNullable<QuantScheduledResearchRun['items'][number]>['stage']): string {
+  return {
+    watchlist: '确认入池',
+    data: '更新数据',
+    research: '生成报告',
+    ai: 'AI 复核',
+    completed: '完成',
+    error: '失败',
+    skipped: '跳过',
+  }[stage]
+}
+
+function scheduledReasonLabel(reason: NonNullable<QuantScheduledResearchRun['items'][number]>['reasons'][number]): string {
+  return {
+    'overdue': '已逾期',
+    'today': '今日复查',
+    'stale-daily': '日线过期',
+    'insufficient-data': '数据不足',
+  }[reason]
+}
 </script>
 
 <template>
@@ -157,6 +183,39 @@ const emit = defineEmits<{
               <ChevronRight :size="13" aria-hidden="true" />
               {{ item.actionLabel }}
             </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="data-health-section scheduled-research-section" aria-labelledby="scheduled-research-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">
+            BACKGROUND RESEARCH
+          </p>
+          <h2 id="scheduled-research-title" class="section-title">
+            后台定时研究
+          </h2>
+        </div>
+        <span v-if="props.scheduledResearch" class="status-chip">{{ scheduledStatusLabel(props.scheduledResearch.status) }}</span>
+      </div>
+      <div v-if="!props.scheduledResearch" class="data-health-summary">
+        <strong>尚未运行后台研究</strong>
+        <p>关闭页面后，Worker 仍会处理已逾期复查、过期日线和数据不足的观察池标的。这里只显示最近一次任务，不构成买卖建议。</p>
+      </div>
+      <div v-else class="data-health-summary">
+        <strong>最近一次后台任务 {{ props.scheduledResearch.completedCount }} 完成 / {{ props.scheduledResearch.failedCount }} 失败 / {{ props.scheduledResearch.dueCount }} 到期</strong>
+        <p>确定性报告成功后才会推迟复查日；AI 失败会保留报告。缺口保持可见，不会补零。</p>
+        <small>{{ props.formatDateTime(props.scheduledResearch.startedAt) }}</small>
+        <div v-if="props.scheduledResearch.items.length" class="scheduled-research-list" role="list" aria-label="后台研究标的">
+          <div v-for="item in props.scheduledResearch.items" :key="item.tsCode" class="data-health-item" role="listitem">
+            <div class="data-health-item-heading">
+              <strong>{{ props.displayStockName(item) }}</strong>
+              <span class="status-chip">{{ scheduledStageLabel(item.stage) }}</span>
+            </div>
+            <p>{{ item.reasons.map(scheduledReasonLabel).join('、') || '无到期原因' }}</p>
+            <small v-if="item.errorCode">{{ item.errorCode }}</small>
           </div>
         </div>
       </div>

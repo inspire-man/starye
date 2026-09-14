@@ -361,6 +361,18 @@ export const quantEndpointContracts = [
     consumer: 'apps/quant-app/src/api/resources/research.ts',
   },
   {
+    id: 'research.schedule.get',
+    area: 'research',
+    method: 'GET',
+    path: '/research/schedule',
+    operationId: 'getQuantScheduledResearch',
+    summary: '获取后台定时研究状态',
+    input: { params: null, query: null, body: null },
+    success: { status: 200, contentType: 'application/json', responseSchema: 'QuantScheduledResearchResponseSchema' },
+    errors: [unauthorized],
+    consumer: 'apps/quant-app/src/api/resources/research.ts',
+  },
+  {
     id: 'research.runs.create',
     area: 'research',
     method: 'POST',
