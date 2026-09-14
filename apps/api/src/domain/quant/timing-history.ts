@@ -239,3 +239,38 @@ export function currentTimingHistoryBucket(history: TimingHistory): TimingHistor
     return null
   return history.buckets.find(bucket => bucket.state === history.currentState) ?? null
 }
+
+export const TIMING_HISTORY_CALIBRATION_FORMULA_VERSION = 'timing-history-calibration-v1' as const
+
+export interface TimingHistoryCalibration {
+  readonly currentState: TimingWindowState
+  readonly currentLabel: string
+  readonly currentSampleSize: number
+  readonly complementSampleSize: number
+  readonly edgeAssessment: TimingHistoryEdgeAssessment
+  readonly positiveRateLift: number | null
+}
+
+export function calibrateTimingHistoryEdge(history: TimingHistory): TimingHistoryCalibration {
+  const currentReturns = history.observations
+    .filter(observation => observation.state === history.currentState)
+    .map(observation => observation.forwardReturn20)
+  const complementReturns = history.observations
+    .filter(observation => observation.state !== history.currentState)
+    .map(observation => observation.forwardReturn20)
+  const current = buildBaseline(currentReturns)
+  const complement = buildBaseline(complementReturns)
+  const edgeAssessment = current.sampleSize < MIN_RELIABLE_SAMPLE_SIZE || complement.sampleSize < MIN_RELIABLE_SAMPLE_SIZE
+    ? 'insufficient'
+    : classifyTimingHistoryEdge(current, complement)
+  return {
+    currentState: history.currentState,
+    currentLabel: history.currentLabel,
+    currentSampleSize: current.sampleSize,
+    complementSampleSize: complement.sampleSize,
+    edgeAssessment,
+    positiveRateLift: current.positiveRate !== null && complement.positiveRate !== null
+      ? current.positiveRate - complement.positiveRate
+      : null,
+  }
+}
