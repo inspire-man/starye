@@ -124,5 +124,39 @@ describe('quant overview view', () => {
     expect(wrapper.emitted('runDataHealthAction')).toEqual([['refresh-daily']])
     expect(wrapper.find('[aria-label="数据健康状态"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('历史时机样本审计')
+    expect(wrapper.text()).toContain('尚未运行后台研究')
+  })
+
+  it('shows the latest scheduled research run without trading copy', async () => {
+    const wrapper = mountView()
+    await wrapper.setProps({
+      scheduledResearch: {
+        id: 'job-1',
+        status: 'completed',
+        dueCount: 1,
+        processedCount: 1,
+        completedCount: 1,
+        failedCount: 0,
+        skippedCount: 0,
+        startedAt: '2026-09-13T00:00:00.000Z',
+        completedAt: '2026-09-13T00:01:00.000Z',
+        items: [{
+          tsCode: candidate.tsCode,
+          name: candidate.name,
+          reasons: ['overdue'],
+          stage: 'completed',
+          aiStatus: 'skipped',
+          errorStage: null,
+          errorCode: null,
+          researchRunId: 'run-1',
+          reviewDateBefore: '2026-09-01',
+          reviewDateAfter: '2026-09-20',
+        }],
+      },
+    })
+    expect(wrapper.text()).toContain('后台定时研究')
+    expect(wrapper.text()).toContain('已逾期')
+    expect(wrapper.text()).not.toContain('买入')
+    expect(wrapper.text()).not.toContain('卖出')
   })
 })

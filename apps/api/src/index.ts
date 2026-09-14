@@ -41,6 +41,7 @@ import { publicSeriesRoutes } from './routes/public/series'
 import { publicSettingsRoutes } from './routes/public/settings'
 import { publishersRoutes } from './routes/publishers'
 import quantRoutes from './routes/quant'
+import { createQuantScheduledResearchHandler } from './routes/quant/handlers/scheduled-research-runtime'
 import ratingsRoutes from './routes/ratings'
 import { uploadRoutes } from './routes/upload'
 
@@ -327,10 +328,21 @@ export function createCrawlerTaskLogCleanupHandler(cleanup: CrawlerTaskLogCleanu
 }
 
 const crawlerTaskLogCleanupHandler = createCrawlerTaskScheduledHandler()
+const quantScheduledResearchHandler = createQuantScheduledResearchHandler()
+
+function createApiScheduledHandler(
+  crawlerHandler = crawlerTaskLogCleanupHandler,
+  quantHandler = quantScheduledResearchHandler,
+) {
+  return (controller: unknown, env: AppEnv['Bindings'], context: ScheduledTaskContext) => {
+    crawlerHandler(controller, env, context)
+    quantHandler(controller, env, context)
+  }
+}
 
 const worker = {
   fetch: routes.fetch,
-  scheduled: crawlerTaskLogCleanupHandler,
+  scheduled: createApiScheduledHandler(),
 } satisfies ExportedHandler<AppEnv['Bindings']>
 
 export default Sentry.withSentry(

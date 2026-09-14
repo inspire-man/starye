@@ -195,6 +195,37 @@ describe('quant AI summary', () => {
     })
   })
 
+  it('normalizes research-decision-v1 copied from the deterministic report', () => {
+    const result = parseQuantAiSummary(JSON.stringify({
+      overview: '当前证据有一项明确支持。',
+      supports: ['ROE 达到报告门槛'],
+      concerns: [],
+      nextChecks: ['继续核对财报'],
+      citedEvidenceKeys: ['quality-roe'],
+      factorReviews: [{
+        factor: 'quality',
+        stance: 'support',
+        confidence: 88,
+        rationale: '盈利质量有可核对证据。',
+        citedEvidenceKeys: ['quality-roe'],
+      }],
+      decisionReview: {
+        decisionVersion: 'research-decision-v1',
+        recommendation: 'bullish',
+        confidence: 84,
+        rationale: '因子方向一致。',
+        invalidationConditions: ['ROE 转弱后复核'],
+        citedEvidenceKeys: ['quality-roe'],
+      },
+    }), factorReport, new Date('2026-08-26T00:00:00.000Z'))
+
+    expect(result.decisionReview).toMatchObject({
+      decisionVersion: 'ai-decision-v1',
+      recommendation: 'bullish',
+      accepted: true,
+    })
+  })
+
   it('rejects invented evidence references', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response(validContent({ citedEvidenceKeys: ['made-up-key'] })))
 

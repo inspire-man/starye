@@ -6,27 +6,18 @@ import { generateQuantAiChangeExplanation } from '../../../domain/quant/ai-chang
 import { generateQuantAiComparison } from '../../../domain/quant/ai-comparison'
 import { getDecryptedQuantAiConfig } from '../../../domain/quant/ai-config'
 import { generateQuantAiQuestion } from '../../../domain/quant/ai-question'
-import { createQuantAkshareBridge } from '../../../domain/quant/akshare-bridge'
 import { QuantError } from '../../../domain/quant/errors'
-import { screenMomentum } from '../../../domain/quant/factor'
-import { createEastmoneyValuationProvider, mapQuantProviderError } from '../../../domain/quant/provider'
 import {
-  createQuantResearchRun,
   ensureQuantStarterWatchlist,
-  getQuantFactorConfiguration,
   getQuantResearchRun,
-  getQuantWatchlistItem,
   listQuantAiRunAudits,
-  listQuantDailyBars,
   listQuantResearchMarkers,
   listQuantResearchRuns,
   listQuantResearchSummaries,
-  listQuantScanSnapshots,
   normalizeTsCode,
   upsertQuantResearchMarker,
 } from '../../../domain/quant/repository'
-import { buildQuantResearchReport } from '../../../domain/quant/research-report'
-import { readQuantShareholderReturn } from '../../../domain/quant/shareholder-return'
+import { readLatestQuantScheduledJob, scheduledResearchView } from '../../../domain/quant/scheduled-research-store'
 import {
   QuantResearchChangeExplanationSchema,
   QuantResearchComparisonSchema,
@@ -39,8 +30,7 @@ import {
   QuantWatchlistParamSchema,
 } from '../../../schemas/quant'
 import { quantRouteDocs } from '../contract-docs'
-import { currentQuantUserId, eastmoneyProviderOptions } from '../route-context'
-import { capitalStructureProvider, cashflowProvider, dividendProvider, financialProvider, repurchaseProvider } from './market-support'
+import { currentQuantUserId } from '../route-context'
 import {
   isComparableResearchReport,
   parseResearchReport,
@@ -51,25 +41,14 @@ import {
   researchRunView,
   researchSummaryView,
 } from './presenters'
+import { generateQuantResearchRunForUser } from './research-generation'
 import {
   aiGenerationTimeoutMs,
-  akshareBridgeErrorCode,
-  akshareBridgeOptions,
   createQuantAiSummaryStream,
   generateAndPersistQuantAiSummary,
 } from './summary-runtime'
 
 export const quantResearchRoutes = new Hono<AppEnv>()
-
-function snapshotIncludesCode(snapshot: { readonly inputTsCodesJson: string }, tsCode: string): boolean {
-  try {
-    const parsed: unknown = JSON.parse(snapshot.inputTsCodesJson)
-    return Array.isArray(parsed) && parsed.some(code => typeof code === 'string' && code.trim().toUpperCase() === tsCode)
-  }
-  catch {
-    return false
-  }
-}
 
 quantResearchRoutes.get('/research', quantRouteDocs('research.markers.list'), async (c) => {
   const userId = currentQuantUserId(c)
@@ -78,61 +57,19 @@ quantResearchRoutes.get('/research', quantRouteDocs('research.markers.list'), as
   return c.json({ success: true as const, data })
 })
 
+quantResearchRoutes.get('/research/schedule', quantRouteDocs('research.schedule.get'), async (c) => {
+  const job = await readLatestQuantScheduledJob(c.get('db'), currentQuantUserId(c))
+  return c.json({ success: true as const, data: job ? scheduledResearchView(job) : null })
+})
+
 quantResearchRoutes.post('/research/runs', quantRouteDocs('research.runs.create'), validator('json', QuantResearchRunCreateSchema), async (c) => {
   const userId = currentQuantUserId(c)
   const input = c.req.valid('json')
-  const tsCode = normalizeTsCode(input.ts_code)
-  const watchlistItem = await getQuantWatchlistItem(c.get('db'), userId, tsCode)
-  if (!watchlistItem)
-    throw new QuantError('QUANT_NOT_FOUND', 'Watchlist item not found', 404)
-
-  const [dailyBars, snapshots] = await Promise.all([
-    listQuantDailyBars(c.get('db'), { tsCode }),
-    listQuantScanSnapshots(c.get('db'), userId, 1),
-  ])
-  const sourceSnapshotId = snapshots[0] && snapshotIncludesCode(snapshots[0], tsCode)
-    ? snapshots[0].id
-    : null
-  const candidate = screenMomentum({ [tsCode]: dailyBars }).find(item => item.tsCode === tsCode) ?? null
-  const factorConfiguration = await getQuantFactorConfiguration(c.get('db'), userId)
-  const valuationProvider = createEastmoneyValuationProvider(eastmoneyProviderOptions(c.env))
-  const financialSourceProvider = financialProvider(c.env)
-  const dividendSourceProvider = dividendProvider(c.env)
-  const cashflowSourceProvider = cashflowProvider(c.env)
-  const akshareBridge = createQuantAkshareBridge(akshareBridgeOptions(c.env))
-  const [valuationResult, financialResult, shareholderResult, akshareResult] = await Promise.allSettled([
-    valuationProvider.fetchValuation({ tsCode }),
-    financialSourceProvider.fetchFinancialQualityHistory({ tsCode, limit: 4 }),
-    readQuantShareholderReturn(c.get('db'), userId, tsCode, dividendSourceProvider, cashflowSourceProvider, capitalStructureProvider(c.env), repurchaseProvider(c.env)),
-    akshareBridge.isConfigured ? akshareBridge.fetchEvidence({ tsCode }) : Promise.resolve(null),
-  ])
-  const generatedAt = new Date()
-  const report = buildQuantResearchReport({
-    tsCode,
-    name: watchlistItem.name,
-    generatedAt,
-    sourceSnapshotId,
-    candidate,
-    dailyBars,
-    valuation: valuationResult.status === 'fulfilled' ? valuationResult.value : null,
-    financialReports: financialResult.status === 'fulfilled' ? financialResult.value : [],
-    shareholderReturn: shareholderResult.status === 'fulfilled' ? shareholderResult.value : null,
-    valuationErrorCode: valuationResult.status === 'rejected' ? mapQuantProviderError(valuationResult.reason).code : null,
-    financialErrorCode: financialResult.status === 'rejected' ? mapQuantProviderError(financialResult.reason).code : null,
-    akshare: akshareResult.status === 'fulfilled' ? akshareResult.value : null,
-    akshareConfigured: akshareBridge.isConfigured,
-    akshareErrorCode: akshareResult.status === 'rejected' ? akshareBridgeErrorCode(akshareResult.reason) : null,
-    factorConfiguration,
-  })
-  const persisted = await createQuantResearchRun(c.get('db'), {
+  const persisted = await generateQuantResearchRunForUser({
+    db: c.get('db'),
+    env: c.env,
     userId,
-    tsCode,
-    name: watchlistItem.name,
-    status: report.status,
-    reportVersion: report.reportVersion,
-    sourceSnapshotId: report.sourceSnapshotId,
-    reportJson: JSON.stringify(report),
-    generatedAt,
+    tsCode: normalizeTsCode(input.ts_code),
   })
   return c.json({ success: true as const, data: researchRunView(persisted) }, 201)
 })

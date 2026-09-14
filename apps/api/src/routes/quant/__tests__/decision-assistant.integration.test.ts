@@ -12,6 +12,17 @@ import { saveQuantAiConfig } from '../../../domain/quant/ai-config'
 import { createQuantResearchRun, upsertQuantDailyBars } from '../../../domain/quant/repository'
 import { quantRoutes } from '../index'
 
+function fixtureDay(daysAgo = 1): string {
+  const date = new Date()
+  date.setUTCDate(date.getUTCDate() - daysAgo)
+  const year = date.getUTCFullYear()
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(date.getUTCDate()).padStart(2, '0')
+  return `${year}${month}${day}`
+}
+
+const FIXTURE_DAY = fixtureDay(1)
+
 const migrationNames = [
   '0036_quant_workbench.sql',
   '0037_quant_sync_lease.sql',
@@ -50,11 +61,11 @@ function report(): QuantResearchReport {
       value: 1,
       threshold: 'fixture',
       source: 'fixture',
-      observedAt: '20260829',
+      observedAt: FIXTURE_DAY,
       formulaVersion: 'fixture-v1',
       detail: 'fixture',
     }],
-    sources: [{ id: 'local-daily-bars', name: '本地 Quant 日线库', observedAt: '20260829', formulaVersion: 'daily-bars-v1' }],
+    sources: [{ id: 'local-daily-bars', name: '本地 Quant 日线库', observedAt: FIXTURE_DAY, formulaVersion: 'daily-bars-v1' }],
     decision: {
       decisionVersion: 'research-decision-v1',
       recommendation: 'bullish',
@@ -68,7 +79,7 @@ function report(): QuantResearchReport {
         currency: 'CNY',
         formulaVersion: 'reference-price-v1',
         source: '本地 Quant 日线库',
-        observedAt: '20260829',
+        observedAt: FIXTURE_DAY,
         evidenceKeys: ['trend-sample'],
       },
       sellPriceRange: null,
@@ -93,7 +104,7 @@ function factorReport(): QuantResearchReport {
         value: 18,
         threshold: '至少 10%',
         source: 'Eastmoney 最新财报',
-        observedAt: '20260829',
+        observedAt: FIXTURE_DAY,
         formulaVersion: 'quality-v1',
         detail: 'ROE 达到研究门槛。',
       },
@@ -105,15 +116,15 @@ function factorReport(): QuantResearchReport {
         value: 12,
         threshold: '估值可核对',
         source: 'Eastmoney 估值',
-        observedAt: '20260829',
+        observedAt: FIXTURE_DAY,
         formulaVersion: 'valuation-v1',
         detail: '估值数据可核对。',
       },
     ],
     sources: [
       ...base.sources,
-      { id: 'eastmoney-financial', name: 'Eastmoney 最新财报', observedAt: '20260829', formulaVersion: 'quality-v1' },
-      { id: 'eastmoney-valuation', name: 'Eastmoney 估值', observedAt: '20260829', formulaVersion: 'valuation-v1' },
+      { id: 'eastmoney-financial', name: 'Eastmoney 最新财报', observedAt: FIXTURE_DAY, formulaVersion: 'quality-v1' },
+      { id: 'eastmoney-valuation', name: 'Eastmoney 估值', observedAt: FIXTURE_DAY, formulaVersion: 'valuation-v1' },
     ],
     factorModel: {
       modelVersion: 'research-factors-v1',
@@ -197,7 +208,7 @@ describe('quant decision assistant API', () => {
     })
     const bar: DailyBar = {
       tsCode: '601899.SH',
-      tradeDate: '20260829',
+      tradeDate: FIXTURE_DAY,
       open: 33,
       high: 34,
       low: 32,
@@ -279,7 +290,7 @@ describe('quant decision assistant API', () => {
     })
     await upsertQuantDailyBars(db, [{
       tsCode: '601899.SH',
-      tradeDate: '20260829',
+      tradeDate: FIXTURE_DAY,
       open: 33,
       high: 34,
       low: 32,
@@ -381,7 +392,7 @@ describe('quant decision assistant API', () => {
     })
     await upsertQuantDailyBars(db, [{
       tsCode: '601899.SH',
-      tradeDate: '20260829',
+      tradeDate: FIXTURE_DAY,
       open: 33,
       high: 34,
       low: 32,
@@ -434,7 +445,7 @@ describe('quant decision assistant API', () => {
     })
     await upsertQuantDailyBars(db, [{
       tsCode: '601899.SH',
-      tradeDate: '20260829',
+      tradeDate: FIXTURE_DAY,
       open: 33,
       high: 34,
       low: 32,

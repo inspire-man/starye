@@ -28,6 +28,7 @@ import type {
   QuantResearchQuestion,
   QuantResearchRun,
   QuantResearchSummary,
+  QuantScheduledResearchRun,
   QuantShareholderReturnItem,
   QuantValuationComparison,
   QuantValuationSnapshot,
@@ -145,6 +146,7 @@ const decisionAssistantLoading = ref(false)
 const decisionAssistantGenerating = ref(false)
 const decisionAssistantError = ref<unknown | null>(null)
 const decisionAssistantAiConfigAvailable = ref<boolean | null>(null)
+const scheduledResearch = ref<QuantScheduledResearchRun | null>(null)
 const automatedResearchTargets = ref<AutomatedResearchCandidate[]>([])
 const automatedResearchStates = ref<Record<string, AutomatedResearchItemState>>({})
 const automatedResearchRunning = ref(false)
@@ -3116,11 +3118,20 @@ async function retryComparisonResearchAiSummary(item: CandidateItem) {
   }
 }
 
+async function loadScheduledResearch(): Promise<void> {
+  try {
+    scheduledResearch.value = await quantApi.getScheduledResearch()
+  }
+  catch {
+    scheduledResearch.value = null
+  }
+}
+
 async function loadWorkspace(force = false) {
   const loader = async () => {
     errors.action = null
     syncResult.value = null
-    await Promise.all([loadWatchlist(), loadCandidates(), loadDecisionQueue(), loadResearchMarkers(), loadInvestmentKnowledge(), loadSyncState()])
+    await Promise.all([loadWatchlist(), loadCandidates(), loadDecisionQueue(), loadResearchMarkers(), loadInvestmentKnowledge(), loadSyncState(), loadScheduledResearch()])
     await Promise.all([loadValueSelection(), loadShareholderReturns()])
     if (!automaticDataRecoveryAttempted.value) {
       automaticDataRecoveryAttempted.value = true
@@ -3339,6 +3350,7 @@ onUnmounted(() => {
       :risk-tone-class="riskToneClass"
       :risk-label="riskLabel"
       :research-priority-detail="researchPriorityDetail"
+      :scheduled-research="scheduledResearch"
       @navigate="setActiveView"
       @select-stock="selectStock"
       @run-data-health-action="runDataHealthAction"
