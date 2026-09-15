@@ -94,6 +94,7 @@ import { buildResearchBatchFilename, buildResearchBatchMarkdown } from './lib/re
 import { applyBatchResearchProgress, getBatchResearchItemAction, markBatchResearchItemPending } from './lib/research-batch-follow-up'
 import { hydrateResearchBatchState } from './lib/research-batch-history'
 import { buildResearchChangeNextCheckPrompt } from './lib/research-change-prompts'
+import { buildResearchEvidenceGroups } from './lib/research-evidence-groups'
 import { buildResearchEvidenceComparison } from './lib/research-evidence-history'
 import { buildResearchPriority, compareResearchPriorities, summarizeResearchPriorities } from './lib/research-priority'
 import { copyResearchReportMarkdown } from './lib/research-report-copy'
@@ -452,26 +453,7 @@ const latestResearchRun = computed(() => researchRuns.value[0] || null)
 const latestResearchReport = computed(() => latestResearchRun.value?.report || null)
 const researchEvidenceGroups = computed(() => {
   const report = latestResearchReport.value
-  if (!report)
-    return [] as { dimension: string, label: string, items: QuantResearchEvidence[] }[]
-  const labels: Record<string, string> = {
-    'trend': '趋势与价格',
-    'valuation': '估值',
-    'quality': '经营质量',
-    'shareholder-return': '股东回报',
-    'risk': '风险与波动',
-  }
-  const order = ['trend', 'valuation', 'quality', 'shareholder-return', 'risk']
-  const groups = new Map<string, QuantResearchEvidence[]>()
-  for (const item of report.evidence)
-    groups.set(item.dimension, [...(groups.get(item.dimension) || []), item])
-  const orderedGroups = order.flatMap(dimension => groups.has(dimension)
-    ? [{ dimension, label: labels[dimension] || dimension, items: groups.get(dimension) || [] }]
-    : [])
-  const additionalGroups = [...groups.entries()]
-    .filter(([dimension]) => !order.includes(dimension))
-    .map(([dimension, items]) => ({ dimension, label: `其他证据 · ${dimension}`, items }))
-  return [...orderedGroups, ...additionalGroups]
+  return report ? buildResearchEvidenceGroups(report.evidence) : []
 })
 const previousResearchRun = computed(() => researchRuns.value[1] || null)
 const researchEvidenceComparison = computed(() => buildResearchEvidenceComparison(latestResearchReport.value, previousResearchRun.value?.report || null))
@@ -3487,6 +3469,7 @@ onUnmounted(() => {
     />
 
     <QuantKnowledgeView
+      v-else-if="activeView === 'knowledge'"
       :investment-knowledge="investmentKnowledge"
       :loading="loading.knowledge"
       :has-error="Boolean(errors.knowledge)"
