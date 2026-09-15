@@ -736,5 +736,11 @@ describe('quant research report', () => {
     expect(smallCalibration).toMatchObject({ optional: true, formulaVersion: 'timing-history-calibration-v1', status: 'missing' })
     expect(largeCalibration).toMatchObject({ optional: true, formulaVersion: 'timing-history-calibration-v1', status: 'missing' })
     expect(large.decision?.evidenceKeys).not.toContain('timing-history-calibration')
+
+    const smallWalkForward = small.evidence.find(item => item.key === 'timing-history-walkforward')
+    const largeWalkForward = large.evidence.find(item => item.key === 'timing-history-walkforward')
+    expect(smallWalkForward).toMatchObject({ optional: true, formulaVersion: 'timing-history-walkforward-v1', status: 'missing' })
+    expect(largeWalkForward).toMatchObject({ optional: true, formulaVersion: 'timing-history-walkforward-v1', status: 'missing' })
+    expect(large.decision?.evidenceKeys).not.toContain('timing-history-walkforward')
   })
 })
