@@ -1,6 +1,6 @@
 import type { TimingHistory, TimingHistoryObservation } from '../timing-history'
 import { describe, expect, it } from 'vitest'
-import { calibrateTimingHistoryEdge, timingHistoryEdgeStatus } from '../timing-history'
+import { calibrateTimingHistoryEdge, timingHistoryEdgeStatus, walkForwardTimingCalibration } from '../timing-history'
 
 function observation(state: TimingHistoryObservation['state'], forwardReturn20: number, index: number): TimingHistoryObservation {
   return {
@@ -88,5 +88,48 @@ describe('calibrateTimingHistoryEdge', () => {
     }))
     expect(result.edgeAssessment).toBe('indeterminate')
     expect(timingHistoryEdgeStatus(result.edgeAssessment)).toBe('caution')
+  })
+})
+
+describe('walkForwardTimingCalibration', () => {
+  it('stays insufficient when directional out-of-sample calls are fewer than 6', () => {
+    const result = walkForwardTimingCalibration(history({
+      currentState: 'constructive',
+      observations: [
+        ...Array.from({ length: 12 }, (_, index) => observation('weak', -0.06, index)),
+        ...Array.from({ length: 8 }, (_, index) => observation('constructive', 0.08, index + 12)),
+      ],
+    }))
+    expect(result).toMatchObject({ edgeAssessment: 'insufficient', directionalSampleSize: 2 })
+    expect(timingHistoryEdgeStatus(result.edgeAssessment)).toBe('missing')
+  })
+
+  it('maps a fully above-chance agreement interval to supported', () => {
+    const result = walkForwardTimingCalibration(history({
+      currentState: 'constructive',
+      observations: [
+        ...Array.from({ length: 12 }, (_, index) => observation('weak', -0.06, index)),
+        ...Array.from({ length: 12 }, (_, index) => observation('constructive', 0.08, index + 12)),
+      ],
+    }))
+    expect(result.directionalSampleSize).toBe(6)
+    expect(result.agreementCount).toBe(6)
+    expect(result.edgeAssessment).toBe('supported')
+    expect(timingHistoryEdgeStatus(result.edgeAssessment)).toBe('pass')
+  })
+
+  it('maps a fully below-chance agreement interval to weaker', () => {
+    const result = walkForwardTimingCalibration(history({
+      currentState: 'constructive',
+      observations: [
+        ...Array.from({ length: 12 }, (_, index) => observation('weak', -0.06, index)),
+        ...Array.from({ length: 6 }, (_, index) => observation('constructive', 0.08, index + 12)),
+        ...Array.from({ length: 6 }, (_, index) => observation('constructive', -0.08, index + 18)),
+      ],
+    }))
+    expect(result.directionalSampleSize).toBe(6)
+    expect(result.agreementCount).toBe(0)
+    expect(result.edgeAssessment).toBe('weaker')
+    expect(timingHistoryEdgeStatus(result.edgeAssessment)).toBe('fail')
   })
 })

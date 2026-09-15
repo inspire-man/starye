@@ -274,3 +274,77 @@ export function calibrateTimingHistoryEdge(history: TimingHistory): TimingHistor
       : null,
   }
 }
+
+export const TIMING_HISTORY_WALKFORWARD_FORMULA_VERSION = 'timing-history-walkforward-v1' as const
+
+export interface TimingHistoryWalkForward {
+  readonly currentState: TimingWindowState
+  readonly currentLabel: string
+  readonly directionalSampleSize: number
+  readonly agreementCount: number
+  readonly agreementRate: number | null
+  readonly agreementRateLower: number | null
+  readonly agreementRateUpper: number | null
+  readonly edgeAssessment: TimingHistoryEdgeAssessment
+}
+
+function directionalAgreement(predicted: TimingHistoryEdgeAssessment, forwardReturn20: number): boolean | null {
+  if (predicted === 'supported')
+    return forwardReturn20 > 0
+  if (predicted === 'weaker')
+    return forwardReturn20 < 0
+  return null
+}
+
+function classifyAgreementRate(agreementCount: number, sampleSize: number): TimingHistoryEdgeAssessment {
+  if (sampleSize < MIN_RELIABLE_SAMPLE_SIZE)
+    return 'insufficient'
+  const interval = wilsonInterval(agreementCount, sampleSize)
+  if (!interval)
+    return 'indeterminate'
+  if (interval.lower > 0.5)
+    return 'supported'
+  if (interval.upper < 0.5)
+    return 'weaker'
+  return 'indeterminate'
+}
+
+export function walkForwardTimingCalibration(history: TimingHistory): TimingHistoryWalkForward {
+  const agreements: boolean[] = []
+  for (let index = 0; index < history.observations.length; index++) {
+    const observation = history.observations[index]
+    if (!observation || observation.state !== history.currentState)
+      continue
+    const prior = calibrateTimingHistoryEdge({
+      ...history,
+      observations: history.observations.slice(0, index),
+      currentState: observation.state,
+    })
+    const agreed = directionalAgreement(prior.edgeAssessment, observation.forwardReturn20)
+    if (agreed === null)
+      continue
+    agreements.push(agreed)
+  }
+  const agreementCount = agreements.filter(value => value).length
+  const interval = wilsonInterval(agreementCount, agreements.length)
+  return {
+    currentState: history.currentState,
+    currentLabel: history.currentLabel,
+    directionalSampleSize: agreements.length,
+    agreementCount,
+    agreementRate: agreements.length ? agreementCount / agreements.length : null,
+    agreementRateLower: interval?.lower ?? null,
+    agreementRateUpper: interval?.upper ?? null,
+    edgeAssessment: classifyAgreementRate(agreementCount, agreements.length),
+  }
+}
+
+export function timingHistoryWalkForwardDetail(result: TimingHistoryWalkForward): string {
+  if (result.edgeAssessment === 'insufficient')
+    return `时序外方向样本 ${result.directionalSampleSize}，不足以核对过去判断是否被随后 20 日收益证实`
+  if (result.edgeAssessment === 'supported')
+    return `时序外方向样本 ${result.directionalSampleSize}，一致 ${result.agreementCount}，判断被随后收益证实`
+  if (result.edgeAssessment === 'weaker')
+    return `时序外方向样本 ${result.directionalSampleSize}，一致 ${result.agreementCount}，判断与随后收益相反`
+  return `时序外方向样本 ${result.directionalSampleSize}，一致 ${result.agreementCount}，一致率区间覆盖 50%`
+}
