@@ -19,6 +19,8 @@ export interface DecisionOutcomeEntry {
   readonly observationPrice: number
   readonly observationObservedAt: string
   readonly changePercent: number
+  readonly realizedReturn: number
+  readonly direction: 'up' | 'down' | 'flat'
 }
 
 export interface DecisionOutcome {
@@ -28,6 +30,7 @@ export interface DecisionOutcome {
   readonly trackedCount: number
   readonly completedCount: number
   readonly pendingCount: number
+  readonly orderedReturnAverage: number | null
 }
 
 interface DecisionEvent {
@@ -98,6 +101,8 @@ function buildEntry(baseline: DecisionEvent, observation: DecisionEvent, kind: E
     observationPrice: observation.price,
     observationObservedAt: observation.observedAt,
     changePercent,
+    realizedReturn: changePercent,
+    direction: changePercent > 0 ? 'up' : changePercent < 0 ? 'down' : 'flat',
   }
 }
 
@@ -118,6 +123,8 @@ function buildCurrentEntry(baseline: DecisionEvent, latest: DecisionEvent): Deci
     observationPrice: latest.price,
     observationObservedAt: latest.observedAt,
     changePercent,
+    realizedReturn: changePercent,
+    direction: changePercent > 0 ? 'up' : changePercent < 0 ? 'down' : 'flat',
   }
 }
 
@@ -201,5 +208,8 @@ export function buildDecisionOutcome(
     trackedCount: entries.length + pendingCount,
     completedCount,
     pendingCount,
+    orderedReturnAverage: entries.length
+      ? Number((entries.reduce((total, entry) => total + entry.realizedReturn, 0) / entries.length).toFixed(10))
+      : null,
   }
 }
