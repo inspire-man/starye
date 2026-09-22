@@ -55,6 +55,7 @@ export interface TimingPoolStateSummary {
   readonly indeterminateCount: number
   readonly supportedCount: number
   readonly weakerCount: number
+  readonly directionalAgreementRate: number | null
   readonly consensus: TimingPoolConsensus
 }
 
@@ -223,15 +224,19 @@ export function buildTimingPoolAudit(results: readonly TimingPoolTickerResult[])
     const indeterminateCount = buckets.filter(bucket => bucket.edgeAssessment === 'indeterminate').length
     const supportedCount = buckets.filter(bucket => bucket.edgeAssessment === 'supported').length
     const weakerCount = buckets.filter(bucket => bucket.edgeAssessment === 'weaker').length
+    const directionalCount = supportedCount + weakerCount
     return {
       state,
       label: STATE_LABELS[state],
       tickerCount: ready.length,
-      assessedCount: indeterminateCount + supportedCount + weakerCount,
+      assessedCount: indeterminateCount + directionalCount,
       insufficientCount,
       indeterminateCount,
       supportedCount,
       weakerCount,
+      directionalAgreementRate: directionalCount === 0
+        ? null
+        : Math.max(supportedCount, weakerCount) / directionalCount,
       consensus: classifyConsensus({
         insufficientCount,
         indeterminateCount,

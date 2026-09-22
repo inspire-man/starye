@@ -127,7 +127,7 @@ async function runAudit(): Promise<void> {
         <article v-for="state in audit.states" :key="state.state" class="timing-pool-state-card">
           <strong>{{ state.label }}</strong>
           <span class="status-chip">{{ timingPoolConsensusLabel(state.consensus) }}</span>
-          <p>有效评估 {{ state.assessedCount }} / {{ state.tickerCount }} · 稳定支持 {{ state.supportedCount }} · 偏弱 {{ state.weakerCount }} · 重叠 {{ state.indeterminateCount }} · 样本不足 {{ state.insufficientCount }}</p>
+          <p>有效评估 {{ state.assessedCount }} / {{ state.tickerCount }} · 方向一致率 {{ state.directionalAgreementRate === null ? '--' : `${Math.round(state.directionalAgreementRate * 100)}%` }} · 稳定支持 {{ state.supportedCount }} · 偏弱 {{ state.weakerCount }} · 重叠 {{ state.indeterminateCount }} · 样本不足 {{ state.insufficientCount }}</p>
         </article>
       </div>
 
