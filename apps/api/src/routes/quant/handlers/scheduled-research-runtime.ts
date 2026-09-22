@@ -70,9 +70,9 @@ export function createQuantScheduledResearchPorts(db: Database, env: AppEnv['Bin
   }
 }
 
-export async function runQuantScheduledResearchFromEnv(env: AppEnv['Bindings'], at = new Date()) {
+export async function runQuantScheduledResearchFromEnv(env: AppEnv['Bindings'], at = new Date(), onlyUserId?: string) {
   const db = createDb(env.DB)
-  return runQuantScheduledResearchTick(createQuantScheduledResearchPorts(db, env), at)
+  return runQuantScheduledResearchTick(createQuantScheduledResearchPorts(db, env), at, onlyUserId)
 }
 
 export function createQuantScheduledResearchHandler(

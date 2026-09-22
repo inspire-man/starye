@@ -31,9 +31,9 @@ describe('quant endpoint contract matrix', () => {
     const manifestKeys = quantEndpointContracts.map(contractKey)
     const mountedKeys = [...runtimeRouteKeys()]
 
-    expect(quantEndpointContracts).toHaveLength(48)
+    expect(quantEndpointContracts).toHaveLength(50)
     expect(new Set(manifestKeys).size).toBe(manifestKeys.length)
-    expect(new Set(mountedKeys).size).toBe(48)
+    expect(new Set(mountedKeys).size).toBe(50)
     expect(mountedKeys.sort()).toEqual(manifestKeys.sort())
   })
 
@@ -46,7 +46,7 @@ describe('quant endpoint contract matrix', () => {
     })
     const operations = quantEndpointContracts.map(contract => operationFor(spec, contract))
 
-    expect(operations).toHaveLength(48)
+    expect(operations).toHaveLength(50)
     for (const [index, contract] of quantEndpointContracts.entries()) {
       const operation = operations[index]
       expect(operation, contractKey(contract)).toBeDefined()

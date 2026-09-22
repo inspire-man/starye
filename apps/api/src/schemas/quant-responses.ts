@@ -395,6 +395,21 @@ export const QuantScheduledResearchResponseSchema = v.object({
   data: v.nullable(QuantScheduledResearchRunSchema),
 })
 
+export const QuantScheduledResearchHistoryResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.array(QuantScheduledResearchRunSchema),
+})
+
+export const QuantScheduledResearchRunTriggerResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.object({
+    userId: v.nullable(v.string()),
+    jobId: v.nullable(v.string()),
+    processedCount: v.number(),
+    skippedReason: v.nullable(v.picklist(['no-users', 'cooldown', 'leased', 'no-due'])),
+  }),
+})
+
 const QuantResearchSummarySchema = v.object({
   id: v.string(),
   researchRunId: v.string(),

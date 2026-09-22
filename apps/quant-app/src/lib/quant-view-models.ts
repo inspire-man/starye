@@ -609,6 +609,13 @@ export interface QuantScheduledResearchRun {
   items: QuantScheduledResearchItem[]
 }
 
+export interface QuantScheduledResearchTriggerResult {
+  userId: string | null
+  jobId: string | null
+  processedCount: number
+  skippedReason: 'no-users' | 'cooldown' | 'leased' | 'no-due' | null
+}
+
 export interface CapabilityState {
   key: CapabilityKey
   label: string

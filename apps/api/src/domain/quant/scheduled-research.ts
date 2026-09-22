@@ -360,8 +360,9 @@ function remainingDue(dueItems: readonly QuantScheduledDueItem[], job: QuantSche
 export async function runQuantScheduledResearchTick(
   ports: QuantScheduledResearchPorts,
   now = new Date(),
+  onlyUserId?: string,
 ): Promise<QuantScheduledTickResult> {
-  const userIds = await ports.listUserIds()
+  const userIds = onlyUserId ? [onlyUserId] : await ports.listUserIds()
   if (!userIds.length)
     return { userId: null, jobId: null, processedCount: 0, skippedReason: 'no-users' }
 

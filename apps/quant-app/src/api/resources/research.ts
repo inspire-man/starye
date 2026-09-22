@@ -27,6 +27,7 @@ import type {
   QuantScheduledResearchRun,
   QuantScheduledResearchStage,
   QuantScheduledResearchStatus,
+  QuantScheduledResearchTriggerResult,
   ResearchMarkerStatus,
 } from '../../lib/quant-view-models'
 import type { QuantRequestOptions } from '../http-client'
@@ -714,6 +715,19 @@ function parseScheduledResearch(payload: unknown): QuantScheduledResearchRun | n
   }
 }
 
+function parseScheduledResearchTrigger(payload: unknown): QuantScheduledResearchTriggerResult {
+  const data = unwrapData(payload)
+  if (!isRecord(data))
+    throw new QuantApiError('后台研究触发结果格式无效', 502, 'QUANT_PROVIDER_INVALID_RESPONSE')
+  const skippedReason = readString(data, 'skippedReason', 'skipped_reason')
+  return {
+    userId: readString(data, 'userId', 'user_id'),
+    jobId: readString(data, 'jobId', 'job_id'),
+    processedCount: readNumber(data, 'processedCount', 'processed_count') ?? 0,
+    skippedReason: skippedReason === 'no-users' || skippedReason === 'cooldown' || skippedReason === 'leased' || skippedReason === 'no-due' ? skippedReason : null,
+  }
+}
+
 export const quantResearchApi = {
   async getResearchMarkers(options: QuantRequestOptions = {}): Promise<QuantResearchMarker[]> {
     return parseResearchMarkers(await requestJson('/research', options.signal ? { signal: options.signal } : undefined))
@@ -721,6 +735,19 @@ export const quantResearchApi = {
 
   async getScheduledResearch(options: QuantRequestOptions = {}): Promise<QuantScheduledResearchRun | null> {
     return parseScheduledResearch(await requestJson('/research/schedule', options.signal ? { signal: options.signal } : undefined))
+  },
+
+  async getScheduledResearchHistory(limit = 10, options: QuantRequestOptions = {}): Promise<QuantScheduledResearchRun[]> {
+    const payload = await requestJson(`/research/schedule/history?limit=${encodeURIComponent(String(limit))}`, options.signal ? { signal: options.signal } : undefined)
+    const data = unwrapData(payload)
+    return readList(data, 'items', 'runs', 'history').flatMap((item) => {
+      const parsed = parseScheduledResearch({ success: true, data: item })
+      return parsed ? [parsed] : []
+    })
+  },
+
+  async runScheduledResearchNow(): Promise<QuantScheduledResearchTriggerResult> {
+    return parseScheduledResearchTrigger(await requestJson('/research/schedule/run', { method: 'POST' }))
   },
 
   async generateResearchRun(tsCode: string): Promise<QuantResearchRun> {

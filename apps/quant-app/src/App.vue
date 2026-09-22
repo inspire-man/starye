@@ -29,6 +29,7 @@ import type {
   QuantResearchRun,
   QuantResearchSummary,
   QuantScheduledResearchRun,
+  QuantScheduledResearchTriggerResult,
   QuantShareholderReturnItem,
   QuantValuationComparison,
   QuantValuationSnapshot,
@@ -148,6 +149,9 @@ const decisionAssistantGenerating = ref(false)
 const decisionAssistantError = ref<unknown | null>(null)
 const decisionAssistantAiConfigAvailable = ref<boolean | null>(null)
 const scheduledResearch = ref<QuantScheduledResearchRun | null>(null)
+const scheduledResearchHistory = ref<QuantScheduledResearchRun[]>([])
+const scheduledResearchRunning = ref(false)
+const scheduledResearchError = ref<string | null>(null)
 const automatedResearchTargets = ref<AutomatedResearchCandidate[]>([])
 const automatedResearchStates = ref<Record<string, AutomatedResearchItemState>>({})
 const automatedResearchRunning = ref(false)
@@ -3101,11 +3105,36 @@ async function retryComparisonResearchAiSummary(item: CandidateItem) {
 }
 
 async function loadScheduledResearch(): Promise<void> {
+  const [latestResult, historyResult] = await Promise.allSettled([
+    quantApi.getScheduledResearch(),
+    quantApi.getScheduledResearchHistory(5),
+  ])
+  if (latestResult.status === 'fulfilled')
+    scheduledResearch.value = latestResult.value
+  if (historyResult.status === 'fulfilled')
+    scheduledResearchHistory.value = historyResult.value
+  if (latestResult.status === 'rejected' && historyResult.status === 'rejected')
+    scheduledResearchError.value = '后台研究状态读取失败'
+}
+
+async function runScheduledResearchNow(): Promise<void> {
+  if (scheduledResearchRunning.value)
+    return
+  scheduledResearchRunning.value = true
+  scheduledResearchError.value = null
   try {
-    scheduledResearch.value = await quantApi.getScheduledResearch()
+    const result: QuantScheduledResearchTriggerResult = await quantApi.runScheduledResearchNow()
+    if (result.skippedReason === 'cooldown')
+      scheduledResearchError.value = '后台任务仍在冷却窗口内'
+    else if (result.skippedReason === 'leased')
+      scheduledResearchError.value = '后台任务正在运行，请稍后查看结果'
+    await loadScheduledResearch()
   }
-  catch {
-    scheduledResearch.value = null
+  catch (error) {
+    scheduledResearchError.value = parsedError(error).message
+  }
+  finally {
+    scheduledResearchRunning.value = false
   }
 }
 
@@ -3333,10 +3362,14 @@ onUnmounted(() => {
       :risk-label="riskLabel"
       :research-priority-detail="researchPriorityDetail"
       :scheduled-research="scheduledResearch"
+      :scheduled-research-history="scheduledResearchHistory"
+      :scheduled-research-running="scheduledResearchRunning"
+      :scheduled-research-error="scheduledResearchError"
       @navigate="setActiveView"
       @select-stock="selectStock"
       @run-data-health-action="runDataHealthAction"
       @recover-data-health="syncDaily"
+      @run-scheduled-research="runScheduledResearchNow"
     />
 
     <QuantWatchlistView
