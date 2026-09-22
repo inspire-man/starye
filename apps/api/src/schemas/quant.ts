@@ -339,7 +339,7 @@ export const QuantDecisionRecordUpdateSchema = v.strictObject({
 })
 
 export const QuantDecisionRecordQuerySchema = v.object({
-  limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,2}$/u))),
+  limit: v.optional(v.pipe(v.string(), v.regex(/^\d{1,3}$/u))),
 })
 
 const QuantDecisionAssistantPositiveNumberSchema = v.pipe(

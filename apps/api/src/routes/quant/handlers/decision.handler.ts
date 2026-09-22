@@ -12,6 +12,7 @@ import {
   getQuantDecisionRecord,
   getQuantResearchRun,
   listQuantDecisionAssessments,
+  listQuantDecisionCalibration,
   listQuantDecisionQueue,
   listQuantDecisionRecords,
   listQuantResearchSummaries,
@@ -184,6 +185,12 @@ quantDecisionRoutes.put('/research/runs/:runId/decision', quantRouteDocs('decisi
 quantDecisionRoutes.get('/research/decisions', quantRouteDocs('decision.queue.list'), validator('query', QuantDecisionRecordQuerySchema), async (c) => {
   const { limit } = c.req.valid('query')
   const data = await listQuantDecisionQueue(c.get('db'), currentQuantUserId(c), limit ? Number(limit) : undefined)
+  return c.json({ success: true as const, data: data.map(decisionRecordView) })
+})
+
+quantDecisionRoutes.get('/research/decisions/calibration', quantRouteDocs('decision.calibration.list'), validator('query', QuantDecisionRecordQuerySchema), async (c) => {
+  const { limit } = c.req.valid('query')
+  const data = await listQuantDecisionCalibration(c.get('db'), currentQuantUserId(c), limit ? Number(limit) : 100)
   return c.json({ success: true as const, data: data.map(decisionRecordView) })
 })
 

@@ -148,6 +148,9 @@ const decisionAssistantLoading = ref(false)
 const decisionAssistantGenerating = ref(false)
 const decisionAssistantError = ref<unknown | null>(null)
 const decisionAssistantAiConfigAvailable = ref<boolean | null>(null)
+const decisionCalibrationRecords = ref<QuantDecisionRecord[]>([])
+const decisionCalibrationLoading = ref(false)
+const decisionCalibrationError = ref<unknown | null>(null)
 const scheduledResearch = ref<QuantScheduledResearchRun | null>(null)
 const scheduledResearchHistory = ref<QuantScheduledResearchRun[]>([])
 const scheduledResearchRunning = ref(false)
@@ -3117,6 +3120,21 @@ async function loadScheduledResearch(): Promise<void> {
     scheduledResearchError.value = '后台研究状态读取失败'
 }
 
+async function loadDecisionCalibration(): Promise<void> {
+  decisionCalibrationLoading.value = true
+  decisionCalibrationError.value = null
+  try {
+    decisionCalibrationRecords.value = await quantApi.getResearchDecisionCalibration(100)
+  }
+  catch (error) {
+    decisionCalibrationError.value = error
+    decisionCalibrationRecords.value = []
+  }
+  finally {
+    decisionCalibrationLoading.value = false
+  }
+}
+
 async function runScheduledResearchNow(): Promise<void> {
   if (scheduledResearchRunning.value)
     return
@@ -3142,7 +3160,7 @@ async function loadWorkspace(force = false) {
   const loader = async () => {
     errors.action = null
     syncResult.value = null
-    await Promise.all([loadWatchlist(), loadCandidates(), loadDecisionQueue(), loadResearchMarkers(), loadInvestmentKnowledge(), loadSyncState(), loadScheduledResearch()])
+    await Promise.all([loadWatchlist(), loadCandidates(), loadDecisionQueue(), loadDecisionCalibration(), loadResearchMarkers(), loadInvestmentKnowledge(), loadSyncState(), loadScheduledResearch()])
     await Promise.all([loadValueSelection(), loadShareholderReturns()])
     if (!automaticDataRecoveryAttempted.value) {
       automaticDataRecoveryAttempted.value = true
@@ -3442,6 +3460,9 @@ onUnmounted(() => {
       :decision-queue-records="decisionQueueRecords"
       :decision-queue-loading="decisionQueueLoading"
       :decision-queue-error-message="decisionQueueError ? parsedError(decisionQueueError).message : null"
+      :decision-calibration-records="decisionCalibrationRecords"
+      :decision-calibration-loading="decisionCalibrationLoading"
+      :decision-calibration-error-message="decisionCalibrationError ? parsedError(decisionCalibrationError).message : null"
       :candidate-ai-briefing="candidateAiBriefing"
       :candidate-briefing-scope-items-count="candidateBriefingScopeItems.length"
       :candidate-ai-briefing-scope-count="candidateAiBriefingScopeCount"

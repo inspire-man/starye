@@ -21,6 +21,7 @@ import { BarChart3, ChevronRight, Info, Plus, RefreshCw, RotateCcw } from 'lucid
 import { ref } from 'vue'
 import QuantAiCandidateBriefingPanel from './QuantAiCandidateBriefing.vue'
 import QuantAiTrustOverview from './QuantAiTrustOverview.vue'
+import QuantDecisionCalibration from './QuantDecisionCalibration.vue'
 import QuantDecisionQueue from './QuantDecisionQueue.vue'
 import QuantResearchAutomation from './QuantResearchAutomation.vue'
 
@@ -73,6 +74,9 @@ const props = defineProps<{
   decisionQueueRecords: QuantDecisionRecord[]
   decisionQueueLoading: boolean
   decisionQueueErrorMessage: string | null
+  decisionCalibrationRecords: QuantDecisionRecord[]
+  decisionCalibrationLoading: boolean
+  decisionCalibrationErrorMessage: string | null
   candidateAiBriefing: QuantAiCandidateBriefing | null
   candidateBriefingScopeItemsCount: number
   candidateAiBriefingScopeCount: number | null
@@ -508,6 +512,13 @@ function emitResearchPrioritySelect(entry: ResearchPriorityQueueEntry): void {
       :loading="props.decisionQueueLoading"
       :error-message="props.decisionQueueErrorMessage"
       @focus="emit('focusDecisionQueue', $event)"
+    />
+    <QuantDecisionCalibration
+      v-if="props.candidateItems.length || props.decisionCalibrationRecords.length"
+      :records="props.decisionCalibrationRecords"
+      :watchlist="props.watchlist"
+      :loading="props.decisionCalibrationLoading"
+      :error-message="props.decisionCalibrationErrorMessage"
     />
     <QuantAiCandidateBriefingPanel
       v-if="props.candidateItems.length"
