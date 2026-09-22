@@ -645,6 +645,14 @@ export async function listQuantDecisionQueue(db: Database, userId: string, limit
   return [...latestByCode.values()].slice(0, boundedLimit)
 }
 
+export async function listQuantDecisionCalibration(db: Database, userId: string, limit = 100) {
+  const ownerId = normalizeQuantUserId(userId)
+  const boundedLimit = Math.min(100, Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : 100))
+  return db.select().from(quantDecisionRecords).where(
+    eq(quantDecisionRecords.userId, ownerId),
+  ).orderBy(desc(quantDecisionRecords.updatedAt), desc(quantDecisionRecords.id)).limit(boundedLimit).all()
+}
+
 export async function upsertQuantDecisionRecord(db: Database, input: {
   readonly userId: string
   readonly researchRunId: string

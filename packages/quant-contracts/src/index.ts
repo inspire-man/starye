@@ -578,6 +578,18 @@ export const quantEndpointContracts = [
     consumer: 'apps/quant-app/src/api/resources/decision.ts',
   },
   {
+    id: 'decision.calibration.list',
+    area: 'decision',
+    method: 'GET',
+    path: '/research/decisions/calibration',
+    operationId: 'listQuantDecisionCalibration',
+    summary: '获取决策校准历史',
+    input: { params: null, query: 'QuantDecisionRecordQuerySchema', body: null },
+    success: { status: 200, contentType: 'application/json', responseSchema: 'QuantDecisionRecordsResponseSchema' },
+    errors: [unauthorized, invalidInput],
+    consumer: 'apps/quant-app/src/api/resources/decision.ts',
+  },
+  {
     id: 'decision.records.list',
     area: 'decision',
     method: 'GET',

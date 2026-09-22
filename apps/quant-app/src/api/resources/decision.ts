@@ -473,4 +473,8 @@ export const quantDecisionApi = {
   async getResearchDecisionQueue(limit = 20, options: QuantRequestOptions = {}): Promise<QuantDecisionRecord[]> {
     return parseDecisionRecords(await requestJson(`/research/decisions?limit=${encodeURIComponent(String(limit))}`, options.signal ? { signal: options.signal } : undefined))
   },
+
+  async getResearchDecisionCalibration(limit = 100, options: QuantRequestOptions = {}): Promise<QuantDecisionRecord[]> {
+    return parseDecisionRecords(await requestJson(`/research/decisions/calibration?limit=${encodeURIComponent(String(limit))}`, options.signal ? { signal: options.signal } : undefined))
+  },
 }
