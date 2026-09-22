@@ -99,6 +99,7 @@ describe('buildTimingPoolAudit', () => {
       assessedCount: 3,
       supportedCount: 2,
       weakerCount: 1,
+      directionalAgreementRate: 2 / 3,
       consensus: 'insufficient-pool',
     })
     expect(audit).not.toHaveProperty('positiveRate')
