@@ -50,6 +50,7 @@ export interface TimingPoolStateSummary {
   readonly state: TimingHistoryState
   readonly label: string
   readonly tickerCount: number
+  readonly assessedCount: number
   readonly insufficientCount: number
   readonly indeterminateCount: number
   readonly supportedCount: number
@@ -226,6 +227,7 @@ export function buildTimingPoolAudit(results: readonly TimingPoolTickerResult[])
       state,
       label: STATE_LABELS[state],
       tickerCount: ready.length,
+      assessedCount: indeterminateCount + supportedCount + weakerCount,
       insufficientCount,
       indeterminateCount,
       supportedCount,

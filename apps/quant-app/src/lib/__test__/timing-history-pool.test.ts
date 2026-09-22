@@ -96,6 +96,7 @@ describe('buildTimingPoolAudit', () => {
       thresholdAdviceLabel: '阈值保持不变',
     })
     expect(audit.states.find(state => state.state === 'constructive')).toMatchObject({
+      assessedCount: 3,
       supportedCount: 2,
       weakerCount: 1,
       consensus: 'insufficient-pool',
