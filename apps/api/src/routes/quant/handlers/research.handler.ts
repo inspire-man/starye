@@ -17,7 +17,7 @@ import {
   normalizeTsCode,
   upsertQuantResearchMarker,
 } from '../../../domain/quant/repository'
-import { readLatestQuantScheduledJob, scheduledResearchView } from '../../../domain/quant/scheduled-research-store'
+import { listQuantScheduledJobs, readLatestQuantScheduledJob, scheduledResearchView } from '../../../domain/quant/scheduled-research-store'
 import {
   QuantResearchChangeExplanationSchema,
   QuantResearchComparisonSchema,
@@ -42,6 +42,7 @@ import {
   researchSummaryView,
 } from './presenters'
 import { generateQuantResearchRunForUser } from './research-generation'
+import { runQuantScheduledResearchFromEnv } from './scheduled-research-runtime'
 import {
   aiGenerationTimeoutMs,
   createQuantAiSummaryStream,
@@ -60,6 +61,17 @@ quantResearchRoutes.get('/research', quantRouteDocs('research.markers.list'), as
 quantResearchRoutes.get('/research/schedule', quantRouteDocs('research.schedule.get'), async (c) => {
   const job = await readLatestQuantScheduledJob(c.get('db'), currentQuantUserId(c))
   return c.json({ success: true as const, data: job ? scheduledResearchView(job) : null })
+})
+
+quantResearchRoutes.get('/research/schedule/history', quantRouteDocs('research.schedule.history'), validator('query', QuantResearchSummaryQuerySchema), async (c) => {
+  const { limit } = c.req.valid('query')
+  const jobs = await listQuantScheduledJobs(c.get('db'), currentQuantUserId(c), limit ? Number(limit) : 10)
+  return c.json({ success: true as const, data: jobs.map(scheduledResearchView) })
+})
+
+quantResearchRoutes.post('/research/schedule/run', quantRouteDocs('research.schedule.run'), async (c) => {
+  const result = await runQuantScheduledResearchFromEnv(c.env, new Date(), currentQuantUserId(c))
+  return c.json({ success: true as const, data: result })
 })
 
 quantResearchRoutes.post('/research/runs', quantRouteDocs('research.runs.create'), validator('json', QuantResearchRunCreateSchema), async (c) => {

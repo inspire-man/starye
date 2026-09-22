@@ -770,3 +770,43 @@
   margin-top: 0.9rem;
 }
 
+.scheduled-research-history {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.65rem;
+}
+
+.scheduled-research-history-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 0.45rem;
+  align-items: baseline;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.68rem;
+}
+
+.scheduled-research-history-row strong {
+  color: hsl(var(--foreground));
+}
+
+.scheduled-research-history-row small {
+  overflow-wrap: anywhere;
+}
+
+.data-health-error {
+  margin: 0.45rem 0 0;
+  color: hsl(var(--status-danger));
+  font-size: 0.7rem;
+}
+
+@media (max-width: 640px) {
+  .scheduled-research-history-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .scheduled-research-history-row small {
+    grid-column: 1 / -1;
+  }
+}

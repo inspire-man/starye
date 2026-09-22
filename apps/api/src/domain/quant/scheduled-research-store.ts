@@ -105,6 +105,12 @@ export async function readLatestQuantScheduledJob(db: Database, userId: string):
   return row ? jobFromRow(db, row) : null
 }
 
+export async function listQuantScheduledJobs(db: Database, userId: string, limit = 10): Promise<QuantScheduledJob[]> {
+  const boundedLimit = Math.min(20, Math.max(1, Math.floor(limit)))
+  const rows = await db.select().from(quantScheduledResearchRuns).where(eq(quantScheduledResearchRuns.userId, userId)).orderBy(desc(quantScheduledResearchRuns.startedAt), desc(quantScheduledResearchRuns.id)).limit(boundedLimit).all()
+  return Promise.all(rows.map(row => jobFromRow(db, row)))
+}
+
 export async function createQuantScheduledJob(db: Database, input: {
   readonly userId: string
   readonly dueCount: number

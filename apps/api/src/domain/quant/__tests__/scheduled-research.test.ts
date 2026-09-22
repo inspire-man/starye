@@ -168,6 +168,14 @@ describe('runQuantScheduledResearchTick', () => {
     expect(generateResearch).toHaveBeenCalledTimes(QUANT_SCHEDULED_RESEARCH_BATCH_SIZE)
   })
 
+  it('limits a manual tick to the requested user', async () => {
+    const listUserIds = vi.fn(async () => ['user-1', 'user-2'])
+    const listWatchlist = vi.fn(async () => [{ tsCode: '601899.SH', name: '紫金矿业', barCount: 0, latestTradeDate: null }])
+    await runQuantScheduledResearchTick(ports({ listUserIds, listWatchlist }), now, 'user-2')
+    expect(listUserIds).not.toHaveBeenCalled()
+    expect(listWatchlist).toHaveBeenCalledWith('user-2')
+  })
+
   it('checkpoints the item before AI generation', async () => {
     const order: string[] = []
     await runQuantScheduledResearchTick(ports({

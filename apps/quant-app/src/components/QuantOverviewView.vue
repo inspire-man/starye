@@ -47,6 +47,9 @@ const props = defineProps<{
   riskLabel: (item: CandidateItem) => string
   researchPriorityDetail: (item: CandidateItem) => string
   scheduledResearch?: QuantScheduledResearchRun | null
+  scheduledResearchHistory?: QuantScheduledResearchRun[]
+  scheduledResearchRunning?: boolean
+  scheduledResearchError?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -54,6 +57,7 @@ const emit = defineEmits<{
   selectStock: [item: Pick<WatchlistItem, 'tsCode' | 'name'>]
   runDataHealthAction: [action: QuantDataHealthAction | null]
   recoverDataHealth: []
+  runScheduledResearch: []
 }>()
 
 function scheduledStatusLabel(status: QuantScheduledResearchRun['status']): string {
@@ -199,10 +203,17 @@ function scheduledReasonLabel(reason: NonNullable<QuantScheduledResearchRun['ite
           </h2>
         </div>
         <span v-if="props.scheduledResearch" class="status-chip">{{ scheduledStatusLabel(props.scheduledResearch.status) }}</span>
+        <button class="text-button" type="button" :disabled="props.scheduledResearchRunning" @click="emit('runScheduledResearch')">
+          <RefreshCw :size="13" :class="props.scheduledResearchRunning ? 'animate-spin' : ''" aria-hidden="true" />
+          {{ props.scheduledResearchRunning ? '运行中' : '立即运行一批' }}
+        </button>
       </div>
+      <p v-if="props.scheduledResearchError" class="data-health-error" role="alert">
+        {{ props.scheduledResearchError }}
+      </p>
       <div v-if="!props.scheduledResearch" class="data-health-summary">
         <strong>尚未运行后台研究</strong>
-        <p>关闭页面后，Worker 仍会处理已逾期复查、过期日线和数据不足的观察池标的。这里只显示最近一次任务，不构成买卖建议。</p>
+        <p>关闭页面后，Worker 仍会处理已逾期复查、过期日线和数据不足的观察池标的。这里显示后台任务状态，不构成买卖建议。</p>
       </div>
       <div v-else class="data-health-summary">
         <strong>最近一次后台任务 {{ props.scheduledResearch.completedCount }} 完成 / {{ props.scheduledResearch.failedCount }} 失败 / {{ props.scheduledResearch.dueCount }} 到期</strong>
@@ -217,6 +228,13 @@ function scheduledReasonLabel(reason: NonNullable<QuantScheduledResearchRun['ite
             <p>{{ item.reasons.map(scheduledReasonLabel).join('、') || '无到期原因' }}</p>
             <small v-if="item.errorCode">{{ item.errorCode }}</small>
           </div>
+        </div>
+      </div>
+      <div v-if="props.scheduledResearchHistory?.length" class="scheduled-research-history" role="list" aria-label="后台研究历史">
+        <div v-for="run in props.scheduledResearchHistory" :key="run.id" class="scheduled-research-history-row" role="listitem">
+          <span>{{ props.formatDateTime(run.startedAt) }}</span>
+          <strong>{{ scheduledStatusLabel(run.status) }}</strong>
+          <small>{{ run.completedCount }} 完成 · {{ run.failedCount }} 失败 · {{ run.processedCount }} 已处理</small>
         </div>
       </div>
     </section>
