@@ -855,6 +855,8 @@ describe('quant detail feature sections', () => {
     expect(wrapper.text()).toContain('历史条件回看')
     expect(wrapper.text()).toContain('未来 20 日上涨比例')
     expect(wrapper.text()).toContain('基准区间结论')
+    expect(wrapper.text()).toContain('时序外')
+    expect(wrapper.text()).toContain('方向样本不足')
   })
 
   it('keeps decision evidence status and action formatting at the component boundary', () => {

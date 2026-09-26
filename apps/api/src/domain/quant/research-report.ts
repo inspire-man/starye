@@ -602,7 +602,7 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     label: `时机时序外：${timingHistory.currentLabel}`,
     status: timingHistoryEdgeStatus(timingWalkForward.edgeAssessment),
     value: timingWalkForward.agreementRate === null ? null : round(timingWalkForward.agreementRate * 100),
-    threshold: '时序外方向样本至少 6；一致率区间完全高于 50% 为支持，完全低于为偏弱',
+    threshold: '该状态更早截点至少 6 且上涨比例区间完全偏离 50% 才形成方向判断；随后一致率区间完全高于 50% 为证实，完全低于为相反',
     source: '本地 Quant 日线历史回看',
     observedAt: latestTradeDate,
     formulaVersion: TIMING_HISTORY_WALKFORWARD_FORMULA_VERSION,

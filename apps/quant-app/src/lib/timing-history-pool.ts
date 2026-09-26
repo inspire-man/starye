@@ -1,7 +1,7 @@
 import type { DailyBar } from './quant-view-models'
 import type { TimingHistory, TimingHistoryEdgeAssessment, TimingHistoryState } from './timing-history'
 import type { TimingWindowState } from './timing-window'
-import { buildTimingHistory } from './timing-history'
+import { buildTimingHistory, walkForwardTimingCalibration } from './timing-history'
 
 export const TIMING_POOL_HISTORY_LIMIT = 520
 export const TIMING_POOL_FETCH_CONCURRENCY = 3
@@ -33,6 +33,14 @@ export interface TimingPoolBucketSummary {
   readonly edgeAssessment: TimingHistoryEdgeAssessment
 }
 
+export interface TimingPoolWalkForward {
+  readonly state: TimingHistoryState
+  readonly directionalSampleSize: number
+  readonly agreementCount: number
+  readonly agreementRate: number | null
+  readonly edgeAssessment: TimingHistoryEdgeAssessment
+}
+
 export interface TimingPoolTickerResult {
   readonly tsCode: string
   readonly name: string | null
@@ -44,6 +52,8 @@ export interface TimingPoolTickerResult {
   readonly currentSampleSize: number | null
   readonly currentEdgeAssessment: TimingHistoryEdgeAssessment | null
   readonly buckets: readonly TimingPoolBucketSummary[]
+  readonly currentWalkForward: TimingPoolWalkForward | null
+  readonly stateWalkForwards: readonly TimingPoolWalkForward[]
 }
 
 export interface TimingPoolStateSummary {
@@ -55,6 +65,11 @@ export interface TimingPoolStateSummary {
   readonly indeterminateCount: number
   readonly supportedCount: number
   readonly weakerCount: number
+  readonly walkForwardInsufficientCount: number
+  readonly walkForwardIndeterminateCount: number
+  readonly walkForwardSupportedCount: number
+  readonly walkForwardWeakerCount: number
+  readonly directionalAgreementRate: number | null
   readonly consensus: TimingPoolConsensus
 }
 
@@ -107,6 +122,18 @@ export function timingPoolEdgeLabel(value: TimingHistoryEdgeAssessment | null): 
     return '区间重叠'
   if (value === 'insufficient')
     return '样本不足'
+  return '--'
+}
+
+export function timingPoolWalkForwardLabel(value: TimingHistoryEdgeAssessment | null): string {
+  if (value === 'supported')
+    return '随后收益证实'
+  if (value === 'weaker')
+    return '随后收益相反'
+  if (value === 'indeterminate')
+    return '一致率覆盖 50%'
+  if (value === 'insufficient')
+    return '方向样本不足'
   return '--'
 }
 
@@ -176,6 +203,8 @@ export function buildTickerTimingPoolResult(
       currentSampleSize: null,
       currentEdgeAssessment: null,
       buckets: emptyBuckets(),
+      currentWalkForward: null,
+      stateWalkForwards: [],
     }
   }
 
@@ -192,10 +221,22 @@ export function buildTickerTimingPoolResult(
       currentSampleSize: null,
       currentEdgeAssessment: null,
       buckets: emptyBuckets(),
+      currentWalkForward: null,
+      stateWalkForwards: [],
     }
   }
 
   const current = currentBucket(history)
+  const stateWalkForwards = TIMING_POOL_STATES.map((state) => {
+    const result = walkForwardTimingCalibration(history, state)
+    return {
+      state,
+      directionalSampleSize: result.directionalSampleSize,
+      agreementCount: result.agreementCount,
+      agreementRate: result.agreementRate,
+      edgeAssessment: result.edgeAssessment,
+    }
+  })
   return {
     tsCode: item.tsCode,
     name: item.name,
@@ -212,6 +253,10 @@ export function buildTickerTimingPoolResult(
       sampleSize: bucket.sampleSize,
       edgeAssessment: bucket.edgeAssessment,
     })),
+    currentWalkForward: history.currentState === 'insufficient'
+      ? null
+      : stateWalkForwards.find(entry => entry.state === history.currentState) ?? null,
+    stateWalkForwards,
   }
 }
 
@@ -223,15 +268,24 @@ export function buildTimingPoolAudit(results: readonly TimingPoolTickerResult[])
     const indeterminateCount = buckets.filter(bucket => bucket.edgeAssessment === 'indeterminate').length
     const supportedCount = buckets.filter(bucket => bucket.edgeAssessment === 'supported').length
     const weakerCount = buckets.filter(bucket => bucket.edgeAssessment === 'weaker').length
+    const directionalCount = supportedCount + weakerCount
+    const walkForwards = ready.flatMap(item => item.stateWalkForwards).filter(entry => entry.state === state)
     return {
       state,
       label: STATE_LABELS[state],
       tickerCount: ready.length,
-      assessedCount: indeterminateCount + supportedCount + weakerCount,
+      assessedCount: indeterminateCount + directionalCount,
       insufficientCount,
       indeterminateCount,
       supportedCount,
       weakerCount,
+      walkForwardInsufficientCount: walkForwards.filter(entry => entry.edgeAssessment === 'insufficient').length,
+      walkForwardIndeterminateCount: walkForwards.filter(entry => entry.edgeAssessment === 'indeterminate').length,
+      walkForwardSupportedCount: walkForwards.filter(entry => entry.edgeAssessment === 'supported').length,
+      walkForwardWeakerCount: walkForwards.filter(entry => entry.edgeAssessment === 'weaker').length,
+      directionalAgreementRate: directionalCount === 0
+        ? null
+        : Math.max(supportedCount, weakerCount) / directionalCount,
       consensus: classifyConsensus({
         insufficientCount,
         indeterminateCount,

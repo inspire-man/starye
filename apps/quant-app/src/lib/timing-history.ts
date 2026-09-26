@@ -211,3 +211,71 @@ export function buildTimingHistory(bars: readonly DailyBar[]): TimingHistory {
     buckets: HISTORY_STATES.map(state => buildBucket(state, returnsByState.get(state) ?? [], baseline)),
   }
 }
+
+export interface TimingHistoryWalkForward {
+  readonly currentState: TimingWindowState
+  readonly currentLabel: string
+  readonly directionalSampleSize: number
+  readonly agreementCount: number
+  readonly agreementRate: number | null
+  readonly agreementRateLower: number | null
+  readonly agreementRateUpper: number | null
+  readonly edgeAssessment: TimingHistoryEdgeAssessment
+}
+
+function directionalCall(positiveCount: number, sampleSize: number): 'up' | 'down' | null {
+  if (sampleSize < MIN_RELIABLE_SAMPLE_SIZE)
+    return null
+  const interval = wilsonInterval(positiveCount, sampleSize)
+  if (!interval)
+    return null
+  if (interval.lower > 0.5)
+    return 'up'
+  if (interval.upper < 0.5)
+    return 'down'
+  return null
+}
+
+function classifyAgreementRate(agreementCount: number, sampleSize: number): TimingHistoryEdgeAssessment {
+  if (sampleSize < MIN_RELIABLE_SAMPLE_SIZE)
+    return 'insufficient'
+  const interval = wilsonInterval(agreementCount, sampleSize)
+  if (!interval)
+    return 'indeterminate'
+  if (interval.lower > 0.5)
+    return 'supported'
+  if (interval.upper < 0.5)
+    return 'weaker'
+  return 'indeterminate'
+}
+
+export function walkForwardTimingCalibration(history: TimingHistory, state: TimingWindowState = history.currentState): TimingHistoryWalkForward {
+  const observations = [...history.observations].sort((left, right) => left.anchorDate.localeCompare(right.anchorDate))
+  let priorTotal = 0
+  let priorPositive = 0
+  const agreements: boolean[] = []
+  for (const observation of observations) {
+    if (observation.state !== state)
+      continue
+    const call = directionalCall(priorPositive, priorTotal)
+    if (call === 'up')
+      agreements.push(observation.forwardReturn20 > 0)
+    else if (call === 'down')
+      agreements.push(observation.forwardReturn20 < 0)
+    priorTotal += 1
+    if (observation.forwardReturn20 > 0)
+      priorPositive += 1
+  }
+  const agreementCount = agreements.filter(value => value).length
+  const interval = wilsonInterval(agreementCount, agreements.length)
+  return {
+    currentState: state,
+    currentLabel: state !== 'insufficient' && state !== history.currentState ? STATE_LABELS[state] : history.currentLabel,
+    directionalSampleSize: agreements.length,
+    agreementCount,
+    agreementRate: agreements.length ? agreementCount / agreements.length : null,
+    agreementRateLower: interval?.lower ?? null,
+    agreementRateUpper: interval?.upper ?? null,
+    edgeAssessment: classifyAgreementRate(agreementCount, agreements.length),
+  }
+}

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { WatchlistItem } from '../../lib/quant-view-models'
-import type { TimingHistory, TimingHistoryBucket } from '../../lib/timing-history'
+import type { TimingHistory, TimingHistoryBucket, TimingHistoryEdgeAssessment } from '../../lib/timing-history'
 import type { TimingWindow, TimingWindowMetricStatus, TimingWindowState } from '../../lib/timing-window'
 import { Info } from 'lucide-vue-next'
+import { computed } from 'vue'
+import { walkForwardTimingCalibration } from '../../lib/timing-history'
 
 export interface QuantTimingSectionProps {
   selectedStock: WatchlistItem | null
@@ -42,6 +44,12 @@ function timingHistorySampleQualityLabel(value: TimingHistory['buckets'][number]
 
 function timingHistoryEdgeAssessmentLabel(value: TimingHistory['buckets'][number]['edgeAssessment']): string {
   return value === 'supported' ? '相对基准有稳定支持' : value === 'weaker' ? '相对基准偏弱' : value === 'indeterminate' ? '区间重叠' : '样本不足'
+}
+
+const currentWalkForward = computed(() => walkForwardTimingCalibration(timingHistory))
+
+function timingHistoryWalkForwardLabel(value: TimingHistoryEdgeAssessment): string {
+  return value === 'supported' ? '随后收益证实' : value === 'weaker' ? '随后收益相反' : value === 'indeterminate' ? '一致率覆盖 50%' : '方向样本不足'
 }
 </script>
 
@@ -92,6 +100,7 @@ function timingHistoryEdgeAssessmentLabel(value: TimingHistory['buckets'][number
       <span>非重叠截点 <strong>{{ timingHistory.evaluatedWindows }}</strong> 个</span>
       <span>全体上涨比例 <strong>{{ formatTimingHistoryRate(timingHistory.baseline.positiveRate) }}</strong></span>
       <span v-if="timingHistory.dataStartDate && timingHistory.dataEndDate">数据范围 {{ formatTradeDate(timingHistory.dataStartDate) }} → {{ formatTradeDate(timingHistory.dataEndDate) }}</span>
+      <span>时序外 <strong>{{ timingHistoryWalkForwardLabel(currentWalkForward.edgeAssessment) }}</strong> · 方向样本 {{ currentWalkForward.directionalSampleSize }} · 一致 {{ currentWalkForward.agreementCount }}</span>
     </div>
     <div v-if="timingHistoryCurrentBucket?.sampleSize" class="timing-history-current-grid">
       <div>

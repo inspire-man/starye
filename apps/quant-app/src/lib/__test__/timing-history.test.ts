@@ -1,6 +1,6 @@
 import type { DailyBar } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
-import { buildTimingHistory, classifyTimingHistoryEdge } from '../timing-history'
+import { buildTimingHistory, classifyTimingHistoryEdge, walkForwardTimingCalibration } from '../timing-history'
 
 function bars(closes: readonly number[]): DailyBar[] {
   return closes.map((close, index) => ({
@@ -92,5 +92,40 @@ describe('buildTimingHistory', () => {
 
     expect(result.availableBars).toBe(99)
     expect(result.observations[0]?.anchorDate).toBe('20260060')
+  })
+})
+
+describe('walkForwardTimingCalibration', () => {
+  it('confirms a down call when other states have fewer than six samples', () => {
+    const observations = [
+      ...Array.from({ length: 2 }, (_, index) => ({ anchorDate: `2026${String(index + 1).padStart(4, '0')}`, state: 'weak' as const, forwardReturn20: -0.04 })),
+      ...Array.from({ length: 42 }, (_, index) => ({ anchorDate: `2026${String(index + 3).padStart(4, '0')}`, state: 'constructive' as const, forwardReturn20: -0.03 })),
+    ]
+    const result = walkForwardTimingCalibration({
+      availableBars: 200,
+      evaluatedWindows: observations.length,
+      forwardDays: 20,
+      samplingInterval: 20,
+      minimumReliableSampleSize: 6,
+      dataStartDate: null,
+      dataEndDate: null,
+      evaluationStartDate: null,
+      evaluationEndDate: null,
+      currentState: 'constructive',
+      currentLabel: '结构平稳',
+      observations,
+      baseline: {
+        sampleSize: observations.length,
+        positiveCount: 0,
+        positiveRate: 0,
+        positiveRateLower: 0,
+        positiveRateUpper: 0,
+        averageForwardReturn20: -0.03,
+        medianForwardReturn20: -0.03,
+      },
+      buckets: [],
+    })
+
+    expect(result).toMatchObject({ directionalSampleSize: 36, agreementCount: 36, edgeAssessment: 'supported' })
   })
 })
