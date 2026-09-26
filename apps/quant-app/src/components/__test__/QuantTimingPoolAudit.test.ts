@@ -82,6 +82,7 @@ describe('quant timing pool audit', () => {
 
     expect(getDailyBars).toHaveBeenCalledWith('601899.SH', { limit: 520 })
     expect(wrapper.text()).toContain('阈值保持不变')
+    expect(wrapper.text()).toContain('时序外')
     expect(wrapper.text()).toContain('来源失败')
     expect(wrapper.text()).not.toContain('看多')
     expect(wrapper.text()).not.toContain('看空')

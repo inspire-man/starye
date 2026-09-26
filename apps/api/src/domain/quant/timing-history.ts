@@ -275,7 +275,7 @@ export function calibrateTimingHistoryEdge(history: TimingHistory): TimingHistor
   }
 }
 
-export const TIMING_HISTORY_WALKFORWARD_FORMULA_VERSION = 'timing-history-walkforward-v1' as const
+export const TIMING_HISTORY_WALKFORWARD_FORMULA_VERSION = 'timing-history-walkforward-v2' as const
 
 export interface TimingHistoryWalkForward {
   readonly currentState: TimingWindowState
@@ -288,11 +288,16 @@ export interface TimingHistoryWalkForward {
   readonly edgeAssessment: TimingHistoryEdgeAssessment
 }
 
-function directionalAgreement(predicted: TimingHistoryEdgeAssessment, forwardReturn20: number): boolean | null {
-  if (predicted === 'supported')
-    return forwardReturn20 > 0
-  if (predicted === 'weaker')
-    return forwardReturn20 < 0
+function directionalCall(positiveCount: number, sampleSize: number): 'up' | 'down' | null {
+  if (sampleSize < MIN_RELIABLE_SAMPLE_SIZE)
+    return null
+  const interval = wilsonInterval(positiveCount, sampleSize)
+  if (!interval)
+    return null
+  if (interval.lower > 0.5)
+    return 'up'
+  if (interval.upper < 0.5)
+    return 'down'
   return null
 }
 
@@ -309,27 +314,28 @@ function classifyAgreementRate(agreementCount: number, sampleSize: number): Timi
   return 'indeterminate'
 }
 
-export function walkForwardTimingCalibration(history: TimingHistory): TimingHistoryWalkForward {
+export function walkForwardTimingCalibration(history: TimingHistory, state: TimingWindowState = history.currentState): TimingHistoryWalkForward {
+  const observations = [...history.observations].sort((left, right) => left.anchorDate.localeCompare(right.anchorDate))
+  let priorTotal = 0
+  let priorPositive = 0
   const agreements: boolean[] = []
-  for (let index = 0; index < history.observations.length; index++) {
-    const observation = history.observations[index]
-    if (!observation || observation.state !== history.currentState)
+  for (const observation of observations) {
+    if (observation.state !== state)
       continue
-    const prior = calibrateTimingHistoryEdge({
-      ...history,
-      observations: history.observations.slice(0, index),
-      currentState: observation.state,
-    })
-    const agreed = directionalAgreement(prior.edgeAssessment, observation.forwardReturn20)
-    if (agreed === null)
-      continue
-    agreements.push(agreed)
+    const call = directionalCall(priorPositive, priorTotal)
+    if (call === 'up')
+      agreements.push(observation.forwardReturn20 > 0)
+    else if (call === 'down')
+      agreements.push(observation.forwardReturn20 < 0)
+    priorTotal += 1
+    if (observation.forwardReturn20 > 0)
+      priorPositive += 1
   }
   const agreementCount = agreements.filter(value => value).length
   const interval = wilsonInterval(agreementCount, agreements.length)
   return {
-    currentState: history.currentState,
-    currentLabel: history.currentLabel,
+    currentState: state,
+    currentLabel: state !== 'insufficient' && state !== history.currentState ? STATE_LABELS[state] : history.currentLabel,
     directionalSampleSize: agreements.length,
     agreementCount,
     agreementRate: agreements.length ? agreementCount / agreements.length : null,
@@ -341,10 +347,10 @@ export function walkForwardTimingCalibration(history: TimingHistory): TimingHist
 
 export function timingHistoryWalkForwardDetail(result: TimingHistoryWalkForward): string {
   if (result.edgeAssessment === 'insufficient')
-    return `时序外方向样本 ${result.directionalSampleSize}，不足以核对过去判断是否被随后 20 日收益证实`
+    return `时序外方向样本 ${result.directionalSampleSize}，不足以核对。方向判断只使用该状态更早截点的上涨比例是否稳定偏离 50%`
   if (result.edgeAssessment === 'supported')
-    return `时序外方向样本 ${result.directionalSampleSize}，一致 ${result.agreementCount}，判断被随后收益证实`
+    return `时序外方向样本 ${result.directionalSampleSize}，一致 ${result.agreementCount}，随后收益与更早方向判断一致`
   if (result.edgeAssessment === 'weaker')
-    return `时序外方向样本 ${result.directionalSampleSize}，一致 ${result.agreementCount}，判断与随后收益相反`
+    return `时序外方向样本 ${result.directionalSampleSize}，一致 ${result.agreementCount}，随后收益与更早方向判断相反`
   return `时序外方向样本 ${result.directionalSampleSize}，一致 ${result.agreementCount}，一致率区间覆盖 50%`
 }

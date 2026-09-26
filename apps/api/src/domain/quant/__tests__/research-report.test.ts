@@ -739,8 +739,9 @@ describe('quant research report', () => {
 
     const smallWalkForward = small.evidence.find(item => item.key === 'timing-history-walkforward')
     const largeWalkForward = large.evidence.find(item => item.key === 'timing-history-walkforward')
-    expect(smallWalkForward).toMatchObject({ optional: true, formulaVersion: 'timing-history-walkforward-v1', status: 'missing' })
-    expect(largeWalkForward).toMatchObject({ optional: true, formulaVersion: 'timing-history-walkforward-v1', status: 'missing' })
+    expect(smallWalkForward).toMatchObject({ optional: true, formulaVersion: 'timing-history-walkforward-v2', status: 'missing' })
+    expect(largeWalkForward).toMatchObject({ optional: true, formulaVersion: 'timing-history-walkforward-v2', status: 'pass' })
+    expect(largeWalkForward?.value).toBeGreaterThan(50)
     expect(large.decision?.evidenceKeys).not.toContain('timing-history-walkforward')
   })
 })

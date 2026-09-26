@@ -41,6 +41,13 @@ function ticker(overrides: Partial<TimingPoolTickerResult> & Pick<TimingPoolTick
       { state: 'extended', label: '短线偏热', sampleSize: 8, edgeAssessment: 'insufficient' },
       { state: 'weak', label: '趋势走弱', sampleSize: 8, edgeAssessment: 'insufficient' },
     ],
+    currentWalkForward: null,
+    stateWalkForwards: [
+      { state: 'constructive', directionalSampleSize: 0, agreementCount: 0, agreementRate: null, edgeAssessment: 'insufficient' },
+      { state: 'pullback_watch', directionalSampleSize: 0, agreementCount: 0, agreementRate: null, edgeAssessment: 'insufficient' },
+      { state: 'extended', directionalSampleSize: 0, agreementCount: 0, agreementRate: null, edgeAssessment: 'insufficient' },
+      { state: 'weak', directionalSampleSize: 0, agreementCount: 0, agreementRate: null, edgeAssessment: 'insufficient' },
+    ],
     ...overrides,
   }
 }
@@ -100,6 +107,8 @@ describe('buildTimingPoolAudit', () => {
       supportedCount: 2,
       weakerCount: 1,
       directionalAgreementRate: 2 / 3,
+      walkForwardInsufficientCount: 3,
+      walkForwardSupportedCount: 0,
       consensus: 'insufficient-pool',
     })
     expect(audit).not.toHaveProperty('positiveRate')
@@ -123,6 +132,21 @@ describe('buildTimingPoolAudit', () => {
 
     expect(audit.states.find(state => state.state === 'constructive')?.consensus).toBe('mixed')
     expect(audit.headline).toContain('方向不一致')
+    expect(audit.thresholdAdvice).toBe('hold-thresholds')
+  })
+
+  it('keeps an in-sample supported consensus when walk-forward disagrees', () => {
+    const audit = buildTimingPoolAudit(withEdge(TIMING_POOL_MIN_CROSS_TICKER, 'supported', 'S').map(item => ({
+      ...item,
+      stateWalkForwards: item.stateWalkForwards.map(entry => entry.state === 'constructive'
+        ? { ...entry, directionalSampleSize: 8, agreementCount: 1, agreementRate: 0.125, edgeAssessment: 'weaker' as const }
+        : entry),
+    })))
+    const constructive = audit.states.find(state => state.state === 'constructive')
+
+    expect(constructive?.consensus).toBe('supported')
+    expect(constructive?.walkForwardWeakerCount).toBe(TIMING_POOL_MIN_CROSS_TICKER)
+    expect(constructive?.walkForwardSupportedCount).toBe(0)
     expect(audit.thresholdAdvice).toBe('hold-thresholds')
   })
 })

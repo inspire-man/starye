@@ -10,6 +10,7 @@ import {
   timingPoolConsensusLabel,
   timingPoolEdgeLabel,
   timingPoolTickerStatusLabel,
+  timingPoolWalkForwardLabel,
 } from '../lib/timing-history-pool'
 
 const props = defineProps<{
@@ -128,6 +129,7 @@ async function runAudit(): Promise<void> {
           <strong>{{ state.label }}</strong>
           <span class="status-chip">{{ timingPoolConsensusLabel(state.consensus) }}</span>
           <p>有效评估 {{ state.assessedCount }} / {{ state.tickerCount }} · 方向一致率 {{ state.directionalAgreementRate === null ? '--' : `${Math.round(state.directionalAgreementRate * 100)}%` }} · 稳定支持 {{ state.supportedCount }} · 偏弱 {{ state.weakerCount }} · 重叠 {{ state.indeterminateCount }} · 样本不足 {{ state.insufficientCount }}</p>
+          <p>时序外 证实 {{ state.walkForwardSupportedCount }} · 相反 {{ state.walkForwardWeakerCount }} · 覆盖 50% {{ state.walkForwardIndeterminateCount }} · 方向样本不足 {{ state.walkForwardInsufficientCount }}</p>
         </article>
       </div>
 
@@ -155,11 +157,14 @@ async function runAudit(): Promise<void> {
           <span role="cell">{{ timingPoolTickerStatusLabel(item.status) }}</span>
           <span role="cell">{{ item.currentLabel || '--' }}</span>
           <span role="cell">{{ item.availableBars === null ? '--' : item.availableBars }} / {{ item.evaluatedWindows === null ? '--' : item.evaluatedWindows }}</span>
-          <span role="cell">{{ timingPoolEdgeLabel(item.currentEdgeAssessment) }}</span>
+          <span role="cell">
+            {{ timingPoolEdgeLabel(item.currentEdgeAssessment) }}
+            <small>时序外 {{ timingPoolWalkForwardLabel(item.currentWalkForward?.edgeAssessment ?? null) }}</small>
+          </span>
         </button>
       </div>
       <p class="timing-pool-note">
-        各标的使用独立的 20 日非重叠窗口和 Wilson 区间，不合并胜率，也不改状态阈值。
+        各标的使用独立的 20 日非重叠窗口。样本内区间和时序外兑现分开计数，不合并收益率，也不改状态阈值。
       </p>
     </template>
   </section>

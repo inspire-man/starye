@@ -2,7 +2,7 @@
 status: idle
 milestone: v1.5
 milestone_name: 爬虫运管与内容可用性闭环
-last_updated: "2026-09-07"
+last_updated: "2026-09-27"
 ---
 
 # Project State
@@ -49,10 +49,11 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 
 ## 下一步
 
-1. 从最新 `main` 开始扩大历史验证样本：用观察池更多已有标的检查各状态的区间分离情况；在样本量和跨标的稳定性足够前，不调整状态阈值。
-2. 小 bug：定位 → 最小修复 → 定向测试 → Gateway 验证。
-3. crawler/D1：补 Gateway、D1 readback、content integrity 和实际消费层证据。
-4. 完成后更新本文件的当前状态；稳定规则回写对应 canonical owner。
+1. 观察池时序外核对已在 `2026-09-26-quant-timing-walkforward-pool` 实现：方向判断改为该状态更早上涨比例是否稳定偏离 50%，公式 `timing-history-walkforward-v2`；样本内共识与时序外计数分开，阈值仍冻结。定向测试、API/Quant type-check 已通过。匿名 Gateway `/quant/` 为 302，相关 API 为 401。认证态页面尚未复验。
+2. 在跨标的时序外样本稳定前，不调整状态阈值，也不把时序外结论写入决策就绪度或候选排序。
+3. 小 bug：定位 → 最小修复 → 定向测试 → Gateway 验证。
+4. crawler/D1：补 Gateway、D1 readback、content integrity 和实际消费层证据。
+5. 完成后更新本文件的当前状态；稳定规则回写对应 canonical owner。
 
 ## 历史入口
 
