@@ -1,6 +1,6 @@
 import type { QuantAiDecisionReview, QuantAiFactorReview, QuantDecisionRecord, QuantDecisionRecordAction } from '../quant-view-models'
 import { describe, expect, it } from 'vitest'
-import { buildQuantAiOutcomeCalibration } from '../ai-outcome-calibration'
+import { buildQuantAiOutcomeCalibration, buildQuantAiReviewComparison } from '../ai-outcome-calibration'
 
 function aiReview(recommendation: 'bullish' | 'bearish', accepted = true): QuantAiDecisionReview {
   return {
@@ -116,5 +116,22 @@ describe('buildQuantAiOutcomeCalibration', () => {
     expect(pending.headline).not.toContain('%')
     expect(empty).toMatchObject({ status: 'empty', eligibleCount: 0, observedCount: 0, pendingCount: 0, agreementRate: null })
     expect(empty.headline).not.toContain('%')
+  })
+
+  it('compares later direction for accepted and unaccepted reviews without inventing a win rate', () => {
+    const acceptedLater = record('accepted-later', 'watch', 12, '20260910')
+    const rejected = { ...record('rejected', 'plan-buy', 10, '20260901', aiReview('bullish', false)), tsCode: '600938.SH' }
+    const rejectedLater = { ...record('rejected-later', 'watch', 8, '20260910'), tsCode: '600938.SH' }
+    const small = buildQuantAiReviewComparison([
+      record('accepted', 'plan-buy', 10, '20260901', aiReview('bullish')),
+      acceptedLater,
+      rejected,
+      rejectedLater,
+    ])
+
+    expect(small.accepted).toMatchObject({ alignedCount: 1, directionalSampleCount: 1, agreementRate: null })
+    expect(small.unaccepted).toMatchObject({ opposedCount: 1, directionalSampleCount: 1, agreementRate: null })
+    expect(small.headline).toContain('不足 3 条')
+    expect(small.headline).not.toContain('胜率')
   })
 })

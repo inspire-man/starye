@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { QuantAiReviewOutcomeBoard, QuantPriceLocation } from '../api/resources/research'
 import type { QuantDataHealthAction, QuantDataHealthFreshness, QuantDataHealthStatus, QuantDataHealthSummary } from '../lib/data-health'
 import type { QuantView } from '../lib/quant-view'
 import type { CandidateItem, QuantScheduledResearchRun, WatchlistItem } from '../lib/quant-view-models'
@@ -50,6 +51,12 @@ const props = defineProps<{
   scheduledResearchHistory?: QuantScheduledResearchRun[]
   scheduledResearchRunning?: boolean
   scheduledResearchError?: string | null
+  priceLocations?: QuantPriceLocation[]
+  priceLocationsLoading?: boolean
+  priceLocationsError?: string | null
+  aiReviewOutcomes?: QuantAiReviewOutcomeBoard | null
+  aiReviewOutcomesLoading?: boolean
+  aiReviewOutcomesError?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -283,6 +290,75 @@ function scheduledReasonLabel(reason: NonNullable<QuantScheduledResearchRun['ite
           </div>
         </div>
       </div>
+    </section>
+
+    <section class="price-location-section" aria-labelledby="price-location-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">
+            PRICE LOCATION
+          </p>
+          <h2 id="price-location-title" class="section-title">
+            价格位置
+          </h2>
+        </div>
+        <span class="section-meta">最近收盘对照已保存的参考区间</span>
+      </div>
+      <p class="price-location-note">
+        只比较观察池里已经生成的研究报告。区间内表示价格条件满足，不是下单依据。
+      </p>
+      <div v-if="props.priceLocationsLoading" class="focus-empty" aria-label="价格位置加载中">
+        <SkeletonCard variant="content" />
+      </div>
+      <p v-else-if="props.priceLocationsError" class="price-location-error" role="status">
+        {{ props.priceLocationsError }}
+      </p>
+      <div v-else-if="props.priceLocations?.length" class="price-location-list">
+        <button v-for="item in props.priceLocations" :key="item.tsCode" class="price-location-row" :class="`price-location-${item.status}`" type="button" :title="item.detail" @click="emit('selectStock', { tsCode: item.tsCode, name: item.name ?? item.tsCode })">
+          <strong>{{ item.name || item.tsCode }}</strong>
+          <small>{{ item.tsCode }}</small>
+          <span>{{ item.label }}</span>
+          <em>{{ item.latestClose === null ? '--' : `${item.latestClose.toFixed(2)} 元` }}</em>
+          <em>{{ item.distancePercent === null ? '' : `${item.distancePercent > 0 ? '+' : ''}${item.distancePercent.toFixed(1)}%` }}</em>
+        </button>
+      </div>
+      <p v-else class="price-location-empty">
+        生成研究报告后，这里会按最近收盘和参考区间排列观察池。
+      </p>
+    </section>
+
+    <section class="price-location-section" aria-labelledby="ai-review-outcome-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">
+            AI REVIEW OUTCOME
+          </p>
+          <h2 id="ai-review-outcome-title" class="section-title">
+            AI 复核回看
+          </h2>
+        </div>
+        <span class="section-meta">最近一次复核对照后续收盘</span>
+      </div>
+      <p class="price-location-note">
+        {{ props.aiReviewOutcomes?.headline || '每只股票只用最近一次已保存的 AI 复核。方向一致不是收益。' }}
+      </p>
+      <div v-if="props.aiReviewOutcomesLoading" class="focus-empty" aria-label="AI 复核回看加载中">
+        <SkeletonCard variant="content" />
+      </div>
+      <p v-else-if="props.aiReviewOutcomesError" class="price-location-error" role="status">
+        {{ props.aiReviewOutcomesError }}
+      </p>
+      <div v-else-if="props.aiReviewOutcomes?.items.length" class="price-location-list">
+        <button v-for="item in props.aiReviewOutcomes.items" :key="item.tsCode" class="price-location-row" :class="`price-location-${item.status === 'aligned' ? 'inside' : item.status === 'opposed' ? 'below' : 'missing-report'}`" type="button" :title="item.detail" @click="emit('selectStock', { tsCode: item.tsCode, name: item.name ?? item.tsCode })">
+          <strong>{{ item.name || item.tsCode }}</strong>
+          <small>{{ item.accepted === false ? '未接受' : item.accepted ? '已接受' : '无结论' }}</small>
+          <span>{{ item.label }}</span>
+          <em>{{ item.changePercent === null ? '--' : `${item.changePercent > 0 ? '+' : ''}${item.changePercent.toFixed(1)}%` }}</em>
+        </button>
+      </div>
+      <p v-else class="price-location-empty">
+        完成一次 AI 复核后，这里回看它和后续收盘的方向。
+      </p>
     </section>
 
     <section class="focus-section" aria-labelledby="focus-title">

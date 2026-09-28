@@ -388,6 +388,56 @@
   font-size: 0.6875rem;
 }
 
+
+.price-location-section {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.price-location-note,
+.price-location-empty,
+.price-location-error {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.price-location-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.price-location-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1.1fr) minmax(6rem, 0.8fr) minmax(0, 1.4fr) auto auto;
+  gap: 0.65rem;
+  align-items: center;
+  width: 100%;
+  border: 1px solid hsl(var(--border));
+  border-left-width: 3px;
+  border-radius: var(--ui-radius-sm, 0.35rem);
+  background: hsl(var(--card));
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+}
+
+.price-location-inside { border-left-color: hsl(var(--status-success)); }
+.price-location-below,
+.price-location-above { border-left-color: hsl(var(--status-warning)); }
+.price-location-not-buying,
+.price-location-missing-range,
+.price-location-missing-price,
+.price-location-missing-report { border-left-color: hsl(var(--border)); }
+
+.price-location-row strong { color: hsl(var(--foreground)); font-size: 0.8125rem; }
+.price-location-row small,
+.price-location-row em { color: hsl(var(--muted-foreground)); font-size: 0.6875rem; font-style: normal; }
+.price-location-row span { color: hsl(var(--foreground)); font-size: 0.75rem; }
+
+@media (max-width: 720px) {
+  .price-location-row { grid-template-columns: 1fr auto; }
+}
 .focus-section {
   min-width: 0;
 }

@@ -192,3 +192,81 @@ export function buildQuantAiOutcomeCalibration(
     factors: buildFactorCalibration(entries, recordsById),
   }
 }
+
+export interface QuantAiReviewCohort {
+  readonly observedCount: number
+  readonly alignedCount: number
+  readonly opposedCount: number
+  readonly flatCount: number
+  readonly directionalSampleCount: number
+  readonly agreementRate: number | null
+}
+
+export interface QuantAiReviewComparison {
+  readonly accepted: QuantAiReviewCohort
+  readonly unaccepted: QuantAiReviewCohort
+  readonly headline: string
+}
+
+function cohortFrom(alignments: readonly QuantAiOutcomeCalibrationAlignment[]): QuantAiReviewCohort {
+  const alignedCount = alignments.filter(item => item === 'aligned').length
+  const opposedCount = alignments.filter(item => item === 'opposed').length
+  const flatCount = alignments.filter(item => item === 'flat').length
+  const directionalSampleCount = alignedCount + opposedCount
+  return {
+    observedCount: alignments.length,
+    alignedCount,
+    opposedCount,
+    flatCount,
+    directionalSampleCount,
+    agreementRate: directionalSampleCount >= 3 ? round(alignedCount / directionalSampleCount * 100) : null,
+  }
+}
+
+function comparisonHeadline(accepted: QuantAiReviewCohort, unaccepted: QuantAiReviewCohort): string {
+  const side = (label: string, cohort: QuantAiReviewCohort) => cohort.agreementRate === null
+    ? `${label}方向样本 ${cohort.directionalSampleCount} 条，不足 3 条`
+    : `${label}方向一致 ${cohort.agreementRate.toFixed(0)}%（${cohort.directionalSampleCount} 条）`
+  let comparison = '两边样本都还不能比较。'
+  if (accepted.agreementRate !== null && unaccepted.agreementRate !== null) {
+    if (accepted.agreementRate > unaccepted.agreementRate)
+      comparison = '目前已接受复核的后续方向一致率更高，样本仍然小，不能当成胜率。'
+    else if (accepted.agreementRate < unaccepted.agreementRate)
+      comparison = '目前未接受复核的后续方向一致率更高，接受门槛还没有表现出优势。'
+    else
+      comparison = '目前两边的方向一致率相同，不能当成胜率。'
+  }
+  return `${side('已接受', accepted)}；${side('未接受', unaccepted)}。${comparison}这只是后续价格方向，不是收益。`
+}
+
+export function buildQuantAiReviewComparison(
+  records: readonly QuantDecisionRecord[],
+  watchlist: readonly { readonly tsCode: string, readonly latestClose: number | null, readonly latestTradeDate: string | null }[] = [],
+): QuantAiReviewComparison {
+  const accepted: QuantAiOutcomeCalibrationAlignment[] = []
+  const unaccepted: QuantAiOutcomeCalibrationAlignment[] = []
+  const byCode = new Map<string, QuantDecisionRecord[]>()
+  for (const record of records)
+    byCode.set(record.tsCode, [...(byCode.get(record.tsCode) || []), record])
+  for (const [tsCode, history] of byCode) {
+    const latest = watchlist.find(item => item.tsCode === tsCode)
+    const outcome = buildDecisionOutcome(history, latest
+      ? { price: positiveFinite(latest.latestClose), observedAt: latest.latestTradeDate }
+      : null)
+    const byId = new Map(history.map(record => [record.id, record]))
+    for (const entry of outcome.entries) {
+      const review = byId.get(entry.baselineId)?.snapshot.aiDecisionReview
+      if (!review || (review.recommendation !== 'bullish' && review.recommendation !== 'bearish'))
+        continue
+      const bucket = review.accepted ? accepted : unaccepted
+      bucket.push(alignment(review.recommendation, entry.changePercent))
+    }
+  }
+  const acceptedCohort = cohortFrom(accepted)
+  const unacceptedCohort = cohortFrom(unaccepted)
+  return {
+    accepted: acceptedCohort,
+    unaccepted: unacceptedCohort,
+    headline: comparisonHeadline(acceptedCohort, unacceptedCohort),
+  }
+}

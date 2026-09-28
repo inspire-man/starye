@@ -495,6 +495,59 @@ describe('quant research report', () => {
     expect(report.decision?.evidenceKeys).not.toContain('operating-driver-segment-revenue-1')
   })
 
+  it('keeps same-period disclosed profitability rows that fall outside the revenue cap', () => {
+    const revenueOnly = (name: string, revenue: number) => ({
+      tsCode: '601899.SH',
+      reportDate: '2026-06-30',
+      category: 'product' as const,
+      name,
+      revenue,
+      revenueRatio: null,
+      grossMargin: null,
+      cost: null,
+      costRatio: null,
+      profit: null,
+      profitRatio: null,
+    })
+    const report = buildQuantResearchReport({
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      generatedAt: new Date('2026-08-26T00:00:00.000Z'),
+      sourceSnapshotId: 'snapshot-segment-extra',
+      candidate,
+      dailyBars: bars(80),
+      valuation,
+      financialReports: [{
+        ...financial,
+        businessSegments: [
+          ...Array.from({ length: 12 }, (_, index) => revenueOnly(`收入分部${index + 1}`, 1_000_000_000 - index)),
+          {
+            tsCode: '601899.SH',
+            reportDate: '2026-06-30',
+            category: 'product' as const,
+            name: '其他(补充)',
+            revenue: 872639928,
+            revenueRatio: null,
+            grossMargin: 0.117486,
+            cost: 770117386,
+            costRatio: null,
+            profit: 102522542,
+            profitRatio: null,
+          },
+          revenueOnly('无盈利披露', 1000),
+        ],
+      }],
+      shareholderReturn,
+    })
+
+    expect(report.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: '其他(补充)分部毛利率', value: 0.117486, status: 'pass', optional: true }),
+      expect.objectContaining({ label: '其他(补充)主营成本', value: 770117386, status: 'pass', optional: true }),
+      expect.objectContaining({ label: '其他(补充)主营利润', value: 102522542, status: 'pass', optional: true }),
+    ]))
+    expect(report.evidence.some(item => item.label.startsWith('无盈利披露'))).toBe(false)
+  })
+
   it('surfaces partial AkShare endpoint failures as optional source evidence', () => {
     const report = buildQuantResearchReport({
       tsCode: '601899.SH',

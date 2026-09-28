@@ -2,6 +2,7 @@
 import type { QuantDecisionRecord, WatchlistItem } from '../lib/quant-view-models'
 import { BarChart3, CircleHelp } from 'lucide-vue-next'
 import { computed } from 'vue'
+import { buildQuantAiReviewComparison } from '../lib/ai-outcome-calibration'
 import { buildQuantDecisionCalibration } from '../lib/decision-calibration'
 
 const props = defineProps<{
@@ -12,6 +13,7 @@ const props = defineProps<{
 }>()
 
 const calibration = computed(() => buildQuantDecisionCalibration(props.records, props.watchlist))
+const aiComparison = computed(() => buildQuantAiReviewComparison(props.records, props.watchlist))
 
 function formatChange(value: number | null): string {
   return value === null ? '样本不足' : `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
@@ -73,7 +75,7 @@ function formatChange(value: number | null): string {
         </div>
       </div>
       <p class="quant-decision-calibration-note">
-        AI 已接受 {{ calibration.summary.acceptedAiCount }} 条，未接受或未完成 {{ calibration.summary.unacceptedAiCount }} 条；方向样本 {{ calibration.summary.directionalSampleCount }} 条，未达到阈值时保留样本不足。
+        {{ aiComparison.headline }}
       </p>
     </template>
   </section>

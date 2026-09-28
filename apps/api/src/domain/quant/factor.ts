@@ -77,8 +77,10 @@ function withRelativeStrength(
       return returnDifference || left[0].localeCompare(right[0])
     })
   const result = new Map<string, number | null>([...factorsByCode.keys()].map(code => [code, null]))
-  const denominator = Math.max(1, ranked.length - 1)
-  ranked.forEach(([code], index) => result.set(code, ranked.length === 1 ? 1 : 1 - index / denominator))
+  if (ranked.length < 2)
+    return result
+  const denominator = ranked.length - 1
+  ranked.forEach(([code], index) => result.set(code, 1 - index / denominator))
   return result
 }
 

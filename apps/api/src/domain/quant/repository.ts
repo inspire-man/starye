@@ -599,6 +599,81 @@ export async function listQuantResearchRuns(db: Database, userId: string, tsCode
   )).orderBy(desc(quantResearchRuns.generatedAt), desc(quantResearchRuns.id)).limit(boundedLimit).all()
 }
 
+export async function listLatestQuantDailyCloses(db: Database, codes: readonly string[]): Promise<ReadonlyMap<string, { readonly close: number, readonly tradeDate: string }>> {
+  if (!codes.length)
+    return new Map()
+  const rows = await db.all<{ tsCode: string, close: number, tradeDate: string }>(sql`
+    SELECT bar.ts_code AS tsCode, bar.close AS close, bar.trade_date AS tradeDate
+    FROM quant_daily_bar AS bar
+    WHERE bar.ts_code IN (${sql.join(codes.map(code => sql`${code}`), sql`, `)})
+      AND NOT EXISTS (
+        SELECT 1 FROM quant_daily_bar AS newer
+        WHERE newer.ts_code = bar.ts_code
+          AND newer.trade_date > bar.trade_date
+      )
+  `)
+  return new Map(rows.map(row => [row.tsCode, { close: row.close, tradeDate: row.tradeDate }]))
+}
+
+export async function listLatestQuantResearchRuns(db: Database, userId: string, codes: readonly string[]): Promise<readonly { readonly tsCode: string, readonly name: string | null, readonly generatedAt: number | string | Date, readonly reportJson: string }[]> {
+  const ownerId = normalizeQuantUserId(userId)
+  if (!codes.length)
+    return []
+  return db.all<{ tsCode: string, name: string | null, generatedAt: number | string | Date, reportJson: string }>(sql`
+    SELECT run.ts_code AS tsCode, run.name AS name, run.generated_at AS generatedAt, run.report_json AS reportJson
+    FROM quant_research_run AS run
+    WHERE run.user_id = ${ownerId}
+      AND run.ts_code IN (${sql.join(codes.map(code => sql`${code}`), sql`, `)})
+      AND NOT EXISTS (
+        SELECT 1 FROM quant_research_run AS newer
+        WHERE newer.user_id = run.user_id
+          AND newer.ts_code = run.ts_code
+          AND (
+            newer.generated_at > run.generated_at
+            OR (newer.generated_at = run.generated_at AND newer.id > run.id)
+          )
+      )
+  `)
+}
+
+export async function listQuantDailyCloses(db: Database, codes: readonly string[]): Promise<readonly { readonly tsCode: string, readonly tradeDate: string, readonly close: number }[]> {
+  if (!codes.length)
+    return []
+  return db.all<{ tsCode: string, tradeDate: string, close: number }>(sql`
+    SELECT bar.ts_code AS tsCode, bar.trade_date AS tradeDate, bar.close AS close
+    FROM quant_daily_bar AS bar
+    WHERE bar.ts_code IN (${sql.join(codes.map(code => sql`${code}`), sql`, `)})
+  `)
+}
+
+export async function listLatestQuantAiSummaries(db: Database, userId: string, codes: readonly string[]): Promise<readonly { readonly tsCode: string, readonly name: string | null, readonly generatedAt: number | string | Date, readonly summaryJson: string }[]> {
+  const ownerId = normalizeQuantUserId(userId)
+  if (!codes.length)
+    return []
+  return db.all<{ tsCode: string, name: string | null, generatedAt: number | string | Date, summaryJson: string }>(sql`
+    SELECT run.ts_code AS tsCode, run.name AS name, summary.generated_at AS generatedAt, summary.summary_json AS summaryJson
+    FROM quant_research_summary AS summary
+    JOIN quant_research_run AS run
+      ON run.id = summary.research_run_id
+      AND run.user_id = summary.user_id
+    WHERE summary.user_id = ${ownerId}
+      AND run.ts_code IN (${sql.join(codes.map(code => sql`${code}`), sql`, `)})
+      AND NOT EXISTS (
+        SELECT 1
+        FROM quant_research_summary AS newer
+        JOIN quant_research_run AS newer_run
+          ON newer_run.id = newer.research_run_id
+          AND newer_run.user_id = newer.user_id
+        WHERE newer.user_id = summary.user_id
+          AND newer_run.ts_code = run.ts_code
+          AND (
+            newer.generated_at > summary.generated_at
+            OR (newer.generated_at = summary.generated_at AND newer.id > summary.id)
+          )
+      )
+  `)
+}
+
 export async function getQuantResearchRun(db: Database, userId: string, id: string) {
   const ownerId = normalizeQuantUserId(userId)
   const normalizedId = id.trim()

@@ -76,6 +76,7 @@ import { buildComparisonAiNextCheckPrompt } from './lib/comparison-ai-prompts'
 import { createComparisonDailyGeneration } from './lib/comparison-daily-generation'
 import { buildQuantDataHealth, classifyQuantDataHealthFreshness, mergeQuantDataHealthFreshness } from './lib/data-health'
 import { buildDecisionEvidence } from './lib/decision-evidence'
+import { buildFactorRobustness } from './lib/factor-robustness'
 import { quantEvidenceRefreshTargetForKey } from './lib/quant-evidence-refresh'
 import { isQuantAiAutoReviewReady } from './lib/research-ai-auto-review'
 import {
@@ -295,6 +296,12 @@ const {
   decisionQueueRecords,
   decisionQueueLoading,
   decisionQueueError,
+  priceLocations,
+  priceLocationsLoading,
+  priceLocationsError,
+  aiReviewOutcomes,
+  aiReviewOutcomesLoading,
+  aiReviewOutcomesError,
   valueSelection,
   shareholderReturns,
   investmentKnowledge,
@@ -302,6 +309,8 @@ const {
   syncState,
   syncStateError,
   loadDecisionQueue,
+  loadPriceLocations,
+  loadAiReviewOutcomes,
   loadValueSelection,
   invalidateValueSelection,
   loadShareholderReturns,
@@ -856,6 +865,7 @@ const chartBars = computed(() => {
 const trendStructure = computed(() => buildTrendStructure(dailyBars.value))
 const timingWindow = computed(() => buildTimingWindow(dailyBars.value, trendStructure.value))
 const timingHistory = computed(() => buildTimingHistory(dailyBars.value))
+const factorRobustness = computed(() => buildFactorRobustness(dailyBars.value))
 const timingHistoryCurrentBucket = computed(() => timingHistory.value.buckets.find(bucket => bucket.state === timingHistory.value.currentState) || null)
 const decisionEvidence = computed(() => buildDecisionEvidence({
   candidate: selectedCandidate.value,
@@ -1855,6 +1865,7 @@ async function loadResearchSummary(runId: string, options: { autoGenerate?: bool
     const summary = await quantApi.generateResearchSummaryStream(runId, event => applyResearchSummaryStreamProgress(requestId, event))
     if (requestId === researchSummaryRequestId) {
       researchAiSummary.value = summary
+      void loadAiReviewOutcomes()
       void loadResearchAiAudits(runId, requestId)
     }
   }
@@ -1888,6 +1899,7 @@ async function generateResearchReport(options: { autoGenerateAi?: boolean } = {}
     if (selectedTsCode.value !== tsCode)
       return
     researchRuns.value = [run, ...researchRuns.value.filter(item => item.id !== run.id)].slice(0, 5)
+    void loadPriceLocations()
     void loadResearchDecisionJournal(tsCode, run.id)
     void loadDecisionAssistant(tsCode, run.id)
     researchSummaryRequestId++
@@ -2057,6 +2069,7 @@ async function generateResearchSummary() {
     const summary = await quantApi.generateResearchSummaryStream(run.id, event => applyResearchSummaryStreamProgress(requestId, event))
     if (requestId === researchSummaryRequestId) {
       researchAiSummary.value = summary
+      void loadAiReviewOutcomes()
       void loadResearchAiAudits(run.id, requestId)
     }
   }
@@ -2721,6 +2734,8 @@ async function executeAutomatedResearch(targets: readonly AutomatedResearchCandi
       loadCandidates(),
       loadResearchMarkers(),
       loadDecisionQueue(),
+      loadPriceLocations(),
+      loadAiReviewOutcomes(),
       loadValueSelection(),
       loadShareholderReturns(),
     ])
@@ -3160,7 +3175,7 @@ async function loadWorkspace(force = false) {
   const loader = async () => {
     errors.action = null
     syncResult.value = null
-    await Promise.all([loadWatchlist(), loadCandidates(), loadDecisionQueue(), loadDecisionCalibration(), loadResearchMarkers(), loadInvestmentKnowledge(), loadSyncState(), loadScheduledResearch()])
+    await Promise.all([loadWatchlist(), loadCandidates(), loadDecisionQueue(), loadPriceLocations(), loadAiReviewOutcomes(), loadDecisionCalibration(), loadResearchMarkers(), loadInvestmentKnowledge(), loadSyncState(), loadScheduledResearch()])
     await Promise.all([loadValueSelection(), loadShareholderReturns()])
     if (!automaticDataRecoveryAttempted.value) {
       automaticDataRecoveryAttempted.value = true
@@ -3383,6 +3398,12 @@ onUnmounted(() => {
       :scheduled-research-history="scheduledResearchHistory"
       :scheduled-research-running="scheduledResearchRunning"
       :scheduled-research-error="scheduledResearchError"
+      :price-locations="priceLocations"
+      :price-locations-loading="priceLocationsLoading"
+      :price-locations-error="priceLocationsError ? parsedError(priceLocationsError).message : null"
+      :ai-review-outcomes="aiReviewOutcomes"
+      :ai-review-outcomes-loading="aiReviewOutcomesLoading"
+      :ai-review-outcomes-error="aiReviewOutcomesError ? parsedError(aiReviewOutcomesError).message : null"
       @navigate="setActiveView"
       @select-stock="selectStock"
       @run-data-health-action="runDataHealthAction"
@@ -3601,6 +3622,7 @@ onUnmounted(() => {
         :trend-structure="trendStructure"
         :timing-window="timingWindow"
         :timing-history="timingHistory"
+        :factor-robustness="factorRobustness"
         :timing-history-current-bucket="timingHistoryCurrentBucket"
         :decision-evidence="decisionEvidence"
         :valuation="valuation"

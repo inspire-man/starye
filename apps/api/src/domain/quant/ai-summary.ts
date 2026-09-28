@@ -99,8 +99,61 @@ function summaryError(code: 'QUANT_AI_SUMMARY_CONFIGURATION' | 'QUANT_AI_SUMMARY
   return new QuantError(code, message, status)
 }
 
-function reportPrompt(report: QuantResearchReport): string {
-  const payload = {
+const SUMMARY_INSTRUCTION = [
+  '请把下面这份 Quant 确定性研究报告解释给金融初学者，并复核其中的结构化推荐。只使用 JSON 中已有的事实和 evidence key。',
+  '返回一个 JSON 对象，字段必须是 overview、supports、concerns、nextChecks、citedEvidenceKeys、factorReviews、decisionReview；数组最多各 6 项。',
+  'overview 用 1-3 句说明当前证据代表什么；supports、concerns、nextChecks 都写成可核对的短句。',
+  'factorReviews 必须逐项复核 factorModel 中每个权重大于 0 的因子，不得遗漏；每项字段是 factor、stance、confidence、rationale、citedEvidenceKeys。stance 只能是 support、caution、oppose、insufficient；引用只能使用该因子自己的 evidenceKeys。',
+  '因子数据缺失、来源不可用或无法核对时使用 insufficient，不要猜测；不要输出 accepted，accepted 会由服务端根据数据、引用和置信度重新计算。',
+  'decisionReview 必须是对象或 null。对象字段必须是 decisionVersion、recommendation、confidence、rationale、invalidationConditions、citedEvidenceKeys；decisionVersion 必须精确等于 "ai-decision-v1"，不要复制报告里的 research-decision-v1；recommendation 只能是 bullish、bearish、watch，confidence 为 0-100 的数字。',
+  'decisionReview 只能复核报告已有证据；如果报告确定性推荐为 watch 或数据覆盖度不足，不得升级为 bullish/bearish。不要添加报告中不存在的数值、来源或证据 key。',
+  '如果报告包含 factorModel.configuration，必须按该报告快照解释权重和确定性分数，不要用当前配置替换历史报告配置。',
+  '对于 optional 的 AkShare 证据，必须保留 source、observedAt 和 formulaVersion；报告期不同或 provider 数值不同只能表述为交叉核对线索，并明确需要人工核对。',
+  '不要生成买入/卖出价格，不要写目标价、未来收益预测或直接交易指令；价格区间只能使用报告中的确定性字段。',
+].join('\n')
+
+function summaryEvidence(item: QuantResearchReport['evidence'][number], detailLimit: number) {
+  return {
+    key: item.key,
+    dimension: item.dimension,
+    label: item.label,
+    status: item.status,
+    value: item.value,
+    threshold: item.threshold.slice(0, 180),
+    source: item.source.slice(0, 180),
+    observedAt: item.observedAt,
+    formulaVersion: item.formulaVersion,
+    optional: item.optional === true,
+    ...(detailLimit > 0 ? { detail: item.detail.slice(0, detailLimit) } : {}),
+  }
+}
+
+function rankedEvidence(report: QuantResearchReport): QuantResearchReport['evidence'] {
+  const required = new Set<string>()
+  for (const factor of report.factorModel?.factors ?? []) {
+    if (factor.weight <= 0)
+      continue
+    for (const key of factor.evidenceKeys)
+      required.add(key)
+  }
+  for (const key of report.decision?.evidenceKeys ?? [])
+    required.add(key)
+  return [
+    ...report.evidence.filter(item => required.has(item.key)),
+    ...report.evidence.filter(item => !required.has(item.key)),
+  ]
+}
+
+function summaryPayload(report: QuantResearchReport, detailLimit: number, evidenceLimit: number, includeSources: boolean) {
+  const ranked = rankedEvidence(report)
+  const requiredCount = ranked.filter((item) => {
+    const required = new Set<string>([
+      ...(report.factorModel?.factors ?? []).filter(factor => factor.weight > 0).flatMap(factor => factor.evidenceKeys),
+      ...(report.decision?.evidenceKeys ?? []),
+    ])
+    return required.has(item.key)
+  }).length
+  return {
     reportVersion: report.reportVersion,
     tsCode: report.tsCode,
     name: report.name,
@@ -130,39 +183,28 @@ function reportPrompt(report: QuantResearchReport): string {
         }
       : null,
     decision: report.decision ?? null,
-    sources: report.sources,
-    evidence: report.evidence.slice(0, 32).map(item => ({
-      key: item.key,
-      dimension: item.dimension,
-      label: item.label,
-      status: item.status,
-      value: item.value,
-      threshold: item.threshold,
-      source: item.source,
-      observedAt: item.observedAt,
-      formulaVersion: item.formulaVersion,
-      optional: item.optional === true,
-      detail: item.detail.slice(0, 360),
-    })),
+    ...(includeSources ? { sources: report.sources } : {}),
+    evidence: ranked.slice(0, Math.max(evidenceLimit, requiredCount)).map(item => summaryEvidence(item, detailLimit)),
   }
-  const serialized = JSON.stringify(payload)
-  return serialized.length <= QUANT_AI_SUMMARY_MAX_PROMPT_LENGTH ? serialized : serialized.slice(0, QUANT_AI_SUMMARY_MAX_PROMPT_LENGTH)
 }
 
 export function buildQuantAiSummaryPrompt(report: QuantResearchReport): string {
-  return [
-    '请把下面这份 Quant 确定性研究报告解释给金融初学者，并复核其中的结构化推荐。只使用 JSON 中已有的事实和 evidence key。',
-    '返回一个 JSON 对象，字段必须是 overview、supports、concerns、nextChecks、citedEvidenceKeys、factorReviews、decisionReview；数组最多各 6 项。',
-    'overview 用 1-3 句说明当前证据代表什么；supports、concerns、nextChecks 都写成可核对的短句。',
-    'factorReviews 必须逐项复核 factorModel 中每个权重大于 0 的因子，不得遗漏；每项字段是 factor、stance、confidence、rationale、citedEvidenceKeys。stance 只能是 support、caution、oppose、insufficient；引用只能使用该因子自己的 evidenceKeys。',
-    '因子数据缺失、来源不可用或无法核对时使用 insufficient，不要猜测；不要输出 accepted，accepted 会由服务端根据数据、引用和置信度重新计算。',
-    'decisionReview 必须是对象或 null。对象字段必须是 decisionVersion、recommendation、confidence、rationale、invalidationConditions、citedEvidenceKeys；decisionVersion 必须精确等于 "ai-decision-v1"，不要复制报告里的 research-decision-v1；recommendation 只能是 bullish、bearish、watch，confidence 为 0-100 的数字。',
-    'decisionReview 只能复核报告已有证据；如果报告确定性推荐为 watch 或数据覆盖度不足，不得升级为 bullish/bearish。不要添加报告中不存在的数值、来源或证据 key。',
-    '如果报告包含 factorModel.configuration，必须按该报告快照解释权重和确定性分数，不要用当前配置替换历史报告配置。',
-    '对于 optional 的 AkShare 证据，必须保留 source、observedAt 和 formulaVersion；报告期不同或 provider 数值不同只能表述为交叉核对线索，并明确需要人工核对。',
-    '不要生成买入/卖出价格，不要写目标价、未来收益预测或直接交易指令；价格区间只能使用报告中的确定性字段。',
-    `研究报告：${reportPrompt(report)}`,
-  ].join('\n')
+  const separator = '\n研究报告：'
+  const budget = Math.max(1, QUANT_AI_SUMMARY_MAX_PROMPT_LENGTH - SUMMARY_INSTRUCTION.length - separator.length)
+  const options = [
+    [160, 32, true],
+    [80, 24, false],
+    [0, 12, false],
+  ] as const
+  let payload = JSON.stringify(summaryPayload(report, 0, 8, false))
+  for (const [detailLimit, evidenceLimit, includeSources] of options) {
+    const candidate = JSON.stringify(summaryPayload(report, detailLimit, evidenceLimit, includeSources))
+    if (candidate.length <= budget) {
+      payload = candidate
+      break
+    }
+  }
+  return `${SUMMARY_INSTRUCTION}${separator}${payload}`
 }
 
 function stripJsonFence(value: string): string {
@@ -185,25 +227,43 @@ function fieldValue(value: Record<string, unknown>, ...keys: string[]): unknown 
 }
 
 function stringValue(value: unknown, field: string, maxLength: number): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > maxLength)
+  if (typeof value !== 'string' || !value.trim())
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', `AI summary field ${field} is invalid`, 502)
-  return value.trim()
+  return value.trim().slice(0, maxLength)
 }
 
 function stringList(value: unknown, field: string): readonly string[] {
-  if (!Array.isArray(value) || value.length > 6)
+  if (value === undefined || value === null)
+    return []
+  if (!Array.isArray(value))
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', `AI summary field ${field} is invalid`, 502)
-  return value.map(item => stringValue(item, field, 240))
+  return value
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .slice(0, 6)
+    .map(item => stringValue(item, field, 240))
 }
 
 function citedEvidenceKeys(value: unknown, report: QuantResearchReport): readonly string[] {
-  if (!Array.isArray(value) || value.length > 16 || value.some(item => typeof item !== 'string'))
+  if (value === undefined || value === null)
+    return []
+  if (!Array.isArray(value) || value.some(item => typeof item !== 'string'))
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI summary evidence references are invalid', 502)
   const allowed = new Set(report.evidence.map(item => item.key))
   const keys = [...new Set(value as string[])]
   if (keys.some(key => !allowed.has(key)))
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI summary cited an unknown evidence key', 502)
-  return keys
+  return keys.slice(0, 16)
+}
+
+function scoreValue(value: unknown): number | null {
+  const numeric = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && value.trim()
+      ? Number(value)
+      : Number.NaN
+  if (!Number.isFinite(numeric) || numeric < 0 || numeric > 100)
+    return null
+  return numeric
 }
 
 function recommendation(value: unknown): QuantRecommendation {
@@ -216,23 +276,20 @@ function factorKey(value: unknown): value is QuantResearchFactorKey {
   return value === 'trend' || value === 'valuation' || value === 'quality' || value === 'shareholder-return' || value === 'risk'
 }
 
-function factorStance(value: unknown): QuantAiFactorReviewStance {
-  if (value === 'support' || value === 'caution' || value === 'oppose' || value === 'insufficient')
-    return value
-  throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review stance is invalid', 502)
-}
-
 function factorReview(value: unknown, report: QuantResearchReport, evaluatedAt: Date): QuantAiFactorReview[] {
-  if (value === undefined)
+  if (value === undefined || value === null)
     return []
-  if (!Array.isArray(value) || value.length > 5)
+  if (!Array.isArray(value))
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor reviews are invalid', 502)
 
   const factors = new Map<QuantResearchFactorKey, QuantResearchFactor>(
     (report.factorModel?.factors ?? []).map(factor => [factor.key, factor]),
   )
   const seen = new Set<QuantResearchFactorKey>()
-  return value.map((item) => {
+  const reviews: QuantAiFactorReview[] = []
+  for (const item of value) {
+    if (reviews.length >= 5)
+      break
     const parsed = record(item)
     const factorValue = parsed ? fieldValue(parsed, 'factor') : undefined
     if (!parsed || !factorKey(factorValue) || seen.has(factorValue))
@@ -240,16 +297,19 @@ function factorReview(value: unknown, report: QuantResearchReport, evaluatedAt: 
     const factor = factors.get(factorValue)
     if (!factor)
       throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review references an unknown factor', 502)
-    seen.add(factorValue)
-    const confidence = fieldValue(parsed, 'confidence')
-    if (typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 100)
+    const confidence = scoreValue(fieldValue(parsed, 'confidence'))
+    if (confidence === null)
       throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review confidence is invalid', 502)
-    const rationale = stringValue(fieldValue(parsed, 'rationale'), 'factorReviews.rationale', 600)
+    const rationaleValue = fieldValue(parsed, 'rationale')
+    if (typeof rationaleValue !== 'string' || !rationaleValue.trim())
+      throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI summary field factorReviews.rationale is invalid', 502)
+    const stanceValue = fieldValue(parsed, 'stance')
+    if (stanceValue !== 'support' && stanceValue !== 'caution' && stanceValue !== 'oppose' && stanceValue !== 'insufficient')
+      throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review stance is invalid', 502)
+    seen.add(factorValue)
     const cited = citedEvidenceKeys(fieldValue(parsed, 'citedEvidenceKeys', 'cited_evidence_keys'), report)
-    const factorEvidenceKeys = new Set(factor.evidenceKeys)
-    if (cited.some(key => !factorEvidenceKeys.has(key)))
+    if (cited.some(key => !factor.evidenceKeys.includes(key)))
       throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI factor review cited evidence from another factor', 502)
-    const stance = factorStance(fieldValue(parsed, 'stance'))
     const freshness = buildQuantFactorFreshness(factor, report.evidence, evaluatedAt)
     const citedUsable = cited.some((key) => {
       const evidence = report.evidence.find(item => item.key === key)
@@ -260,17 +320,18 @@ function factorReview(value: unknown, report: QuantResearchReport, evaluatedAt: 
       && confidence >= 60
       && cited.length > 0
       && citedUsable
-      && stance !== 'insufficient'
+      && stanceValue !== 'insufficient'
       && isQuantFactorFreshForAi(freshness)
-    return {
+    reviews.push({
       factor: factorValue,
-      stance,
+      stance: stanceValue,
       confidence,
       accepted,
-      rationale,
+      rationale: stringValue(rationaleValue, 'factorReviews.rationale', 600),
       citedEvidenceKeys: cited,
-    }
-  })
+    })
+  }
+  return reviews
 }
 
 function impactRound(value: number, digits = 4): number {
@@ -517,8 +578,8 @@ function decisionReview(value: unknown, report: QuantResearchReport, reviews: re
     || decisionVersion === 'research-decision-v1'
   if (!parsed || !versionOk)
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI decision review version is invalid', 502)
-  const confidence = fieldValue(parsed, 'confidence')
-  if (typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 100)
+  const confidence = scoreValue(fieldValue(parsed, 'confidence'))
+  if (confidence === null)
     throw summaryError('QUANT_AI_SUMMARY_INVALID_RESPONSE', 'AI decision confidence is invalid', 502)
   const rationale = stringValue(fieldValue(parsed, 'rationale'), 'decisionReview.rationale', 600)
   const invalidationConditions = stringList(fieldValue(parsed, 'invalidationConditions', 'invalidation_conditions'), 'decisionReview.invalidationConditions')

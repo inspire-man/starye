@@ -25,6 +25,7 @@ import QuantAiResearchSummary from '../QuantAiResearchSummary.vue'
 import QuantDecisionAssistantPanel from '../QuantDecisionAssistant.vue'
 import QuantDecisionJournal from '../QuantDecisionJournal.vue'
 import QuantDecisionRecommendation from '../QuantDecisionRecommendation.vue'
+import QuantReportFold from './QuantReportFold.vue'
 
 export interface QuantResearchRunSectionProps {
   selectedStock: WatchlistItem | null
@@ -204,6 +205,10 @@ const emit = defineEmits<{
 const researchQuestionInput = defineModel<string>('researchQuestionInput', { required: true })
 const questionPanel = ref<{ useQuestionPrompt: (prompt: string) => void } | null>(null)
 
+function researchEvidenceGapCount(items: readonly QuantResearchEvidence[]): number {
+  return items.filter(item => item.status === 'missing').length
+}
+
 function useQuestionPrompt(prompt: string): void {
   questionPanel.value?.useQuestionPrompt(prompt)
 }
@@ -251,105 +256,116 @@ defineExpose({ useQuestionPrompt })
       </button>
     </div>
     <template v-else-if="latestResearchReport">
-      <QuantDecisionRecommendation
-        :report="latestResearchReport"
-        :summary="researchAiSummary"
-        :current-price="latestDailyBar?.close ?? selectedStock.latestClose"
-        :current-price-observed-at="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
-        :data-freshness="decisionFreshness"
-        :data-freshness-detail="decisionFreshnessDetail"
-        :ai-review-generating="researchSummaryLoading || researchSummaryGenerating"
-        :refresh-evidence="refreshEvidence"
-        :refreshing-evidence-key="refreshingEvidenceKey"
-        :refresh-evidence-error-message="refreshEvidenceErrorMessage"
-        :refresh-evidence-message="refreshEvidenceMessage"
-        @request-ai-review="generateResearchSummary"
-      />
-      <QuantDecisionAssistantPanel
-        v-if="latestResearchRun"
-        :run="latestResearchRun"
-        :latest-close="latestDailyBar?.close ?? selectedStock.latestClose"
-        :latest-trade-date="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
-        :assessment="decisionAssistant"
-        :history="decisionAssistantHistory"
-        :loading="decisionAssistantLoading"
-        :generating="decisionAssistantGenerating"
-        :error-message="decisionAssistantErrorMessage"
-        :ai-config-available="decisionAssistantAiConfigAvailable"
-        @assess="createDecisionAssistant"
-        @open-settings="emit('openSettings')"
-      />
-      <QuantDecisionJournal
-        :run="latestResearchRun"
-        :record="researchDecisionRecord"
-        :history="researchDecisionHistory"
-        :loading="researchDecisionLoading"
-        :history-loading="researchDecisionHistoryLoading"
-        :saving="researchDecisionSaving"
-        :latest-price="latestDailyBar?.close ?? selectedStock.latestClose"
-        :latest-price-observed-at="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
-        :load-error-message="researchDecisionLoadErrorMessage"
-        :history-error-message="researchDecisionHistoryErrorMessage"
-        :save-error-message="researchDecisionSaveErrorMessage"
-        :save-message="researchDecisionSaveMessage"
-        @save="saveResearchDecision"
-      />
-      <div class="research-run-summary">
-        <div class="research-run-summary-main" :class="researchRunStatusClass(latestResearchReport.status)">
-          <span>当前状态</span>
-          <strong>{{ researchRunStatusLabel(latestResearchReport.status) }}</strong>
-          <small>{{ latestResearchReport.reportVersion }}</small>
+      <QuantReportFold label="决策推荐" open>
+        <QuantDecisionRecommendation
+          :report="latestResearchReport"
+          :summary="researchAiSummary"
+          :current-price="latestDailyBar?.close ?? selectedStock.latestClose"
+          :current-price-observed-at="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
+          :data-freshness="decisionFreshness"
+          :data-freshness-detail="decisionFreshnessDetail"
+          :ai-review-generating="researchSummaryLoading || researchSummaryGenerating"
+          :refresh-evidence="refreshEvidence"
+          :refreshing-evidence-key="refreshingEvidenceKey"
+          :refresh-evidence-error-message="refreshEvidenceErrorMessage"
+          :refresh-evidence-message="refreshEvidenceMessage"
+          @request-ai-review="generateResearchSummary"
+        />
+      </QuantReportFold>
+      <QuantReportFold v-if="latestResearchRun" label="今日决策助手" open>
+        <QuantDecisionAssistantPanel
+          :run="latestResearchRun"
+          :latest-close="latestDailyBar?.close ?? selectedStock.latestClose"
+          :latest-trade-date="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
+          :assessment="decisionAssistant"
+          :history="decisionAssistantHistory"
+          :loading="decisionAssistantLoading"
+          :generating="decisionAssistantGenerating"
+          :error-message="decisionAssistantErrorMessage"
+          :ai-config-available="decisionAssistantAiConfigAvailable"
+          @assess="createDecisionAssistant"
+          @open-settings="emit('openSettings')"
+        />
+      </QuantReportFold>
+      <QuantReportFold label="决策记录" open>
+        <QuantDecisionJournal
+          :run="latestResearchRun"
+          :record="researchDecisionRecord"
+          :history="researchDecisionHistory"
+          :loading="researchDecisionLoading"
+          :history-loading="researchDecisionHistoryLoading"
+          :saving="researchDecisionSaving"
+          :latest-price="latestDailyBar?.close ?? selectedStock.latestClose"
+          :latest-price-observed-at="latestDailyBar?.tradeDate ?? selectedStock.latestTradeDate"
+          :load-error-message="researchDecisionLoadErrorMessage"
+          :history-error-message="researchDecisionHistoryErrorMessage"
+          :save-error-message="researchDecisionSaveErrorMessage"
+          :save-message="researchDecisionSaveMessage"
+          @save="saveResearchDecision"
+        />
+      </QuantReportFold>
+      <details class="quant-report-fold research-run-summary-fold">
+        <summary class="research-run-fold-summary">
+          <span>报告摘要</span>
+          <small>{{ researchRunStatusLabel(latestResearchReport.status) }} · {{ researchRunActionLabel(latestResearchReport.action) }}</small>
+        </summary>
+        <div class="research-run-summary">
+          <div class="research-run-summary-main" :class="researchRunStatusClass(latestResearchReport.status)">
+            <span>当前状态</span>
+            <strong>{{ researchRunStatusLabel(latestResearchReport.status) }}</strong>
+            <small>{{ latestResearchReport.reportVersion }}</small>
+          </div>
+          <div>
+            <span>研究动作</span>
+            <strong>{{ researchRunActionLabel(latestResearchReport.action) }}</strong>
+            <small>{{ latestResearchReport.score === null ? '--' : `${latestResearchReport.score.toFixed(1)} / 100` }}</small>
+          </div>
+          <div>
+            <span>证据条数</span>
+            <strong>{{ latestResearchReport.evidence.length }}</strong>
+            <small>{{ latestResearchReport.sources.length }} 个来源</small>
+          </div>
         </div>
-        <div>
-          <span>研究动作</span>
-          <strong>{{ researchRunActionLabel(latestResearchReport.action) }}</strong>
-          <small>{{ latestResearchReport.score === null ? '--' : `${latestResearchReport.score.toFixed(1)} / 100` }}</small>
+        <p class="research-run-headline">
+          {{ latestResearchReport.headline }}
+        </p>
+        <div class="research-run-guidance-grid">
+          <details v-if="latestResearchReport.strengths.length" class="research-run-guidance research-run-guidance-positive quant-report-fold">
+            <summary>支持依据</summary>
+            <ul>
+              <li v-for="item in latestResearchReport.strengths" :key="`strength-${item}`">
+                {{ item }}
+              </li>
+            </ul>
+          </details>
+          <details v-if="latestResearchReport.risks.length" class="research-run-guidance research-run-guidance-danger quant-report-fold">
+            <summary>风险核对</summary>
+            <ul>
+              <li v-for="item in latestResearchReport.risks" :key="`risk-${item}`">
+                {{ item }}
+              </li>
+            </ul>
+          </details>
+          <details v-if="latestResearchReport.gaps.length" class="research-run-guidance research-run-guidance-warning quant-report-fold">
+            <summary>数据缺口</summary>
+            <ul>
+              <li v-for="item in latestResearchReport.gaps" :key="`gap-${item}`">
+                {{ item }}
+              </li>
+            </ul>
+          </details>
+          <details class="research-run-guidance research-run-guidance-neutral quant-report-fold">
+            <summary>下一步</summary>
+            <ul>
+              <li v-for="item in latestResearchReport.nextActions" :key="`next-${item}`">
+                {{ item }}
+              </li>
+            </ul>
+          </details>
         </div>
-        <div>
-          <span>证据条数</span>
-          <strong>{{ latestResearchReport.evidence.length }}</strong>
-          <small>{{ latestResearchReport.sources.length }} 个来源</small>
-        </div>
-      </div>
-      <p class="research-run-headline">
-        {{ latestResearchReport.headline }}
-      </p>
-      <div class="research-run-guidance-grid">
-        <div v-if="latestResearchReport.strengths.length" class="research-run-guidance research-run-guidance-positive">
-          <span>支持依据</span>
-          <ul>
-            <li v-for="item in latestResearchReport.strengths" :key="`strength-${item}`">
-              {{ item }}
-            </li>
-          </ul>
-        </div>
-        <div v-if="latestResearchReport.risks.length" class="research-run-guidance research-run-guidance-danger">
-          <span>风险核对</span>
-          <ul>
-            <li v-for="item in latestResearchReport.risks" :key="`risk-${item}`">
-              {{ item }}
-            </li>
-          </ul>
-        </div>
-        <div v-if="latestResearchReport.gaps.length" class="research-run-guidance research-run-guidance-warning">
-          <span>数据缺口</span>
-          <ul>
-            <li v-for="item in latestResearchReport.gaps" :key="`gap-${item}`">
-              {{ item }}
-            </li>
-          </ul>
-        </div>
-        <div class="research-run-guidance research-run-guidance-neutral">
-          <span>下一步</span>
-          <ul>
-            <li v-for="item in latestResearchReport.nextActions" :key="`next-${item}`">
-              {{ item }}
-            </li>
-          </ul>
-        </div>
-      </div>
-      <section class="research-run-timeline-panel" aria-label="研究决策轨迹">
-        <div class="research-run-timeline-heading">
+      </details>
+      <details class="research-run-timeline-panel quant-report-fold">
+        <summary class="research-run-timeline-heading">
           <div>
             <p class="section-kicker">
               DECISION TIMELINE
@@ -362,7 +378,7 @@ defineExpose({ useQuestionPrompt })
               <Info :size="14" aria-hidden="true" />
             </span>
           </div>
-        </div>
+        </summary>
         <div v-if="researchRunTimeline.points.length < 2" class="research-run-timeline-state" role="status">
           <Info :size="15" aria-hidden="true" />
           <span>当前只有 1 份研究快照，再生成 1 份后可观察分数和动作轨迹。</span>
@@ -410,13 +426,13 @@ defineExpose({ useQuestionPrompt })
             </article>
           </div>
         </template>
-      </section>
+      </details>
       <div class="research-run-evidence-groups">
-        <section v-for="group in researchEvidenceGroups" :key="group.dimension" class="research-run-evidence-group" :aria-labelledby="`research-evidence-${group.dimension}`">
-          <div class="research-run-evidence-group-heading">
+        <details v-for="group in researchEvidenceGroups" :key="group.dimension" class="research-run-evidence-group quant-report-fold" :aria-labelledby="`research-evidence-${group.dimension}`">
+          <summary class="research-run-evidence-group-heading">
             <strong :id="`research-evidence-${group.dimension}`">{{ group.label }}</strong>
-            <small>{{ group.items.length }} 条证据</small>
-          </div>
+            <small>{{ group.items.length }} 条证据<template v-if="researchEvidenceGapCount(group.items)"> · {{ researchEvidenceGapCount(group.items) }} 项数据不足</template></small>
+          </summary>
           <div class="research-run-evidence-list">
             <div v-for="item in group.items" :id="researchEvidenceDomId(latestResearchReport.tsCode, item.key)" :key="item.key" class="research-run-evidence-row" :class="researchEvidenceStatusClass(item.status)" :title="`${item.source} · ${item.formulaVersion}`">
               <div class="research-run-evidence-main">
@@ -437,47 +453,56 @@ defineExpose({ useQuestionPrompt })
               </div>
             </div>
           </div>
-        </section>
+        </details>
       </div>
-      <div class="research-run-sources">
-        <span>来源快照</span>
-        <span v-for="source in latestResearchReport.sources" :key="source.id" :title="source.formulaVersion">
-          {{ source.name }} · {{ formatResearchRunSourceDate(source.observedAt) }}
-        </span>
-      </div>
-      <QuantAiResearchSummary
-        :report="latestResearchReport"
-        :summary="researchAiSummary"
-        :loading="researchSummaryLoading"
-        :generating="researchSummaryGenerating"
-        :stream-mode="researchSummaryStreamMode"
-        :stream-received-chars="researchSummaryStreamReceivedChars"
-        :audit-history="researchAiAudits"
-        :audit-history-loading="researchAiAuditsLoading"
-        :audit-history-error="researchAiAuditErrorMessage"
-        :error-message="researchSummaryErrorMessage"
-        :configuration-error="researchSummaryConfigurationError"
-        :question-prompt-ready="researchQuestionPromptReady"
-        @generate="generateResearchSummary"
-        @open-settings="emit('openSettings')"
-        @use-next-check="useResearchSummaryNextCheck"
-      />
-      <QuantAiResearchQuestion
-        v-if="!researchRunGenerating"
-        ref="questionPanel"
-        :report="latestResearchReport"
-        :input="researchQuestionInput"
-        :result="researchQuestion"
-        :loading="researchQuestionLoading"
-        :error-message="researchQuestionErrorMessage"
-        :configuration-error="researchQuestionConfigurationError"
-        @update:input="researchQuestionInput = $event"
-        @ask="askResearchQuestion"
-        @open-settings="emit('openSettings')"
-        @focus-evidence="focusResearchQuestionEvidence"
-      />
-      <section class="research-evidence-history-panel" aria-label="研究证据变化">
-        <div class="research-evidence-history-heading">
+      <details class="quant-report-fold research-run-sources-fold">
+        <summary class="research-run-fold-summary">
+          <span>来源快照</span>
+          <small>{{ latestResearchReport.sources.length }} 个来源</small>
+        </summary>
+        <div class="research-run-sources">
+          <span v-for="source in latestResearchReport.sources" :key="source.id" class="research-run-source-item" :title="source.formulaVersion">
+            {{ source.name }} · {{ formatResearchRunSourceDate(source.observedAt) }}
+          </span>
+        </div>
+      </details>
+      <QuantReportFold label="AI 证据解读" open>
+        <QuantAiResearchSummary
+          :report="latestResearchReport"
+          :summary="researchAiSummary"
+          :loading="researchSummaryLoading"
+          :generating="researchSummaryGenerating"
+          :stream-mode="researchSummaryStreamMode"
+          :stream-received-chars="researchSummaryStreamReceivedChars"
+          :audit-history="researchAiAudits"
+          :audit-history-loading="researchAiAuditsLoading"
+          :audit-history-error="researchAiAuditErrorMessage"
+          :error-message="researchSummaryErrorMessage"
+          :configuration-error="researchSummaryConfigurationError"
+          :question-prompt-ready="researchQuestionPromptReady"
+          @generate="generateResearchSummary"
+          @open-settings="emit('openSettings')"
+          @use-next-check="useResearchSummaryNextCheck"
+        />
+      </QuantReportFold>
+      <QuantReportFold v-if="!researchRunGenerating" label="研究追问" open>
+        <QuantAiResearchQuestion
+
+          ref="questionPanel"
+          :report="latestResearchReport"
+          :input="researchQuestionInput"
+          :result="researchQuestion"
+          :loading="researchQuestionLoading"
+          :error-message="researchQuestionErrorMessage"
+          :configuration-error="researchQuestionConfigurationError"
+          @update:input="researchQuestionInput = $event"
+          @ask="askResearchQuestion"
+          @open-settings="emit('openSettings')"
+          @focus-evidence="focusResearchQuestionEvidence"
+        />
+      </QuantReportFold>
+      <details class="research-evidence-history-panel quant-report-fold">
+        <summary class="research-evidence-history-heading">
           <div>
             <p class="section-kicker">
               HISTORY DIFF
@@ -490,7 +515,7 @@ defineExpose({ useQuestionPrompt })
           <span v-if="researchEvidenceComparison" class="research-evidence-history-count">
             {{ researchEvidenceComparison.changedCount }} 项变化
           </span>
-        </div>
+        </summary>
         <div v-if="researchRuns.length < 2" class="research-evidence-history-state" role="status">
           <Info :size="15" aria-hidden="true" />
           <span>当前只有 1 份研究快照，再生成 1 份后可比较证据变化。</span>
@@ -549,21 +574,22 @@ defineExpose({ useQuestionPrompt })
             <span>最近两份报告的证据状态和数值没有明显变化。</span>
           </div>
         </template>
-      </section>
-      <QuantAiResearchChangeExplanation
-        v-if="researchEvidenceComparison"
-        :comparison="researchEvidenceComparison"
-        :explanation="researchChangeExplanation"
-        :loading="false"
-        :generating="researchChangeExplanationGenerating"
-        :error-message="researchChangeExplanationErrorMessage"
-        :configuration-error="researchChangeExplanationConfigurationError"
-        :question-prompt-ready="researchQuestionPromptReady"
-        @generate="generateResearchChangeExplanation"
-        @open-settings="emit('openSettings')"
-        @use-next-check="useResearchChangeNextCheck"
-        @focus-evidence="focusResearchQuestionEvidence"
-      />
+      </details>
+      <QuantReportFold v-if="researchEvidenceComparison" label="变化解释" open>
+        <QuantAiResearchChangeExplanation
+          :comparison="researchEvidenceComparison"
+          :explanation="researchChangeExplanation"
+          :loading="false"
+          :generating="researchChangeExplanationGenerating"
+          :error-message="researchChangeExplanationErrorMessage"
+          :configuration-error="researchChangeExplanationConfigurationError"
+          :question-prompt-ready="researchQuestionPromptReady"
+          @generate="generateResearchChangeExplanation"
+          @open-settings="emit('openSettings')"
+          @use-next-check="useResearchChangeNextCheck"
+          @focus-evidence="focusResearchQuestionEvidence"
+        />
+      </QuantReportFold>
       <p class="research-run-note">
         这是基于已保存数据的版本化研究快照；报告用于整理核对顺序，不是买入、卖出或收益预测。
       </p>

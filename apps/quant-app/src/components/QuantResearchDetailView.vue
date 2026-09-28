@@ -2,6 +2,7 @@
 import type { Column, ParsedError } from '@starye/ui'
 import type { QuantDataHealthFreshness } from '../lib/data-health'
 import type { DecisionEvidence, DecisionEvidenceStatus } from '../lib/decision-evidence'
+import type { FactorRobustness } from '../lib/factor-robustness'
 import type {
   CandidateItem,
   CandidateSignalPersistence,
@@ -43,6 +44,7 @@ import QuantDailyDataSection from './quant-detail/QuantDailyDataSection.vue'
 import QuantDecisionCard from './quant-detail/QuantDecisionCard.vue'
 import QuantDecisionEvidenceSection from './quant-detail/QuantDecisionEvidenceSection.vue'
 import QuantFinancialQualitySection from './quant-detail/QuantFinancialQualitySection.vue'
+import QuantReportFold from './quant-detail/QuantReportFold.vue'
 import QuantResearchMarkerEditor from './quant-detail/QuantResearchMarkerEditor.vue'
 import QuantResearchReadout from './quant-detail/QuantResearchReadout.vue'
 import QuantResearchRunSection from './quant-detail/QuantResearchRunSection.vue'
@@ -111,6 +113,7 @@ export interface QuantResearchDetailProps {
   trendStructure: TrendStructure
   timingWindow: TimingWindow
   timingHistory: TimingHistory
+  factorRobustness: FactorRobustness
   timingHistoryCurrentBucket: TimingHistoryBucket | null
   decisionEvidence: DecisionEvidence | null
   valuation: QuantValuationSnapshot | null
@@ -412,19 +415,21 @@ defineExpose({ useQuestionPrompt })
 
 <template>
   <section class="quant-detail-content" aria-labelledby="daily-title">
-    <QuantDecisionCard
-      :selected-candidate="selectedCandidate"
-      :selected-research-marker="selectedResearchMarker"
-      :selected-research-review="selectedResearchReview"
-      :research-status-options="researchStatusOptions"
-      :signal-rule-count="signalRuleCount"
-      :format-signal-score="formatSignalScore"
-      :format-percent="formatPercent"
-      :format-factor-label="formatFactorLabel"
-      :candidate-priority-for="candidatePriorityFor"
-      :research-priority-detail="researchPriorityDetail"
-      :research-priority-action-class="researchPriorityActionClass"
-    />
+    <QuantReportFold label="候选决策">
+      <QuantDecisionCard
+        :selected-candidate="selectedCandidate"
+        :selected-research-marker="selectedResearchMarker"
+        :selected-research-review="selectedResearchReview"
+        :research-status-options="researchStatusOptions"
+        :signal-rule-count="signalRuleCount"
+        :format-signal-score="formatSignalScore"
+        :format-percent="formatPercent"
+        :format-factor-label="formatFactorLabel"
+        :candidate-priority-for="candidatePriorityFor"
+        :research-priority-detail="researchPriorityDetail"
+        :research-priority-action-class="researchPriorityActionClass"
+      />
+    </QuantReportFold>
     <QuantResearchRunSection
       ref="researchRunSection"
       v-model:research-question-input="researchQuestionInput"
@@ -512,152 +517,173 @@ defineExpose({ useQuestionPrompt })
       :use-research-change-next-check="useResearchChangeNextCheck"
       @open-settings="emit('openSettings')"
     />
-    <QuantSignalPersistenceSection
-      :selected-candidate="selectedCandidate"
-      :format-persistence-rate="formatPersistenceRate"
-      :format-score-delta="formatScoreDelta"
-      :score-delta-class="scoreDeltaClass"
-      :candidate-persistence-for="candidatePersistenceFor"
-      :candidate-persistence-label="candidatePersistenceLabel"
-      :candidate-persistence-class="candidatePersistenceClass"
-      :format-factor-label="formatFactorLabel"
-      :format-date-time="formatDateTime"
-      :format-signal-score="formatSignalScore"
-    />
-    <QuantTimingSection
-      :selected-stock="selectedStock"
-      :timing-window="timingWindow"
-      :timing-history="timingHistory"
-      :timing-history-current-bucket="timingHistoryCurrentBucket"
-      :format-trade-date="formatTradeDate"
-      :timing-window-class="timingWindowClass"
-      :timing-window-metric-class="timingWindowMetricClass"
-      :timing-window-metric-status-label="timingWindowMetricStatusLabel"
-      :format-timing-window-metric="formatTimingWindowMetric"
-      :timing-history-state-class="timingHistoryStateClass"
-      :format-timing-history-rate="formatTimingHistoryRate"
-      :format-timing-history-percent="formatTimingHistoryPercent"
-      :timing-history-bucket-title="timingHistoryBucketTitle"
-    />
-    <QuantDecisionEvidenceSection
-      :decision-evidence="decisionEvidence"
-      :format-evidence-date="formatEvidenceDate"
-      :format-date-time="formatDateTime"
-      :decision-evidence-status-label="decisionEvidenceStatusLabel"
-      :decision-evidence-status-class="decisionEvidenceStatusClass"
-      :decision-evidence-action-class="decisionEvidenceActionClass"
-    />
-    <QuantValueQualitySection
-      :selected-stock="selectedStock"
-      :selected-value-quality="selectedValueQuality"
-      :loading="loading"
-      :errors="errors"
-      :format-date-time="formatDateTime"
-      :format-trade-date="formatTradeDate"
-      :value-quality-status-label="valueQualityStatusLabel"
-      :value-quality-status-class="valueQualityStatusClass"
-      :format-value-quality-score="formatValueQualityScore"
-      :format-value-quality-dimension="formatValueQualityDimension"
-      :value-quality-dimension-samples="valueQualityDimensionSamples"
-      :parsed-error="parsedError"
-      :load-value-selection="loadValueSelection"
-    />
-    <QuantResearchMarkerEditor
-      v-model:research-form-status="researchFormStatus"
-      v-model:research-form-note="researchFormNote"
-      v-model:research-form-review-date="researchFormReviewDate"
-      :research-status-options="researchStatusOptions"
-      :research-saving="researchSaving"
-      :research-save-message="researchSaveMessage"
-      :research-save-error-message="researchSaveErrorMessage"
-      :save-research-marker="saveResearchMarker"
-    />
-    <div class="section-heading">
-      <div>
-        <p class="section-kicker">
-          PRICE & DAILY DATA
-        </p>
-        <h2 id="daily-title" class="section-title">
-          走势与日线
-        </h2>
+    <QuantReportFold label="信号持续性">
+      <QuantSignalPersistenceSection
+        :selected-candidate="selectedCandidate"
+        :format-persistence-rate="formatPersistenceRate"
+        :format-score-delta="formatScoreDelta"
+        :score-delta-class="scoreDeltaClass"
+        :candidate-persistence-for="candidatePersistenceFor"
+        :candidate-persistence-label="candidatePersistenceLabel"
+        :candidate-persistence-class="candidatePersistenceClass"
+        :format-factor-label="formatFactorLabel"
+        :format-date-time="formatDateTime"
+        :format-signal-score="formatSignalScore"
+      />
+    </QuantReportFold>
+    <QuantReportFold label="时机窗口">
+      <QuantTimingSection
+        :selected-stock="selectedStock"
+        :timing-window="timingWindow"
+        :timing-history="timingHistory"
+        :factor-robustness="factorRobustness"
+        :timing-history-current-bucket="timingHistoryCurrentBucket"
+        :format-trade-date="formatTradeDate"
+        :timing-window-class="timingWindowClass"
+        :timing-window-metric-class="timingWindowMetricClass"
+        :timing-window-metric-status-label="timingWindowMetricStatusLabel"
+        :format-timing-window-metric="formatTimingWindowMetric"
+        :timing-history-state-class="timingHistoryStateClass"
+        :format-timing-history-rate="formatTimingHistoryRate"
+        :format-timing-history-percent="formatTimingHistoryPercent"
+        :timing-history-bucket-title="timingHistoryBucketTitle"
+      />
+    </QuantReportFold>
+    <QuantReportFold label="决策证据">
+      <QuantDecisionEvidenceSection
+        :decision-evidence="decisionEvidence"
+        :format-evidence-date="formatEvidenceDate"
+        :format-date-time="formatDateTime"
+        :decision-evidence-status-label="decisionEvidenceStatusLabel"
+        :decision-evidence-status-class="decisionEvidenceStatusClass"
+        :decision-evidence-action-class="decisionEvidenceActionClass"
+      />
+    </QuantReportFold>
+    <QuantReportFold label="价值质量">
+      <QuantValueQualitySection
+        :selected-stock="selectedStock"
+        :selected-value-quality="selectedValueQuality"
+        :loading="loading"
+        :errors="errors"
+        :format-date-time="formatDateTime"
+        :format-trade-date="formatTradeDate"
+        :value-quality-status-label="valueQualityStatusLabel"
+        :value-quality-status-class="valueQualityStatusClass"
+        :format-value-quality-score="formatValueQualityScore"
+        :format-value-quality-dimension="formatValueQualityDimension"
+        :value-quality-dimension-samples="valueQualityDimensionSamples"
+        :parsed-error="parsedError"
+        :load-value-selection="loadValueSelection"
+      />
+    </QuantReportFold>
+    <QuantReportFold label="研究记录" open>
+      <QuantResearchMarkerEditor
+        v-model:research-form-status="researchFormStatus"
+        v-model:research-form-note="researchFormNote"
+        v-model:research-form-review-date="researchFormReviewDate"
+        :research-status-options="researchStatusOptions"
+        :research-saving="researchSaving"
+        :research-save-message="researchSaveMessage"
+        :research-save-error-message="researchSaveErrorMessage"
+        :save-research-marker="saveResearchMarker"
+      />
+    </QuantReportFold>
+    <QuantReportFold label="研究摘要">
+      <QuantResearchReadout
+        :selected-stock="selectedStock"
+        :research-summary="researchSummary"
+      />
+    </QuantReportFold>
+    <QuantReportFold label="估值速览">
+      <QuantValuationSection
+        :selected-stock="selectedStock"
+        :selected-ts-code="selectedTsCode"
+        :valuation="valuation"
+        :valuation-comparison="valuationComparison"
+        :has-valuation-data="hasValuationData"
+        :loading="loading.valuation"
+        :error="errors.valuation"
+        :valuation-error-message="valuationErrorMessage"
+        :valuation-comparison-error-message="valuationComparisonErrorMessage"
+        :format-number="formatNumber"
+        :format-date-time="formatDateTime"
+        :format-comparison-position="formatComparisonPosition"
+        :format-market-cap="formatMarketCap"
+        :load-valuation="loadValuation"
+      />
+    </QuantReportFold>
+    <QuantReportFold label="基本面">
+      <QuantFinancialQualitySection
+        :selected-stock="selectedStock"
+        :selected-ts-code="selectedTsCode"
+        :financial-quality="financialQuality"
+        :financial-history="financialHistory"
+        :financial-comparison="financialComparison"
+        :financial-comparison-error="financialComparisonError"
+        :has-financial-data="hasFinancialData"
+        :financial-trend-items="financialTrendItems"
+        :loading="loading"
+        :errors="errors"
+        :format-number="formatNumber"
+        :format-percent="formatPercent"
+        :format-trade-date="formatTradeDate"
+        :format-financial-amount="formatFinancialAmount"
+        :format-metric-percent="formatMetricPercent"
+        :format-ratio-percent="formatRatioPercent"
+        :format-multiple="formatMultiple"
+        :format-comparison-position="formatComparisonPosition"
+        :format-lower-comparison-position="formatLowerComparisonPosition"
+        :format-trend-delta="formatTrendDelta"
+        :load-financial-quality="loadFinancialQuality"
+      />
+    </QuantReportFold>
+    <QuantReportFold label="股东回报">
+      <QuantShareholderReturnsSection
+        :selected-shareholder-return="selectedShareholderReturn"
+        :financial-industry="financialQuality?.industry ?? null"
+        :loading="loading"
+        :errors="errors"
+        :format-number="formatNumber"
+        :format-financial-amount="formatFinancialAmount"
+        :format-trade-date="formatTradeDate"
+        :format-dividend-yield="formatDividendYield"
+        :shareholder-return-status-label="shareholderReturnStatusLabel"
+        :shareholder-return-status-class="shareholderReturnStatusClass"
+        :shareholder-return-header-label="shareholderReturnHeaderLabel"
+        :shareholder-return-source-label="shareholderReturnSourceLabel"
+        :parsed-error="parsedError"
+        :load-shareholder-returns="loadShareholderReturns"
+      />
+    </QuantReportFold>
+    <QuantReportFold label="走势与日线">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">
+            PRICE & DAILY DATA
+          </p>
+          <h2 id="daily-title" class="section-title">
+            走势与日线
+          </h2>
+        </div>
+        <span class="section-meta">{{ selectedStock?.tsCode || '未选择股票' }}</span>
       </div>
-      <span class="section-meta">{{ selectedStock?.tsCode || '未选择股票' }}</span>
-    </div>
-    <QuantResearchReadout
-      :selected-stock="selectedStock"
-      :research-summary="researchSummary"
-    />
-    <QuantValuationSection
-      :selected-stock="selectedStock"
-      :selected-ts-code="selectedTsCode"
-      :valuation="valuation"
-      :valuation-comparison="valuationComparison"
-      :has-valuation-data="hasValuationData"
-      :loading="loading.valuation"
-      :error="errors.valuation"
-      :valuation-error-message="valuationErrorMessage"
-      :valuation-comparison-error-message="valuationComparisonErrorMessage"
-      :format-number="formatNumber"
-      :format-date-time="formatDateTime"
-      :format-comparison-position="formatComparisonPosition"
-      :format-market-cap="formatMarketCap"
-      :load-valuation="loadValuation"
-    />
-    <QuantFinancialQualitySection
-      :selected-stock="selectedStock"
-      :selected-ts-code="selectedTsCode"
-      :financial-quality="financialQuality"
-      :financial-history="financialHistory"
-      :financial-comparison="financialComparison"
-      :financial-comparison-error="financialComparisonError"
-      :has-financial-data="hasFinancialData"
-      :financial-trend-items="financialTrendItems"
-      :loading="loading"
-      :errors="errors"
-      :format-number="formatNumber"
-      :format-percent="formatPercent"
-      :format-trade-date="formatTradeDate"
-      :format-financial-amount="formatFinancialAmount"
-      :format-metric-percent="formatMetricPercent"
-      :format-ratio-percent="formatRatioPercent"
-      :format-multiple="formatMultiple"
-      :format-comparison-position="formatComparisonPosition"
-      :format-lower-comparison-position="formatLowerComparisonPosition"
-      :format-trend-delta="formatTrendDelta"
-      :load-financial-quality="loadFinancialQuality"
-    />
-    <QuantShareholderReturnsSection
-      :selected-shareholder-return="selectedShareholderReturn"
-      :financial-industry="financialQuality?.industry ?? null"
-      :loading="loading"
-      :errors="errors"
-      :format-number="formatNumber"
-      :format-financial-amount="formatFinancialAmount"
-      :format-trade-date="formatTradeDate"
-      :format-dividend-yield="formatDividendYield"
-      :shareholder-return-status-label="shareholderReturnStatusLabel"
-      :shareholder-return-status-class="shareholderReturnStatusClass"
-      :shareholder-return-header-label="shareholderReturnHeaderLabel"
-      :shareholder-return-source-label="shareholderReturnSourceLabel"
-      :parsed-error="parsedError"
-      :load-shareholder-returns="loadShareholderReturns"
-    />
-    <QuantDailyDataSection
-      :selected-stock="selectedStock"
-      :selected-ts-code="selectedTsCode"
-      :daily-bars="dailyBars"
-      :daily-columns="dailyColumns"
-      :chart-bars="chartBars"
-      :latest-daily-bar="latestDailyBar"
-      :latest-date="latestDate"
-      :trend-structure="trendStructure"
-      :loading="loading"
-      :errors="errors"
-      :format-number="formatNumber"
-      :format-percent="formatPercent"
-      :format-trade-date="formatTradeDate"
-      :parsed-error="parsedError"
-      :load-daily-bars="loadDailyBars"
-    />
+      <QuantDailyDataSection
+        :selected-stock="selectedStock"
+        :selected-ts-code="selectedTsCode"
+        :daily-bars="dailyBars"
+        :daily-columns="dailyColumns"
+        :chart-bars="chartBars"
+        :latest-daily-bar="latestDailyBar"
+        :latest-date="latestDate"
+        :trend-structure="trendStructure"
+        :loading="loading"
+        :errors="errors"
+        :format-number="formatNumber"
+        :format-percent="formatPercent"
+        :format-trade-date="formatTradeDate"
+        :parsed-error="parsedError"
+        :load-daily-bars="loadDailyBars"
+      />
+    </QuantReportFold>
   </section>
 </template>

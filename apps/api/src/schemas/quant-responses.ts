@@ -67,6 +67,52 @@ export const QuantWatchlistDeleteResponseSchema = v.object({
   data: v.object({ tsCode: v.string() }),
 })
 
+export const QuantPriceLocationsResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.array(v.object({
+    tsCode: v.string(),
+    name: v.nullable(v.string()),
+    latestClose: v.nullable(v.number()),
+    latestTradeDate: v.nullable(v.string()),
+    reportGeneratedAt: v.nullable(v.string()),
+    recommendation: v.nullable(v.picklist(['bullish', 'bearish', 'watch'])),
+    recommendationLabel: v.nullable(v.string()),
+    rangeLow: v.nullable(v.number()),
+    rangeHigh: v.nullable(v.number()),
+    status: v.picklist(['inside', 'below', 'above', 'not-buying', 'missing-range', 'missing-price', 'missing-report']),
+    label: v.string(),
+    distancePercent: v.nullable(v.number()),
+    detail: v.string(),
+  })),
+})
+
+export const QuantAiReviewOutcomesResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.object({
+    headline: v.string(),
+    acceptedAgreementRate: v.nullable(v.number()),
+    unacceptedAgreementRate: v.nullable(v.number()),
+    acceptedDirectionalCount: v.number(),
+    unacceptedDirectionalCount: v.number(),
+    pendingCount: v.number(),
+    items: v.array(v.object({
+      tsCode: v.string(),
+      name: v.nullable(v.string()),
+      reviewedAt: v.string(),
+      accepted: v.nullable(v.boolean()),
+      recommendation: v.nullable(v.picklist(['bullish', 'bearish', 'watch'])),
+      baselineClose: v.nullable(v.number()),
+      baselineTradeDate: v.nullable(v.string()),
+      observationClose: v.nullable(v.number()),
+      observationTradeDate: v.nullable(v.string()),
+      changePercent: v.nullable(v.number()),
+      status: v.picklist(['aligned', 'opposed', 'flat', 'pending', 'unavailable', 'not-directional']),
+      label: v.string(),
+      detail: v.string(),
+    })),
+  }),
+})
+
 export const QuantStockBasicResponseSchema = v.object({
   success: v.literal(true),
   data: v.object({

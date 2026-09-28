@@ -82,7 +82,8 @@ describe('quant AI transport', () => {
 
     await expect(request(fetchImpl, { model: 'gpt-4o' })).resolves.toMatchObject({ content: 'OK' })
     const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body)) as Record<string, unknown>
-    expect(body).toMatchObject({ temperature: 0.2, stream: false, max_completion_tokens: 512 })
+    expect(body).toMatchObject({ temperature: 0.2, stream: false, max_tokens: 512 })
+    expect(body).not.toHaveProperty('max_completion_tokens')
     expect(body).not.toHaveProperty('reasoning_effort')
   })
 
@@ -96,6 +97,22 @@ describe('quant AI transport', () => {
     await expect(request(fetchImpl, { responseMode: 'stream' })).resolves.toMatchObject({ content: '{"ok":true}', finishReason: 'stop' })
     const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body)) as Record<string, unknown>
     expect(body).toMatchObject({ stream: true, response_format: { type: 'json_object' } })
+  })
+
+  it('retries a gateway 502 with the plain chat completion contract', async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response({ error: 'upstream gateway' }, 502))
+      .mockResolvedValueOnce(response({ choices: [{ finish_reason: 'stop', message: { content: '{"ok":true}' } }] }))
+
+    await expect(request(fetchImpl, { model: 'grok-4', responseMode: 'stream' })).resolves.toMatchObject({ content: '{"ok":true}' })
+
+    const first = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body)) as Record<string, unknown>
+    const second = JSON.parse(String(fetchImpl.mock.calls[1]?.[1]?.body)) as Record<string, unknown>
+    expect(first).toMatchObject({ stream: true, max_tokens: 512, response_format: { type: 'json_object' } })
+    expect(second).toMatchObject({ stream: false, max_tokens: 512, temperature: 0.2 })
+    expect(second).not.toHaveProperty('response_format')
+    expect(second).not.toHaveProperty('max_completion_tokens')
+    expect(second).not.toHaveProperty('reasoning_effort')
   })
 
   it('reports bounded streamed deltas while retaining the complete result', async () => {

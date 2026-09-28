@@ -6,14 +6,21 @@ import { generateQuantAiChangeExplanation } from '../../../domain/quant/ai-chang
 import { generateQuantAiComparison } from '../../../domain/quant/ai-comparison'
 import { getDecryptedQuantAiConfig } from '../../../domain/quant/ai-config'
 import { generateQuantAiQuestion } from '../../../domain/quant/ai-question'
+import { buildQuantAiReviewOutcomeBoard, readQuantAiSummaryDecision } from '../../../domain/quant/ai-review-outcome'
 import { QuantError } from '../../../domain/quant/errors'
+import { buildQuantPriceLocations, readQuantPriceLocationDecision } from '../../../domain/quant/price-location'
 import {
   ensureQuantStarterWatchlist,
   getQuantResearchRun,
+  listLatestQuantAiSummaries,
+  listLatestQuantDailyCloses,
+  listLatestQuantResearchRuns,
   listQuantAiRunAudits,
+  listQuantDailyCloses,
   listQuantResearchMarkers,
   listQuantResearchRuns,
   listQuantResearchSummaries,
+  listQuantWatchlist,
   normalizeTsCode,
   upsertQuantResearchMarker,
 } from '../../../domain/quant/repository'
@@ -72,6 +79,77 @@ quantResearchRoutes.get('/research/schedule/history', quantRouteDocs('research.s
 quantResearchRoutes.post('/research/schedule/run', quantRouteDocs('research.schedule.run'), async (c) => {
   const result = await runQuantScheduledResearchFromEnv(c.env, new Date(), currentQuantUserId(c))
   return c.json({ success: true as const, data: result })
+})
+
+function priceLocationGeneratedAt(value: number | string | Date): string {
+  if (value instanceof Date)
+    return value.toISOString()
+  if (typeof value === 'number')
+    return new Date(value < 1e12 ? value * 1000 : value).toISOString()
+  const numeric = Number(value)
+  if (Number.isFinite(numeric))
+    return new Date(numeric < 1e12 ? numeric * 1000 : numeric).toISOString()
+  return new Date(value).toISOString()
+}
+
+quantResearchRoutes.get('/research/price-locations', quantRouteDocs('research.priceLocations.list'), async (c) => {
+  const userId = currentQuantUserId(c)
+  const db = c.get('db')
+  const watchlist = await listQuantWatchlist(db, userId)
+  const codes = watchlist.map(item => item.tsCode)
+  const [closes, runs] = await Promise.all([
+    listLatestQuantDailyCloses(db, codes),
+    listLatestQuantResearchRuns(db, userId, codes),
+  ])
+  const runsByCode = new Map(runs.map(run => [run.tsCode, run]))
+  const data = buildQuantPriceLocations(watchlist.map((item) => {
+    const close = closes.get(item.tsCode)
+    const run = runsByCode.get(item.tsCode)
+    const decision = run
+      ? readQuantPriceLocationDecision(run.reportJson)
+      : { recommendation: null, rangeLow: null, rangeHigh: null }
+    return {
+      tsCode: item.tsCode,
+      name: item.name,
+      latestClose: close?.close ?? null,
+      latestTradeDate: close?.tradeDate ?? null,
+      reportGeneratedAt: run ? priceLocationGeneratedAt(run.generatedAt) : null,
+      recommendation: decision.recommendation,
+      rangeLow: decision.rangeLow,
+      rangeHigh: decision.rangeHigh,
+    }
+  }))
+  return c.json({ success: true as const, data })
+})
+
+quantResearchRoutes.get('/research/ai-review-outcomes', quantRouteDocs('research.aiReviewOutcomes.list'), async (c) => {
+  const userId = currentQuantUserId(c)
+  const db = c.get('db')
+  const watchlist = await listQuantWatchlist(db, userId)
+  const codes = watchlist.map(item => item.tsCode)
+  const names = new Map(watchlist.map(item => [item.tsCode, item.name]))
+  const [summaries, closes] = await Promise.all([
+    listLatestQuantAiSummaries(db, userId, codes),
+    listQuantDailyCloses(db, codes),
+  ])
+  const barsByCode = new Map<string, { tradeDate: string, close: number }[]>()
+  for (const close of closes) {
+    const bars = barsByCode.get(close.tsCode) ?? []
+    bars.push({ tradeDate: close.tradeDate, close: close.close })
+    barsByCode.set(close.tsCode, bars)
+  }
+  const data = buildQuantAiReviewOutcomeBoard(summaries.map((summary) => {
+    const decision = readQuantAiSummaryDecision(summary.summaryJson)
+    return {
+      tsCode: summary.tsCode,
+      name: names.get(summary.tsCode) ?? summary.name,
+      reviewedAt: priceLocationGeneratedAt(summary.generatedAt),
+      accepted: decision.accepted,
+      recommendation: decision.recommendation,
+      bars: barsByCode.get(summary.tsCode) ?? [],
+    }
+  }))
+  return c.json({ success: true as const, data })
 })
 
 quantResearchRoutes.post('/research/runs', quantRouteDocs('research.runs.create'), validator('json', QuantResearchRunCreateSchema), async (c) => {

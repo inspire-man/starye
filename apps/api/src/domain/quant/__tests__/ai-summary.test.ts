@@ -1,7 +1,7 @@
 import type { QuantDecryptedAiConfig } from '../ai-config'
 import type { QuantResearchReport } from '../research-report'
 import { describe, expect, it, vi } from 'vitest'
-import { buildQuantAiFactorImpact, generateQuantAiSummary, parseQuantAiFactorImpactSnapshot, parseQuantAiSummary } from '../ai-summary'
+import { buildQuantAiFactorImpact, buildQuantAiSummaryPrompt, generateQuantAiSummary, parseQuantAiFactorImpactSnapshot, parseQuantAiSummary, QUANT_AI_SUMMARY_MAX_PROMPT_LENGTH } from '../ai-summary'
 
 const report: QuantResearchReport = {
   reportVersion: 'research-report-v2',
@@ -575,5 +575,58 @@ describe('quant AI summary', () => {
       code: 'QUANT_AI_SUMMARY_TIMEOUT',
       status: 504,
     })
+  })
+
+  it('keeps a large report prompt as valid JSON and retains factor evidence', () => {
+    const filler = Array.from({ length: 40 }, (_, index) => ({
+      key: `extra-${index}`,
+      dimension: 'quality' as const,
+      label: `补充证据 ${index}`,
+      status: 'pass' as const,
+      value: index,
+      threshold: '仅供参考'.repeat(20),
+      source: 'Eastmoney 最新财报'.repeat(8),
+      observedAt: '2026-06-30',
+      formulaVersion: 'eastmoney-financial-v1',
+      detail: '这条证据说明很长，不能从 JSON 中间截断。'.repeat(30),
+    }))
+    const large = {
+      ...factorReport,
+      evidence: [...filler, ...factorReport.evidence],
+    }
+    const prompt = buildQuantAiSummaryPrompt(large)
+    const payload = prompt.slice(prompt.indexOf('\n研究报告：') + '\n研究报告：'.length)
+
+    expect(prompt.length).toBeLessThanOrEqual(QUANT_AI_SUMMARY_MAX_PROMPT_LENGTH)
+    expect(JSON.parse(payload)).toEqual(expect.objectContaining({
+      evidence: expect.arrayContaining([expect.objectContaining({ key: 'quality-roe' })]),
+    }))
+    expect(prompt).toContain('"evidenceKeys":["quality-roe"]')
+  })
+
+  it('keeps a review when the model returns numeric strings and extra list items', () => {
+    const result = parseQuantAiSummary(validContent({
+      supports: ['一', '二', '三', '四', '五', '六', '七'],
+      factorReviews: [{
+        factor: 'quality',
+        stance: 'support',
+        confidence: '88',
+        rationale: '盈利质量有证据。',
+        citedEvidenceKeys: ['quality-roe'],
+      }],
+      decisionReview: {
+        decisionVersion: 'ai-decision-v1',
+        recommendation: 'bullish',
+        confidence: '84',
+        rationale: '只采用报告里的证据。',
+        invalidationConditions: ['条件一', '条件二', '条件三', '条件四', '条件五', '条件六', '条件七'],
+        citedEvidenceKeys: ['quality-roe'],
+      },
+    }), factorReport, new Date('2026-09-01T00:00:00.000Z'))
+
+    expect(result.supports).toHaveLength(6)
+    expect(result.factorReviews).toMatchObject([{ factor: 'quality', confidence: 88, citedEvidenceKeys: ['quality-roe'] }])
+    expect(result.decisionReview).toMatchObject({ confidence: 84, citedEvidenceKeys: ['quality-roe'] })
+    expect(result.decisionReview?.invalidationConditions).toHaveLength(6)
   })
 })

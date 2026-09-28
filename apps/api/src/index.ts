@@ -59,7 +59,7 @@ const API_REQUEST_TIMEOUT_MS = 30_000
 const QUANT_SYNC_PATH = '/api/quant/sync'
 const QUANT_AI_GENERATION_PATHS = [
   /^\/api\/quant\/decision-assistant$/u,
-  /^\/api\/quant\/research\/runs\/[^/]+\/(?:summary|question|change-explanation)$/u,
+  /^\/api\/quant\/research\/runs\/[^/]+\/(?:summary(?:\/stream)?|question|change-explanation)$/u,
   /^\/api\/quant\/research\/comparison$/u,
   /^\/api\/quant\/candidates\/ai-briefing(?:\/question)?$/u,
 ] as const

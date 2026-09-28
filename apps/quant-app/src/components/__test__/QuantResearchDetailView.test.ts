@@ -197,6 +197,19 @@ function baseProps(loadResearchRuns: (tsCode: string) => void): QuantResearchDet
     timingWindow: emptyTiming,
     timingHistory: emptyHistory,
     timingHistoryCurrentBucket: null,
+    factorRobustness: {
+      formulaVersion: 'factor-robustness-v1',
+      currentLabel: '当前 K 线不足以计算 MA20 和 20 日收益',
+      expectedDirection: 'split',
+      matchedSampleSize: 0,
+      directionalSampleSize: 0,
+      agreementCount: 0,
+      agreementRate: null,
+      baselineAgreementRate: null,
+      edge: 'insufficient',
+      label: '样本不足',
+      detail: '至少需要 21 根有效日线才能判断当前因子状态。',
+    },
     decisionEvidence: null,
     valuation: null,
     valuationComparison: null,
@@ -320,6 +333,7 @@ describe('quant research detail view', () => {
       global: {
         stubs: {
           QuantResearchRunSection: false,
+          QuantReportFold: false,
           QuantResearchMarkerEditor: false,
         },
       },

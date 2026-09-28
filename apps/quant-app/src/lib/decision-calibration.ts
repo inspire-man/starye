@@ -84,6 +84,7 @@ export function buildQuantDecisionCalibration(
   }
 
   const directionalSampleCount = alignedCount + opposedCount
+  const averageChangePercent = directionalSampleCount >= 3 && changeCount ? round(totalChange / changeCount) : null
   return {
     status: observedCount ? 'observed' : pendingCount ? 'pending' : 'empty',
     summary: {
@@ -99,7 +100,7 @@ export function buildQuantDecisionCalibration(
       opposedCount,
       flatCount,
       directionalSampleCount,
-      averageChangePercent: changeCount ? round(totalChange / changeCount) : null,
+      averageChangePercent,
     },
   }
 }

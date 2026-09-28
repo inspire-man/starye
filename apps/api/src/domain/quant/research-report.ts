@@ -5,6 +5,7 @@ import type { QuantFinancialQualitySnapshot, QuantValuationSnapshot } from './pr
 import type { QuantShareholderReturnItem } from './shareholder-return'
 import type { DailyBar, MomentumCandidate } from './types'
 import { buildQuantDecisionProjection } from './decision-recommendation'
+import { buildFactorRobustness } from './factor-robustness'
 import { buildTimingHistory, calibrateTimingHistoryEdge, currentTimingHistoryBucket, TIMING_HISTORY_CALIBRATION_FORMULA_VERSION, TIMING_HISTORY_FORMULA_VERSION, TIMING_HISTORY_WALKFORWARD_FORMULA_VERSION, timingHistoryEdgeDetail, timingHistoryEdgeStatus, timingHistoryWalkForwardDetail, walkForwardTimingCalibration } from './timing-history'
 
 export const QUANT_RESEARCH_REPORT_V1_VERSION = 'research-report-v1' as const
@@ -116,7 +117,13 @@ function genericFinancialMetricApplicable(input: QuantResearchReportInput): bool
   return financialIndustry(input) === 'general'
 }
 
-function financialSourceFor(report: QuantFinancialQualitySnapshot | null, errorCode: string | null = null): { readonly id: string, readonly name: string, readonly formulaVersion: string } {
+interface QuantResearchFinancialSource {
+  readonly id: string
+  readonly name: string
+  readonly formulaVersion: string
+}
+
+function financialSourceFor(report: QuantFinancialQualitySnapshot | null, errorCode: string | null = null): QuantResearchFinancialSource {
   const provider = report?.provider
   const primaryProvider = provider === 'tushare' ? 'Tushare' : provider === 'akshare' ? 'AkShare' : 'Eastmoney'
   const primaryId = provider === 'tushare' ? 'tushare-financial' : provider === 'akshare' ? 'akshare-financial' : 'eastmoney-financial'
@@ -222,8 +229,24 @@ function appendWorkingCapitalEvidence(evidenceItems: QuantResearchEvidence[], la
   }
 }
 
-function appendBusinessSegmentEvidence(evidenceItems: QuantResearchEvidence[], latestFinancial: QuantFinancialQualitySnapshot | null, financialSource: ReturnType<typeof financialSourceFor>): void {
-  const segments = latestFinancial?.businessSegments?.slice(0, 12) ?? []
+const SEGMENT_EVIDENCE_REVENUE_LIMIT = 12
+const SEGMENT_EVIDENCE_DISCLOSED_EXTRA_LIMIT = 4
+
+function segmentHasDisclosedProfitability(segment: { readonly cost?: number | null, readonly profit?: number | null, readonly grossMargin: number | null }): boolean {
+  return finite(segment.cost) !== null || finite(segment.profit) !== null || finite(segment.grossMargin) !== null
+}
+
+function selectBusinessSegmentEvidenceRows<T extends { readonly cost?: number | null, readonly profit?: number | null, readonly grossMargin: number | null }>(segments: readonly T[]): readonly T[] {
+  const primary = segments.slice(0, SEGMENT_EVIDENCE_REVENUE_LIMIT)
+  const disclosedBeyondRevenueCap = segments
+    .slice(SEGMENT_EVIDENCE_REVENUE_LIMIT)
+    .filter(segmentHasDisclosedProfitability)
+    .slice(0, SEGMENT_EVIDENCE_DISCLOSED_EXTRA_LIMIT)
+  return [...primary, ...disclosedBeyondRevenueCap]
+}
+
+function appendBusinessSegmentEvidence(evidenceItems: QuantResearchEvidence[], latestFinancial: QuantFinancialQualitySnapshot | null, financialSource: QuantResearchFinancialSource): void {
+  const segments = selectBusinessSegmentEvidenceRows(latestFinancial?.businessSegments ?? [])
   if (!segments.length) {
     evidenceItems.push(evidence({
       key: 'operating-driver-segment-revenue',
@@ -545,6 +568,20 @@ export function buildQuantResearchReport(input: QuantResearchReportInput): Quant
     observedAt: latestTradeDate,
     formulaVersion: candidate?.factorVersion ?? 'momentum-v1',
     detail: return20 !== null && return20 >= 0 ? '近一个月价格方向未走弱' : '近一个月价格方向偏弱',
+  }))
+  const factorRobustness = buildFactorRobustness(bars)
+  evidenceItems.push(evidence({
+    key: 'trend-factor-robustness',
+    dimension: 'trend',
+    label: '同类 K 线历史方向',
+    status: factorRobustness.edge === 'supported' ? 'pass' : factorRobustness.edge === 'weaker' ? 'fail' : factorRobustness.edge === 'indeterminate' || factorRobustness.edge === 'split' ? 'caution' : 'missing',
+    value: factorRobustness.agreementRate,
+    threshold: '至少 6 个非重叠同类方向样本，且 Wilson 区间强于全体 K 线',
+    source: '本地 Quant 日线因子',
+    observedAt: latestTradeDate,
+    formulaVersion: factorRobustness.formulaVersion,
+    detail: `${factorRobustness.currentLabel}。${factorRobustness.detail}`,
+    optional: true,
   }))
 
   const timingHistory = buildTimingHistory(bars)

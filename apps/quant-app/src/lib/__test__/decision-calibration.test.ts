@@ -37,8 +37,7 @@ describe('buildQuantDecisionCalibration', () => {
       record('follow', 'watch', 11, '20260902'),
       record('pending', 'holding', 12, '20260903'),
     ], [{ tsCode: '000001.SZ', latestClose: 12, latestTradeDate: '20260903' }])
-    expect(result.summary).toMatchObject({ recordCount: 3, observedCount: 1, pendingCount: 1, alignedCount: 1, acceptedAiCount: 3 })
-    expect(result.summary.averageChangePercent).toBe(10)
+    expect(result.summary).toMatchObject({ recordCount: 3, observedCount: 1, pendingCount: 1, alignedCount: 1, acceptedAiCount: 3, averageChangePercent: null })
   })
 
   it('keeps AI rejection separate from price outcomes', () => {

@@ -185,14 +185,14 @@ function segmentCategoryLabel(value: QuantBusinessSegment['category']): string {
       <p class="financial-context-note">
         {{ financialQuality.workingCapitalErrorCode ? `经营驱动来源暂不可用（${financialQuality.workingCapitalErrorCode}）` : '这些是同报告期资产负债表原始金额；缺失表示来源未返回。' }} 订单、销量、价格与未来利润另行核验，不进入价值质量总分。
       </p>
-      <div class="financial-segment-list" aria-label="分部经营原始字段">
-        <div class="financial-subheading">
+      <details class="financial-segment-list quant-report-fold" aria-label="分部经营原始字段">
+        <summary class="financial-subheading">
           <div>
             <span class="section-kicker">SEGMENT CONTEXT</span>
             <strong>分部经营原始字段</strong>
           </div>
-          <small>最多展示最近报告期的 12 条披露</small>
-        </div>
+          <small>同报告期披露；空值是源站未返回，不从收入或比例推导</small>
+        </summary>
         <div v-if="financialQuality.businessSegments?.length" class="financial-segment-table">
           <div class="financial-segment-row financial-segment-head">
             <span>分类</span><span>分部</span><span>主营收入</span><span>收入占比</span><span>主营成本</span><span>成本占比</span><span>主营利润</span><span>利润占比</span><span>毛利率</span>
@@ -216,7 +216,7 @@ function segmentCategoryLabel(value: QuantBusinessSegment['category']): string {
         <p class="financial-context-note">
           分部收入、成本、利润和毛利率仅记录源站披露，不从收入比例推导销量、价格或订单金额，也不进入价值质量总分。
         </p>
-      </div>
+      </details>
     </div>
     <div v-if="financialQuality?.industry && financialQuality.industry !== 'general' && financialQuality.industryMetrics" class="financial-context-panel financial-industry-panel">
       <div class="financial-subheading">
