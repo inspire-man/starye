@@ -59,4 +59,4 @@ Use one mode/target/run tuple for execution and verification:
 
 ## Verification
 
-Run focused tests under packages/config, packages/db/scripts, packages/crawler/scripts, and scripts before broader type-check/lint. For any code symbol change, run GitNexus upstream impact analysis first; before commit, run GitNexus detect_changes and review affected flows.
+Run focused tests under packages/config, packages/db/scripts, packages/crawler/scripts, and scripts before broader type-check/lint.

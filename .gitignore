@@ -101,7 +101,6 @@ test-*.txt
 
 # Claude Code worktrees (local only, never tracked)
 .claude/worktrees/*
-.gitnexus
 
 # Local smoke and browser-run artifacts
 /.target-runs/

@@ -40,5 +40,3 @@ Use this skill for changes under packages/crawler that add or modify a source st
     pnpm --filter @starye/crawler exec vitest run src/task-runner/__tests__/TARGET.test.ts
     pnpm --filter @starye/crawler run type-check
     pnpm dev:clean
-
-Before editing a shared code symbol, use GitNexus upstream impact analysis. Before committing, run GitNexus detect_changes with an explicit staged file allowlist and review affected flows.

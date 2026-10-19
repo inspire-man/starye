@@ -32,7 +32,7 @@ pnpm dev:clean
 
 1. 先读 [`.planning/STATE.md`](./.planning/STATE.md)；涉及背景或历史决策时再读 [`.planning/PROJECT.md`](./.planning/PROJECT.md)。
 2. 单文件 bug 或小改动直接实现并补验证；跨 api/db/frontend、接口契约或多步骤功能先按 [`openspec/README.md`](./openspec/README.md) 建 change。
-3. 修改代码前按 [GitNexus 规则](./AGENTS.md) 做影响分析；爬虫、持久化和前端验收遵循 Gateway/D1 规则。
+3. 爬虫、持久化和前端验收遵循 Gateway/D1 规则。
 4. 完成后只更新对应 canonical owner，不复制说明到多个文档。
 
 ## 文档地图
