@@ -13,6 +13,8 @@ const props = defineProps<{
 }>()
 
 const calibration = computed(() => buildQuantDecisionCalibration(props.records, props.watchlist))
+const opposedOutcomes = computed(() => calibration.value.recommendationOutcomes.filter(item => !item.matched).slice(0, 8))
+const hiddenOpposedCount = computed(() => calibration.value.recommendationOutcomes.filter(item => !item.matched).length - opposedOutcomes.value.length)
 const aiComparison = computed(() => buildQuantAiReviewComparison(props.records, props.watchlist))
 
 function formatChange(value: number | null): string {
@@ -75,6 +77,17 @@ function formatChange(value: number | null): string {
         </div>
       </div>
       <p class="quant-decision-calibration-note">
+        {{ calibration.recommendationHeadline }}
+      </p>
+      <ul v-if="opposedOutcomes.length" class="quant-decision-calibration-outcomes" aria-label="方向相反的建议">
+        <li v-for="item in opposedOutcomes" :key="item.baselineId">
+          {{ item.name || item.tsCode }} · {{ item.recommendation === 'bullish' ? '看多' : '看空' }}后价格{{ item.direction === 'up' ? '上涨' : '下跌' }} {{ item.changePercent > 0 ? '+' : '' }}{{ item.changePercent.toFixed(2) }}%
+        </li>
+      </ul>
+      <p v-if="hiddenOpposedCount > 0" class="quant-decision-calibration-note">
+        另有 {{ hiddenOpposedCount }} 条方向相反未列出。
+      </p>
+      <p class="quant-decision-calibration-note">
         {{ aiComparison.headline }}
       </p>
     </template>
@@ -85,7 +98,8 @@ function formatChange(value: number | null): string {
 .quant-decision-calibration { display: grid; gap: 0.6rem; margin-top: 0.9rem; border-top: 1px solid hsl(var(--status-info) / 0.32); padding-top: 0.8rem; }
 .quant-decision-calibration-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }
 .quant-decision-calibration-heading h3 { margin: 0.3rem 0 0; font-size: 0.9rem; color: hsl(var(--foreground)); }
-.quant-decision-calibration-heading small, .quant-decision-calibration-note, .quant-decision-calibration-state { color: hsl(var(--muted-foreground)); font-size: 0.68rem; line-height: 1.45; }
+.quant-decision-calibration-heading small, .quant-decision-calibration-note, .quant-decision-calibration-state, .quant-decision-calibration-outcomes { color: hsl(var(--muted-foreground)); font-size: 0.68rem; line-height: 1.45; }
+.quant-decision-calibration-outcomes { display: grid; gap: 0.2rem; margin: 0; padding: 0; list-style: none; }
 .quant-decision-calibration-heading small { display: block; margin-top: 0.2rem; }
 .quant-decision-calibration-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.35rem; }
 .quant-decision-calibration-grid > div { display: grid; gap: 0.15rem; border-left: 2px solid hsl(var(--border)); padding: 0.2rem 0.45rem; }
