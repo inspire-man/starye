@@ -27,7 +27,7 @@ interface FactorState {
 
 function validCloses(bars: readonly Pick<DailyBar, 'close' | 'tradeDate'>[]): number[] {
   return [...bars]
-    .filter(bar => Number.isFinite(bar.close) && bar.close > 0)
+    .filter((bar): bar is { close: number, tradeDate: string } => typeof bar.close === 'number' && Number.isFinite(bar.close) && bar.close > 0)
     .sort((left, right) => left.tradeDate.localeCompare(right.tradeDate))
     .map(bar => bar.close)
 }
