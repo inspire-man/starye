@@ -363,6 +363,22 @@ describe('路径匹配规则', () => {
     expect(capturedRequest!.url).toContain('127.0.0.1:3002')
   })
 
+  it('/canvas 与 /canvas/ 应跳转到 Helunox，且不请求上游', async () => {
+    for (const path of ['/canvas', '/canvas/']) {
+      capturedRequest = null
+      const resp = await worker.fetch(makeRequest(`http://localhost:8080${path}?from=blog`), {})
+      expect(resp.status).toBe(302)
+      expect(resp.headers.get('location')).toBe('https://wx.apiclub.top/canvas?from=blog')
+      expect(capturedRequest).toBeNull()
+    }
+  })
+
+  it('/canvas 子路径仍回退到 Blog，避免吞掉未知路由', async () => {
+    const req = makeRequest('http://localhost/canvas/project')
+    await worker.fetch(req, {})
+    expect(capturedRequest!.url).toContain('127.0.0.1:3002')
+  })
+
   it('/blog/* 应路由到 Blog 服务（默认回退）', async () => {
     const req = makeRequest('http://localhost/blog/')
     await worker.fetch(req, {})

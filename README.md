@@ -25,6 +25,7 @@ pnpm dev:clean
 - `http://localhost:8080/movie/`
 - `http://localhost:8080/comic/`
 - `http://localhost:8080/auth/`
+- `http://localhost:8080/canvas`：跳转到 Helunox 无限画布，不进入本仓库应用
 
 其他应用端口只用于诊断。
 

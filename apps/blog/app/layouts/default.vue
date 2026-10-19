@@ -40,6 +40,14 @@ function getLoginUrl() {
           <NuxtLink to="/archive" class="hover:text-primary transition-colors text-sm">
             归档
           </NuxtLink>
+          <a
+            href="/canvas"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="hover:text-primary transition-colors text-sm"
+          >
+            无限画布
+          </a>
           <NuxtLink to="/search" class="hover:text-primary transition-colors text-sm flex items-center gap-1">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m0 0A7 7 0 1 0 4.65 4.65a7 7 0 0 0 12 12Z" />

@@ -323,6 +323,13 @@ const gatewayHandler = {
       return cachedProxy(request, target, undefined, { ...proxyCacheOptions, bypassCache: true })
     }
 
+    // Helunox 无限画布是独立站点。只跳转精确入口，不反代其 /api 与子路由。
+    if (path === '/canvas' || path === '/canvas/') {
+      const target = new URL('https://wx.apiclub.top/canvas')
+      target.search = url.search
+      return Response.redirect(target.toString(), 302)
+    }
+
     // 8. Blog App (Default / Main Site)
     if (path === '/') {
       return Response.redirect(`${url.origin}/blog/`, 301)
