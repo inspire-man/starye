@@ -646,6 +646,16 @@ export async function listQuantDailyCloses(db: Database, codes: readonly string[
   `)
 }
 
+export async function listQuantDailyFactorBars(db: Database, codes: readonly string[]): Promise<readonly { readonly tsCode: string, readonly tradeDate: string, readonly close: number, readonly volume: number }[]> {
+  if (!codes.length)
+    return []
+  return db.all<{ tsCode: string, tradeDate: string, close: number, volume: number }>(sql`
+    SELECT bar.ts_code AS tsCode, bar.trade_date AS tradeDate, bar.close AS close, bar.volume AS volume
+    FROM quant_daily_bar AS bar
+    WHERE bar.ts_code IN (${sql.join(codes.map(code => sql`${code}`), sql`, `)})
+  `)
+}
+
 export async function listLatestQuantAiSummaries(db: Database, userId: string, codes: readonly string[]): Promise<readonly { readonly tsCode: string, readonly name: string | null, readonly generatedAt: number | string | Date, readonly summaryJson: string }[]> {
   const ownerId = normalizeQuantUserId(userId)
   if (!codes.length)

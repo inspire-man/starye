@@ -1,4 +1,4 @@
-import type { QuantAiReviewOutcomeBoard, QuantPriceLocation } from '../api/resources/research'
+import type { QuantAiReviewOutcomeBoard, QuantInvalidationItem, QuantPriceLocation } from '../api/resources/research'
 import type {
   QuantDecisionRecord,
   QuantInvestmentKnowledge,
@@ -40,6 +40,9 @@ export function useQuantWorkspace(input: {
   const aiReviewOutcomes = ref<QuantAiReviewOutcomeBoard | null>(null)
   const aiReviewOutcomesLoading = ref(false)
   const aiReviewOutcomesError = ref<unknown | null>(null)
+  const invalidationChecks = ref<QuantInvalidationItem[]>([])
+  const invalidationChecksLoading = ref(false)
+  const invalidationChecksError = ref<unknown | null>(null)
   const valueSelection = ref<QuantValueSelection | null>(null)
   const shareholderReturns = ref<QuantShareholderReturnSelection | null>(null)
   const investmentKnowledge = ref<QuantInvestmentKnowledge | null>(null)
@@ -55,6 +58,7 @@ export function useQuantWorkspace(input: {
   const researchMarkersRequest = useQuantRequestState<QuantResearchMarker[]>([])
   const priceLocationRequest = useQuantRequestState<QuantPriceLocation[]>([])
   const aiReviewOutcomeRequest = useQuantRequestState<QuantAiReviewOutcomeBoard | null>(null)
+  const invalidationCheckRequest = useQuantRequestState<QuantInvalidationItem[]>([])
 
   async function loadResource<T>(request: {
     request: QuantRequestState<T>
@@ -105,6 +109,16 @@ export function useQuantWorkspace(input: {
       setLoading: value => aiReviewOutcomesLoading.value = value,
       setError: value => aiReviewOutcomesError.value = value,
       apply: value => aiReviewOutcomes.value = value,
+    })
+  }
+
+  async function loadInvalidationChecks(): Promise<void> {
+    await loadResource({
+      request: invalidationCheckRequest,
+      loader: signal => quantApi.getInvalidationChecks({ signal }),
+      setLoading: value => invalidationChecksLoading.value = value,
+      setError: value => invalidationChecksError.value = value,
+      apply: value => invalidationChecks.value = value,
     })
   }
 
@@ -176,6 +190,7 @@ export function useQuantWorkspace(input: {
     decisionQueueRequest.cancel()
     priceLocationRequest.cancel()
     aiReviewOutcomeRequest.cancel()
+    invalidationCheckRequest.cancel()
     valueQualityRequest.cancel()
     shareholderReturnRequest.cancel()
     knowledgeRequest.cancel()
@@ -198,6 +213,9 @@ export function useQuantWorkspace(input: {
     aiReviewOutcomes,
     aiReviewOutcomesLoading,
     aiReviewOutcomesError,
+    invalidationChecks,
+    invalidationChecksLoading,
+    invalidationChecksError,
     valueSelection,
     shareholderReturns,
     investmentKnowledge,
@@ -207,6 +225,7 @@ export function useQuantWorkspace(input: {
     loadDecisionQueue,
     loadPriceLocations,
     loadAiReviewOutcomes,
+    loadInvalidationChecks,
     loadValueSelection,
     invalidateValueSelection,
     loadShareholderReturns,

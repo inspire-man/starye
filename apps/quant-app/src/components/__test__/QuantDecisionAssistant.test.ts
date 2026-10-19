@@ -143,6 +143,29 @@ describe('quant decision assistant panel', () => {
     expect(wrapper.text()).toContain('15.97%')
   })
 
+  it('fills an empty holding cost from the recorded book without overwriting a typed cost', async () => {
+    const wrapper = mount(QuantDecisionAssistantPanel, {
+      props: {
+        ...baseProps,
+        recordedPosition: {
+          tsCode: '601899.SH',
+          openQuantity: 100,
+          averageCost: 29.42,
+          realizedPnl: 120,
+          closedCount: 1,
+        },
+      },
+    })
+
+    await wrapper.get('.quant-decision-assistant-mode button:nth-child(2)').trigger('click')
+    expect((wrapper.get('input[aria-label="持仓成本"]').element as HTMLInputElement).value).toBe('29.42')
+    expect((wrapper.get('input[aria-label="持仓数量"]').element as HTMLInputElement).value).toBe('100')
+    expect(wrapper.text()).toContain('不改研究报告')
+    await wrapper.get('input[aria-label="持仓成本"]').setValue('33.40')
+    await wrapper.get('.text-button').trigger('click')
+    expect((wrapper.get('input[aria-label="持仓成本"]').element as HTMLInputElement).value).toBe('33.4')
+  })
+
   it('keeps the deterministic result visible when AI fails', () => {
     const wrapper = mount(QuantDecisionAssistantPanel, { props: { ...baseProps, assessment: assessment() } })
 

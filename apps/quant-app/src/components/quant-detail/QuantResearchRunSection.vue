@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { QuantInvalidationItem } from '../../api/resources/research'
 import type { QuantDataHealthFreshness } from '../../lib/data-health'
 import type {
   DailyBar,
@@ -15,10 +16,13 @@ import type {
   QuantResearchSummary,
   WatchlistItem,
 } from '../../lib/quant-view-models'
+import type { QuantRecordedPosition } from '../../lib/recorded-position'
 import type { ResearchEvidenceChange, ResearchEvidenceHistoryComparison } from '../../lib/research-evidence-history'
 import type { ResearchRunScoreDirection, ResearchRunTimeline } from '../../lib/research-run-timeline'
 import { CheckCircle2, ChevronRight, Copy, Download, Info, RefreshCw, RotateCcw } from 'lucide-vue-next'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import { quantApi } from '../../lib/api-client'
+import { recordedPositionFromBoard } from '../../lib/recorded-position'
 import QuantAiResearchChangeExplanation from '../QuantAiResearchChangeExplanation.vue'
 import QuantAiResearchQuestion from '../QuantAiResearchQuestion.vue'
 import QuantAiResearchSummary from '../QuantAiResearchSummary.vue'
@@ -76,6 +80,7 @@ export interface QuantResearchRunSectionProps {
   refreshingEvidenceKey?: string | null
   refreshEvidenceErrorMessage?: string | null
   refreshEvidenceMessage?: string | null
+  invalidation?: QuantInvalidationItem | null
   researchEvidenceGroups: { dimension: string, label: string, items: QuantResearchEvidence[] }[]
   researchEvidenceComparison: ResearchEvidenceHistoryComparison | null
   researchRunTimeline: ResearchRunTimeline
@@ -162,6 +167,7 @@ const {
   refreshingEvidenceKey,
   refreshEvidenceErrorMessage,
   refreshEvidenceMessage,
+  invalidation,
   researchEvidenceGroups,
   researchEvidenceComparison,
   researchRunTimeline,
@@ -214,6 +220,24 @@ function useQuestionPrompt(prompt: string): void {
 }
 
 defineExpose({ useQuestionPrompt })
+
+const recordedPosition = ref<QuantRecordedPosition | null>(null)
+watch(() => selectedStock?.tsCode, async (tsCode, _previous, onCleanup) => {
+  const controller = new AbortController()
+  onCleanup(() => controller.abort())
+  recordedPosition.value = null
+  if (!tsCode)
+    return
+  try {
+    const board = await quantApi.getOperations({ signal: controller.signal })
+    if (!controller.signal.aborted && selectedStock?.tsCode === tsCode)
+      recordedPosition.value = recordedPositionFromBoard(board, tsCode)
+  }
+  catch {
+    if (!controller.signal.aborted)
+      recordedPosition.value = null
+  }
+}, { immediate: true })
 </script>
 
 <template>
@@ -269,6 +293,8 @@ defineExpose({ useQuestionPrompt })
           :refreshing-evidence-key="refreshingEvidenceKey"
           :refresh-evidence-error-message="refreshEvidenceErrorMessage"
           :refresh-evidence-message="refreshEvidenceMessage"
+          :invalidation="invalidation"
+          :recorded-position="recordedPosition"
           @request-ai-review="generateResearchSummary"
         />
       </QuantReportFold>
@@ -283,6 +309,7 @@ defineExpose({ useQuestionPrompt })
           :generating="decisionAssistantGenerating"
           :error-message="decisionAssistantErrorMessage"
           :ai-config-available="decisionAssistantAiConfigAvailable"
+          :recorded-position="recordedPosition"
           @assess="createDecisionAssistant"
           @open-settings="emit('openSettings')"
         />

@@ -1,4 +1,4 @@
-export const quantViews = ['overview', 'candidates', 'watchlist', 'knowledge'] as const
+export const quantViews = ['overview', 'candidates', 'watchlist', 'operations', 'knowledge'] as const
 
 export type QuantView = typeof quantViews[number]
 

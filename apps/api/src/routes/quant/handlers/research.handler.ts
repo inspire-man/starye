@@ -8,6 +8,7 @@ import { getDecryptedQuantAiConfig } from '../../../domain/quant/ai-config'
 import { generateQuantAiQuestion } from '../../../domain/quant/ai-question'
 import { buildQuantAiReviewOutcomeBoard, readQuantAiSummaryDecision } from '../../../domain/quant/ai-review-outcome'
 import { QuantError } from '../../../domain/quant/errors'
+import { buildQuantInvalidationBoard, buildQuantInvalidationItem, readQuantReportEvidence } from '../../../domain/quant/invalidation-check'
 import { buildQuantPriceLocations, readQuantPriceLocationDecision } from '../../../domain/quant/price-location'
 import {
   ensureQuantStarterWatchlist,
@@ -17,6 +18,7 @@ import {
   listLatestQuantResearchRuns,
   listQuantAiRunAudits,
   listQuantDailyCloses,
+  listQuantDailyFactorBars,
   listQuantResearchMarkers,
   listQuantResearchRuns,
   listQuantResearchSummaries,
@@ -149,6 +151,43 @@ quantResearchRoutes.get('/research/ai-review-outcomes', quantRouteDocs('research
       bars: barsByCode.get(summary.tsCode) ?? [],
     }
   }))
+  return c.json({ success: true as const, data })
+})
+
+quantResearchRoutes.get('/research/invalidation-checks', quantRouteDocs('research.invalidationChecks.list'), async (c) => {
+  const userId = currentQuantUserId(c)
+  const db = c.get('db')
+  const watchlist = await listQuantWatchlist(db, userId)
+  const codes = watchlist.map(item => item.tsCode)
+  const names: Record<string, string | null> = {}
+  for (const item of watchlist)
+    names[item.tsCode] = item.name
+  const [runs, rows] = await Promise.all([
+    listLatestQuantResearchRuns(db, userId, codes),
+    listQuantDailyFactorBars(db, codes),
+  ])
+  const barsByCode: Record<string, Parameters<typeof buildQuantInvalidationItem>[0]['bars']> = {}
+  for (const row of rows) {
+    barsByCode[row.tsCode] = [...(barsByCode[row.tsCode] ?? []), {
+      tsCode: row.tsCode,
+      tradeDate: row.tradeDate,
+      open: row.close,
+      high: row.close,
+      low: row.close,
+      close: row.close,
+      preClose: null,
+      change: null,
+      pctChg: null,
+      volume: row.volume,
+      amount: null,
+    }]
+  }
+  const data = buildQuantInvalidationBoard(runs.map(run => buildQuantInvalidationItem({
+    tsCode: run.tsCode,
+    name: names[run.tsCode] ?? run.name,
+    evidence: readQuantReportEvidence(run.reportJson),
+    bars: barsByCode[run.tsCode] ?? [],
+  })))
   return c.json({ success: true as const, data })
 })
 

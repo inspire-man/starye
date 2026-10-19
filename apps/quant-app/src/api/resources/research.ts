@@ -839,6 +839,68 @@ function parseAiReviewOutcomeBoard(value: unknown): QuantAiReviewOutcomeBoard {
   }
 }
 
+export interface QuantInvalidationCheck {
+  key: string
+  label: string
+  savedStatus: 'pass' | 'caution' | 'fail' | 'missing'
+  currentStatus: 'pass' | 'caution' | 'fail' | 'missing'
+  change: 'triggered' | 'recovered' | 'unchanged' | 'unavailable'
+}
+
+export interface QuantInvalidationItem {
+  tsCode: string
+  name: string | null
+  triggeredCount: number
+  recoveredCount: number
+  unchangedCount: number
+  unavailableCount: number
+  uncheckedCount: number
+  label: string
+  checks: QuantInvalidationCheck[]
+}
+
+const INVALIDATION_CHANGES = ['triggered', 'recovered', 'unchanged', 'unavailable'] as const
+const EVIDENCE_STATUSES = ['pass', 'caution', 'fail', 'missing'] as const
+
+function isInvalidationChange(value: string | null): value is QuantInvalidationCheck['change'] {
+  return INVALIDATION_CHANGES.includes(value)
+}
+
+function isEvidenceStatus(value: string | null): value is QuantInvalidationCheck['savedStatus'] {
+  return EVIDENCE_STATUSES.includes(value)
+}
+
+function parseInvalidationItem(value: unknown): QuantInvalidationItem {
+  if (!isRecord(value) || !Array.isArray(value.checks))
+    throw new QuantApiError('失效对照格式无效', 502, 'QUANT_INVALIDATION_CHECK_INVALID')
+  return {
+    tsCode: readString(value, 'tsCode', 'ts_code') ?? '',
+    name: readString(value, 'name'),
+    triggeredCount: readNumber(value, 'triggeredCount', 'triggered_count') ?? 0,
+    recoveredCount: readNumber(value, 'recoveredCount', 'recovered_count') ?? 0,
+    unchangedCount: readNumber(value, 'unchangedCount', 'unchanged_count') ?? 0,
+    unavailableCount: readNumber(value, 'unavailableCount', 'unavailable_count') ?? 0,
+    uncheckedCount: readNumber(value, 'uncheckedCount', 'unchecked_count') ?? 0,
+    label: readString(value, 'label') ?? '',
+    checks: value.checks.map((check) => {
+      if (!isRecord(check))
+        throw new QuantApiError('失效对照格式无效', 502, 'QUANT_INVALIDATION_CHECK_INVALID')
+      const savedStatus = readString(check, 'savedStatus', 'saved_status')
+      const currentStatus = readString(check, 'currentStatus', 'current_status')
+      const change = readString(check, 'change')
+      if (!isEvidenceStatus(savedStatus) || !isEvidenceStatus(currentStatus) || !isInvalidationChange(change))
+        throw new QuantApiError('失效对照状态无效', 502, 'QUANT_INVALIDATION_CHECK_INVALID')
+      return {
+        key: readString(check, 'key') ?? '',
+        label: readString(check, 'label') ?? '',
+        savedStatus,
+        currentStatus,
+        change,
+      }
+    }),
+  }
+}
+
 export const quantResearchApi = {
   async getPriceLocations(options: QuantRequestOptions = {}): Promise<QuantPriceLocation[]> {
     const data = unwrapData(await requestJson('/research/price-locations', options.signal ? { signal: options.signal } : undefined))
@@ -849,6 +911,13 @@ export const quantResearchApi = {
 
   async getAiReviewOutcomes(options: QuantRequestOptions = {}): Promise<QuantAiReviewOutcomeBoard> {
     return parseAiReviewOutcomeBoard(unwrapData(await requestJson('/research/ai-review-outcomes', options.signal ? { signal: options.signal } : undefined)))
+  },
+
+  async getInvalidationChecks(options: QuantRequestOptions = {}): Promise<QuantInvalidationItem[]> {
+    const data = unwrapData(await requestJson('/research/invalidation-checks', options.signal ? { signal: options.signal } : undefined))
+    if (!Array.isArray(data))
+      throw new QuantApiError('失效对照格式无效', 502, 'QUANT_INVALIDATION_CHECK_INVALID')
+    return data.map(parseInvalidationItem)
   },
 
   async getResearchMarkers(options: QuantRequestOptions = {}): Promise<QuantResearchMarker[]> {

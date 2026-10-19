@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import type { QuantInvalidationItem } from '../api/resources/research'
 import type { QuantDataHealthFreshness } from '../lib/data-health'
 import type { QuantAiDecisionReview, QuantRecommendation, QuantReferencePriceRange, QuantResearchReport, QuantResearchSummary } from '../lib/quant-view-models'
+import type { QuantRecordedPosition } from '../lib/recorded-position'
 import { BrainCircuit, CircleHelp, Info } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { buildQuantDecisionReadiness } from '../lib/decision-readiness'
@@ -22,6 +24,8 @@ const props = defineProps<{
   refreshingEvidenceKey?: string | null
   refreshEvidenceErrorMessage?: string | null
   refreshEvidenceMessage?: string | null
+  invalidation?: QuantInvalidationItem | null
+  recordedPosition?: QuantRecordedPosition | null
 }>()
 
 const emit = defineEmits<{
@@ -29,6 +33,10 @@ const emit = defineEmits<{
 }>()
 
 const reportDecision = computed(() => props.report?.decision || null)
+const DAILY_INVALIDATION_KEYS = new Set(['trend-ma20', 'trend-return20', 'risk-volume', 'risk-streak'])
+const dailyInvalidationChecks = computed(() => (props.invalidation?.checks ?? []).filter(check => DAILY_INVALIDATION_KEYS.has(check.key)))
+const fundamentalInvalidationChecks = computed(() => (props.invalidation?.checks ?? []).filter(check => check.key.startsWith('valuation-') || check.key.startsWith('quality-')))
+const shareholderInvalidationChecks = computed(() => (props.invalidation?.checks ?? []).filter(check => check.key.startsWith('shareholder-')))
 const aiReview = computed<QuantAiDecisionReview | null>(() => props.summary?.summary.decisionReview || null)
 const dataFreshness = computed<QuantDataHealthFreshness>(() => props.dataFreshness || 'unknown')
 const aiFactorFreshnessReady = computed(() => {
@@ -67,6 +75,89 @@ const decisionReadiness = computed(() => {
   })
 })
 const factorDataHealth = computed(() => props.report ? buildQuantFactorDataHealth(props.report) : null)
+const openCheck = computed(() => {
+  const decision = reportDecision.value
+  if (!decision)
+    return null
+  const price = typeof props.currentPrice === 'number' && Number.isFinite(props.currentPrice) ? props.currentPrice : null
+  const buy = decision.buyPriceRange
+  const sell = decision.sellPriceRange
+  const place = price === null
+    ? (buy ? '还没有带入收盘价' : '参考区间还没生成')
+    : sell && price >= sell.low && price <= sell.high
+      ? '收盘在参考卖出区间内'
+      : sell && price > sell.high
+        ? '收盘高于参考卖出区间'
+        : buy && price < buy.low
+          ? '收盘低于参考买入区间'
+          : buy && price > buy.high
+            ? '收盘高于参考买入区间'
+            : buy
+              ? '收盘在参考买入区间内'
+              : '参考区间还没生成'
+  const triggered = dailyInvalidationChecks.value.filter(check => check.change === 'triggered').length
+  const evidence = triggered
+    ? `${triggered} 条日线证据已转弱`
+    : dailyInvalidationChecks.value.length
+      ? '可对照的日线证据未转弱'
+      : '还没有日线对照'
+  const recommendation = activeRecommendation.value
+  const next = triggered
+    ? '证据已转弱。开盘前先重看这些证据，不要直接沿用这份推荐。'
+    : recommendation === 'bullish' && buy && price !== null && price >= buy.low && price <= buy.high
+      ? '价格还在参考买入区间内。开盘前用今日决策助手再核对一次。'
+      : recommendation === 'bullish' && buy && price !== null && price < buy.low
+        ? '收盘还低于参考买入区间。开盘前先看价格是否回到区间，再使用今日决策助手。'
+        : recommendation === 'bearish' && sell && price !== null && price >= sell.low
+          ? '收盘已到或高于参考卖出区间。开盘前用今日决策助手的持有模式核对。'
+          : recommendation === 'watch'
+            ? '当前是观望。开盘前只核对价格是否离开参考区间。'
+            : '先核对参考区间和证据，再使用今日决策助手。区间不是委托。'
+  return {
+    price: price === null ? '尚未带入' : price.toFixed(2),
+    observedAt: props.currentPriceObservedAt || '日期未记录',
+    place,
+    evidence,
+    next,
+  }
+})
+
+const recordedCostPlace = computed(() => {
+  const cost = props.recordedPosition?.averageCost ?? null
+  if (cost === null)
+    return null
+  const buy = reportDecision.value?.buyPriceRange
+  const sell = reportDecision.value?.sellPriceRange
+  if (sell && cost >= sell.low && cost <= sell.high)
+    return '账本成本在参考卖出区间内'
+  if (sell && cost > sell.high)
+    return '账本成本高于参考卖出区间'
+  if (buy && cost < buy.low)
+    return '账本成本低于参考买入区间'
+  if (buy && cost > buy.high)
+    return '账本成本高于参考买入区间'
+  if (buy)
+    return '账本成本在参考买入区间内'
+  return '参考区间还没生成'
+})
+
+const recordedCostGap = computed(() => {
+  const cost = props.recordedPosition?.averageCost ?? null
+  const price = typeof props.currentPrice === 'number' && Number.isFinite(props.currentPrice) ? props.currentPrice : null
+  if (cost === null || price === null || cost <= 0)
+    return null
+  const perShare = price - cost
+  if (perShare.toFixed(2) === '0.00')
+    return '相对最近收盘持平。账本对照，不是收益结论。'
+  const percent = perShare / cost * 100
+  const quantity = props.recordedPosition?.openQuantity ?? 0
+  const position = quantity > 0 ? `，持仓价差 ${signed(perShare * quantity)}` : ''
+  return `相对最近收盘 ${signed(perShare)}/股（${signed(percent)}%）${position}。账本对照，不是收益结论。`
+})
+
+function signed(value: number): string {
+  return `${value > 0 ? '+' : ''}${value.toFixed(2)}`
+}
 
 function recommendationLabel(value: QuantRecommendation | null): string {
   return value === 'bullish' ? '看多' : value === 'bearish' ? '看空' : '观望'
@@ -150,6 +241,37 @@ function aiReviewGateDetail(): string {
         </div>
       </div>
 
+      <div v-if="openCheck" class="quant-decision-open-check" aria-label="开盘前核对">
+        <div>
+          <p class="section-kicker">
+            OPEN CHECK
+          </p>
+          <h4>开盘前核对</h4>
+        </div>
+        <div class="quant-decision-price-grid">
+          <div>
+            <span>最近收盘</span>
+            <strong>{{ openCheck.price }}</strong>
+            <small>{{ openCheck.observedAt }}</small>
+          </div>
+          <div>
+            <span>相对参考区间</span>
+            <strong>{{ openCheck.place }}</strong>
+          </div>
+          <div>
+            <span>日线证据</span>
+            <strong>{{ openCheck.evidence }}</strong>
+          </div>
+          <div v-if="recordedPosition" role="group" aria-label="账本持仓">
+            <span>账本持仓</span>
+            <strong>{{ recordedPosition.openQuantity > 0 ? `${recordedPosition.openQuantity} 股` : '无未平仓' }}</strong>
+            <small>{{ recordedCostPlace ? `${recordedCostPlace} · ` : '' }}{{ recordedPosition.averageCost === null ? '没有未平成本' : `成本 ${recordedPosition.averageCost.toFixed(2)}` }} · 已实现 {{ recordedPosition.realizedPnl > 0 ? '+' : '' }}{{ recordedPosition.realizedPnl.toFixed(2) }} · 你的记录，不是研究证据</small>
+            <small v-if="recordedCostGap">{{ recordedCostGap }}</small>
+          </div>
+        </div>
+        <p>{{ openCheck.next }}</p>
+      </div>
+
       <div class="quant-decision-price-grid" aria-label="参考价格区间">
         <div>
           <span>参考买入区间</span>
@@ -160,6 +282,28 @@ function aiReviewGateDetail(): string {
           <span>参考卖出区间</span>
           <strong>{{ formatRange(reportDecision.sellPriceRange) }}</strong>
           <small>{{ reportDecision.sellPriceRange ? `${reportDecision.sellPriceRange.source} · ${reportDecision.sellPriceRange.observedAt}` : '关键数据齐备后生成' }}</small>
+        </div>
+      </div>
+
+      <div v-if="dailyInvalidationChecks.length" class="quant-decision-price-grid" aria-label="日线失效对照">
+        <div v-for="check in dailyInvalidationChecks" :key="check.key">
+          <span>{{ check.label }}</span>
+          <strong>{{ check.change === 'triggered' ? '已转弱' : check.change === 'recovered' ? '已恢复' : check.change === 'unchanged' ? '未变化' : '无法对照' }}</strong>
+          <small>报告 {{ { pass: '通过', caution: '留意', fail: '未通过', missing: '缺失' }[check.savedStatus] }} → 最新 {{ { pass: '通过', caution: '留意', fail: '未通过', missing: '缺失' }[check.currentStatus] }}</small>
+        </div>
+      </div>
+      <div v-if="fundamentalInvalidationChecks.length" class="quant-decision-price-grid" aria-label="财务估值对照">
+        <div v-for="check in fundamentalInvalidationChecks" :key="check.key">
+          <span>{{ check.label }}</span>
+          <strong>{{ check.change === 'triggered' ? '已转弱' : check.change === 'recovered' ? '已恢复' : check.change === 'unchanged' ? '未变化' : '无法对照' }}</strong>
+          <small>报告 {{ { pass: '通过', caution: '留意', fail: '未通过', missing: '缺失' }[check.savedStatus] }} → 最新 {{ { pass: '通过', caution: '留意', fail: '未通过', missing: '缺失' }[check.currentStatus] }}</small>
+        </div>
+      </div>
+      <div v-if="shareholderInvalidationChecks.length" class="quant-decision-price-grid" aria-label="股东回报对照">
+        <div v-for="check in shareholderInvalidationChecks" :key="check.key">
+          <span>{{ check.label }}</span>
+          <strong>{{ check.change === 'triggered' ? '已转弱' : check.change === 'recovered' ? '已恢复' : check.change === 'unchanged' ? '未变化' : '无法对照' }}</strong>
+          <small>报告 {{ { pass: '通过', caution: '留意', fail: '未通过', missing: '缺失' }[check.savedStatus] }} → 最新 {{ { pass: '通过', caution: '留意', fail: '未通过', missing: '缺失' }[check.currentStatus] }}</small>
         </div>
       </div>
 
@@ -380,6 +524,11 @@ function aiReviewGateDetail(): string {
 .quant-decision-price-grid small {
   overflow-wrap: anywhere;
 }
+
+.quant-decision-open-check { display: grid; gap: 0.45rem; }
+.quant-decision-open-check h4 { margin: 0; font-size: 0.95rem; }
+.quant-decision-open-check .quant-decision-price-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.quant-decision-open-check > p { margin: 0; color: hsl(var(--muted-foreground)); font-size: 0.75rem; line-height: 1.45; }
 
 .quant-decision-ai-review {
   flex-wrap: wrap;

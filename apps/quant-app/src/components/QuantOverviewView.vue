@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { QuantAiReviewOutcomeBoard, QuantPriceLocation } from '../api/resources/research'
+import type { QuantAiReviewOutcomeBoard, QuantInvalidationItem, QuantPriceLocation } from '../api/resources/research'
 import type { QuantDataHealthAction, QuantDataHealthFreshness, QuantDataHealthStatus, QuantDataHealthSummary } from '../lib/data-health'
 import type { QuantView } from '../lib/quant-view'
 import type { CandidateItem, QuantScheduledResearchRun, WatchlistItem } from '../lib/quant-view-models'
 import type { WatchlistEnvironment, WatchlistEnvironmentStatus } from '../lib/watchlist-environment'
-import { SkeletonCard } from '@starye/ui'
 import { ArrowUpRight, CalendarDays, ChevronRight, DatabaseZap, Eye, Info, RefreshCw, ShieldAlert, Sparkles } from 'lucide-vue-next'
+import { computed } from 'vue'
 import QuantTimingPoolAudit from './QuantTimingPoolAudit.vue'
 
 type RiskTone = 'neutral' | 'warning' | 'danger'
@@ -57,6 +57,10 @@ const props = defineProps<{
   aiReviewOutcomes?: QuantAiReviewOutcomeBoard | null
   aiReviewOutcomesLoading?: boolean
   aiReviewOutcomesError?: string | null
+  invalidationChecks?: QuantInvalidationItem[]
+  invalidationChecksLoading?: boolean
+  invalidationChecksError?: string | null
+  holdings?: Record<string, { name: string | null, openQuantity: number, cost: number | null, dividendCash: number, realizedPnl: number }>
 }>()
 
 const emit = defineEmits<{
@@ -65,7 +69,44 @@ const emit = defineEmits<{
   runDataHealthAction: [action: QuantDataHealthAction | null]
   recoverDataHealth: []
   runScheduledResearch: []
+  addHolding: [item: { tsCode: string, name: string | null }]
+  recordFill: [tsCode: string]
 }>()
+
+const holdingRows = computed(() => Object.entries(props.holdings ?? {})
+  .filter(([, book]) => book.openQuantity > 0)
+  .map(([tsCode, book]) => {
+    const watchedItem = props.watchlist.find(item => item.tsCode === tsCode)
+    const cost = book.cost
+    const latestClose = watchedItem?.latestClose ?? null
+    const gapPercent = cost !== null && latestClose !== null && cost > 0 ? (latestClose - cost) / cost : null
+    return {
+      tsCode,
+      name: book.name ?? watchedItem?.name ?? null,
+      openQuantity: book.openQuantity,
+      cost,
+      dividendCash: book.dividendCash,
+      latestClose,
+      watched: Boolean(watchedItem),
+      gapPercent,
+    }
+  })
+  .sort((left, right) => Number(left.watched) - Number(right.watched)
+    || Math.abs(right.gapPercent ?? 0) - Math.abs(left.gapPercent ?? 0)
+    || (left.name || left.tsCode).localeCompare(right.name || right.tsCode, 'zh')))
+
+const blockedHoldingCount = computed(() => holdingRows.value.filter(item => !item.watched).length)
+
+function holdingGap(item: { cost: number | null, latestClose: number | null, openQuantity: number }): string | null {
+  if (item.cost === null || item.latestClose === null || item.cost <= 0 || item.openQuantity <= 0)
+    return null
+  const perShare = item.latestClose - item.cost
+  const percent = perShare / item.cost * 100
+  const signed = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(2)}`
+  if (perShare.toFixed(2) === '0.00')
+    return '相对最近收盘持平。账本对照，不是收益结论。'
+  return `相对最近收盘 ${signed(perShare)}/股（${signed(percent)}%）。账本对照，不是收益结论。`
+}
 
 function scheduledStatusLabel(status: QuantScheduledResearchRun['status']): string {
   return { running: '运行中', completed: '已完成', partial: '部分完成', failed: '失败' }[status]
@@ -90,6 +131,32 @@ function scheduledReasonLabel(reason: NonNullable<QuantScheduledResearchRun['ite
     'stale-daily': '日线过期',
     'insufficient-data': '数据不足',
   }[reason]
+}
+
+function evidenceStatusLabel(status: 'pass' | 'caution' | 'fail' | 'missing'): string {
+  return { pass: '通过', caution: '留意', fail: '未通过', missing: '缺失' }[status]
+}
+
+function changedInvalidationItems(): QuantInvalidationItem[] {
+  return (props.invalidationChecks ?? []).filter(item => item.triggeredCount || item.recoveredCount)
+}
+
+function unchangedInvalidationCount(): number {
+  return (props.invalidationChecks ?? []).filter(item => !item.triggeredCount && !item.recoveredCount).length
+}
+
+function focusInvalidationLabel(tsCode: string): string {
+  const item = props.invalidationChecks?.find(row => row.tsCode === tsCode)
+  if (!item?.triggeredCount)
+    return ''
+  return item.checks.filter(check => check.change === 'triggered').map(check => check.label).join('、')
+}
+
+function changedCheckSummary(item: QuantInvalidationItem): string {
+  return item.checks
+    .filter(check => check.change === 'triggered' || check.change === 'recovered')
+    .map(check => `${check.label}${check.change === 'triggered' ? '转弱' : '恢复'}`)
+    .join('、')
 }
 </script>
 
@@ -133,6 +200,52 @@ function scheduledReasonLabel(reason: NonNullable<QuantScheduledResearchRun['ite
           <span class="metric-note">最新 {{ props.latestWatchlistDate }}</span>
         </article>
       </template>
+    </section>
+
+    <section v-if="holdingRows.length" class="holdings-section" aria-labelledby="holdings-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">
+            OPEN WORKFLOW
+          </p>
+          <h2 id="holdings-title" class="section-title">
+            开盘工作流
+          </h2>
+          <p class="holdings-note">
+            先处理打不开研究的持仓，再看相对最近收盘偏离更大的。这不是买卖清单。
+          </p>
+        </div>
+        <button class="text-button" type="button" @click="emit('navigate', 'operations')">
+          打开操作记录
+        </button>
+      </div>
+      <p class="holdings-progress">
+        {{ holdingRows.length }} 只持仓 · {{ blockedHoldingCount }} 只还不能研究
+      </p>
+      <ol class="holdings-steps">
+        <li v-for="(item, index) in holdingRows" :key="item.tsCode" class="holding-step">
+          <span class="holding-step-index">{{ index + 1 }}</span>
+          <div class="holding-step-body">
+            <strong>{{ item.name || item.tsCode }}</strong>
+            <small>{{ item.tsCode }}</small>
+            <span>未平 {{ item.openQuantity }} 股 · 成本 {{ item.cost === null ? '--' : item.cost.toFixed(2) }} · 分红 {{ item.dividendCash > 0 ? '+' : '' }}{{ item.dividendCash.toFixed(2) }}</span>
+            <small v-if="!item.watched" :aria-label="`${item.name || item.tsCode} 不在观察池`">不在观察池，打不开研究详情</small>
+            <small v-else-if="holdingGap(item)">{{ holdingGap(item) }}</small>
+            <small v-else>最近收盘还没带入。打开研究后再核对。</small>
+          </div>
+          <div class="holding-step-actions">
+            <button v-if="item.watched" class="primary-button" type="button" :aria-label="`打开 ${item.name || item.tsCode} 的研究`" @click="emit('selectStock', { tsCode: item.tsCode, name: item.name })">
+              打开研究
+            </button>
+            <button v-else class="primary-button" type="button" :aria-label="`把 ${item.name || item.tsCode} 加入观察池`" @click="emit('addHolding', { tsCode: item.tsCode, name: item.name })">
+              加入观察池
+            </button>
+            <button class="text-button" type="button" :aria-label="`为 ${item.name || item.tsCode} 记一笔`" @click="emit('recordFill', item.tsCode)">
+              记一笔
+            </button>
+          </div>
+        </li>
+      </ol>
     </section>
 
     <section class="data-health-section" aria-labelledby="data-health-title">
@@ -315,10 +428,12 @@ function scheduledReasonLabel(reason: NonNullable<QuantScheduledResearchRun['ite
       </p>
       <div v-else-if="props.priceLocations?.length" class="price-location-list">
         <button v-for="item in props.priceLocations" :key="item.tsCode" class="price-location-row" :class="`price-location-${item.status}`" type="button" :title="item.detail" @click="emit('selectStock', { tsCode: item.tsCode, name: item.name ?? item.tsCode })">
-          <strong>{{ item.name || item.tsCode }}</strong>
-          <small>{{ item.tsCode }}</small>
+          <span class="price-location-identity">
+            <strong>{{ item.name || item.tsCode }}</strong>
+            <small>{{ item.tsCode }}</small>
+          </span>
           <span>{{ item.label }}</span>
-          <em>{{ item.latestClose === null ? '--' : `${item.latestClose.toFixed(2)} 元` }}</em>
+          <em>{{ item.latestClose === null ? '--' : `${item.latestClose.toFixed(2)}` }}</em>
           <em>{{ item.distancePercent === null ? '' : `${item.distancePercent > 0 ? '+' : ''}${item.distancePercent.toFixed(1)}%` }}</em>
         </button>
       </div>
@@ -350,14 +465,58 @@ function scheduledReasonLabel(reason: NonNullable<QuantScheduledResearchRun['ite
       </p>
       <div v-else-if="props.aiReviewOutcomes?.items.length" class="price-location-list">
         <button v-for="item in props.aiReviewOutcomes.items" :key="item.tsCode" class="price-location-row" :class="`price-location-${item.status === 'aligned' ? 'inside' : item.status === 'opposed' ? 'below' : 'missing-report'}`" type="button" :title="item.detail" @click="emit('selectStock', { tsCode: item.tsCode, name: item.name ?? item.tsCode })">
-          <strong>{{ item.name || item.tsCode }}</strong>
-          <small>{{ item.accepted === false ? '未接受' : item.accepted ? '已接受' : '无结论' }}</small>
+          <span class="price-location-identity">
+            <strong>{{ item.name || item.tsCode }}</strong>
+            <small>{{ item.accepted === false ? '未接受' : item.accepted ? '已接受' : '无结论' }}</small>
+          </span>
           <span>{{ item.label }}</span>
           <em>{{ item.changePercent === null ? '--' : `${item.changePercent > 0 ? '+' : ''}${item.changePercent.toFixed(1)}%` }}</em>
         </button>
       </div>
       <p v-else class="price-location-empty">
         完成一次 AI 复核后，这里回看它和后续收盘的方向。
+      </p>
+    </section>
+
+    <section class="price-location-section overview-changes" aria-labelledby="invalidation-check-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">
+            INVALIDATION CHECK
+          </p>
+          <h2 id="invalidation-check-title" class="section-title">
+            失效对照
+          </h2>
+        </div>
+        <span class="section-meta">只核对均线、20 日收益、量比和连涨</span>
+      </div>
+      <p class="price-location-note">
+        用最新日线重算报告里这四条证据。转弱只表示该重新评估，不构成交易结论。财务、估值和股东回报在个股决策卡对照当前读取结果。
+      </p>
+      <div v-if="props.invalidationChecksLoading" class="focus-empty" aria-label="失效对照加载中">
+        <SkeletonCard variant="content" />
+      </div>
+      <p v-else-if="props.invalidationChecksError" class="price-location-error" role="status">
+        {{ props.invalidationChecksError }}
+      </p>
+      <div v-else-if="changedInvalidationItems().length" class="price-location-list">
+        <button v-for="item in changedInvalidationItems()" :key="item.tsCode" class="price-location-row" :class="item.triggeredCount ? 'price-location-below' : 'price-location-inside'" type="button" :title="item.checks.map(check => `${check.label} ${evidenceStatusLabel(check.savedStatus)} → ${evidenceStatusLabel(check.currentStatus)}`).join('；')" @click="emit('selectStock', { tsCode: item.tsCode, name: item.name ?? item.tsCode })">
+          <span class="price-location-identity">
+            <strong>{{ item.name || item.tsCode }}</strong>
+            <small>{{ item.tsCode }}</small>
+          </span>
+          <span>{{ changedCheckSummary(item) }}</span>
+          <em>{{ item.triggeredCount ? `${item.triggeredCount} 条转弱` : `${item.recoveredCount} 条恢复` }}</em>
+        </button>
+      </div>
+      <p v-else-if="props.invalidationChecks?.length" class="price-location-empty">
+        可对照的日线证据都未转弱。
+      </p>
+      <p v-else class="price-location-empty">
+        生成研究报告后，这里对照最新日线是否让已保存证据转弱。
+      </p>
+      <p v-if="changedInvalidationItems().length && unchangedInvalidationCount()" class="price-location-note">
+        其余 {{ unchangedInvalidationCount() }} 只未转弱。
       </p>
     </section>
 
@@ -390,6 +549,7 @@ function scheduledReasonLabel(reason: NonNullable<QuantScheduledResearchRun['ite
             <span class="focus-stock">
               <strong>{{ props.displayStockName(item) }}</strong>
               <small>{{ item.tsCode }}</small>
+              <small v-if="focusInvalidationLabel(item.tsCode)">{{ focusInvalidationLabel(item.tsCode) }}已转弱</small>
             </span>
             <span class="focus-signal" :title="props.researchPriorityDetail(item)">{{ props.focusSignal(item) }}</span>
             <span class="focus-score">

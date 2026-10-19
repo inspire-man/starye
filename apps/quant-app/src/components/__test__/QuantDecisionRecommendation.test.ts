@@ -164,6 +164,72 @@ describe('quant decision recommendation', () => {
     expect(wrapper.text()).toContain('最新')
   })
 
+  it('checks the close against the saved range before the next open', () => {
+    const wrapper = mount(QuantDecisionRecommendation, {
+      props: {
+        report: report(),
+        summary: null,
+        currentPrice: 10.5,
+        currentPriceObservedAt: '2026-09-28',
+        invalidation: {
+          tsCode: '601899.SH',
+          name: '紫金矿业',
+          triggeredCount: 1,
+          recoveredCount: 0,
+          unchangedCount: 3,
+          unavailableCount: 0,
+          uncheckedCount: 0,
+          label: '1 条日线证据转弱',
+          checks: [{ key: 'trend-ma20', label: '收盘价 / MA20', savedStatus: 'pass', currentStatus: 'fail', change: 'triggered' }],
+        },
+      },
+    })
+
+    expect(wrapper.get('[aria-label="开盘前核对"]').text()).toContain('10.50')
+    expect(wrapper.text()).toContain('收盘在参考买入区间内')
+    expect(wrapper.text()).toContain('1 条日线证据已转弱')
+    expect(wrapper.text()).toContain('不要直接沿用这份推荐')
+    expect(wrapper.text()).not.toContain('开盘买入')
+  })
+
+  it('shows the recorded book beside the open check without turning it into a signal', async () => {
+    const wrapper = mount(QuantDecisionRecommendation, {
+      props: {
+        report: report(),
+        summary: null,
+        currentPrice: 10.5,
+        recordedPosition: {
+          tsCode: '601899.SH',
+          openQuantity: 100,
+          averageCost: 29.42,
+          realizedPnl: 120,
+          closedCount: 1,
+        },
+      },
+    })
+
+    const book = wrapper.get('[aria-label="账本持仓"]')
+    expect(book.text()).toContain('100 股')
+    expect(book.text()).toContain('29.42')
+    expect(book.text()).toContain('账本成本高于参考卖出区间')
+    expect(book.text()).toContain('相对最近收盘 -18.92/股（-64.31%）')
+    expect(book.text()).toContain('持仓价差 -1892.00')
+    expect(book.text()).toContain('不是收益结论')
+    expect(book.text()).not.toContain('建议卖出')
+    await wrapper.setProps({
+      recordedPosition: {
+        tsCode: '601899.SH',
+        openQuantity: 100,
+        averageCost: 10.5,
+        realizedPnl: 120,
+        closedCount: 1,
+      },
+    })
+    expect(wrapper.get('[aria-label="账本持仓"]').text()).toContain('账本成本在参考买入区间内')
+    expect(wrapper.get('[aria-label="账本持仓"]').text()).toContain('相对最近收盘持平')
+    expect(wrapper.text()).not.toContain('开盘买入')
+  })
+
   it('uses an accepted AI review for the final label while retaining deterministic prices', () => {
     const wrapper = mount(QuantDecisionRecommendation, { props: { report: report(), summary: summary(), dataFreshness: 'fresh' } })
 

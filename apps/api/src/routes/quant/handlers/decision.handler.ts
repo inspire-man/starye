@@ -6,6 +6,8 @@ import { buildQuantAiFactorImpact } from '../../../domain/quant/ai-summary'
 import { applyQuantDecisionAssistantAiReview, buildQuantDecisionAssistant, buildQuantDecisionAssistantAiFailure, buildQuantDecisionAssistantAiReview, buildQuantDecisionAssistantAiUnavailable, generateQuantAiDecisionAssistant } from '../../../domain/quant/decision-assistant'
 import { buildQuantDecisionRecordSnapshot } from '../../../domain/quant/decision-record'
 import { QuantError } from '../../../domain/quant/errors'
+import { operationAiContext } from '../../../domain/quant/operation-ledger'
+import { readQuantOperationBoard } from '../../../domain/quant/operation-store'
 import {
   createQuantDecisionAssessment,
   getLatestQuantDailyBar,
@@ -79,6 +81,7 @@ quantDecisionRoutes.post('/decision-assistant', quantRouteDocs('decision.assista
           deterministic: assessment.deterministic,
           scenario,
           market: assessment.market,
+          operationLedger: operationAiContext((await readQuantOperationBoard(c.get('db'), userId)).ledger, report.tsCode),
           config,
           ...(aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) ? { timeoutMs: aiGenerationTimeoutMs(c.env, config.generationTimeoutMs) } : {}),
         })

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { QuantDecisionAssistant, QuantDecisionAssistantMode, QuantResearchRun } from '../lib/quant-view-models'
+import type { QuantRecordedPosition } from '../lib/recorded-position'
 import { AlertCircle, CheckCircle2, RefreshCw, Sparkles } from 'lucide-vue-next'
 import QuantDecisionAssistantForm from './quant-decision/QuantDecisionAssistantForm.vue'
 import QuantDecisionAssistantResult from './quant-decision/QuantDecisionAssistantResult.vue'
@@ -15,6 +16,7 @@ defineProps<{
   generating: boolean
   errorMessage: string | null
   aiConfigAvailable: boolean | null
+  recordedPosition?: QuantRecordedPosition | null
 }>()
 
 const emit = defineEmits<{
@@ -52,6 +54,7 @@ function formatDate(value: string | null): string {
       :assessment="assessment"
       :loading="loading"
       :generating="generating"
+      :recorded-position="recordedPosition"
       @assess="emit('assess', $event)"
     />
 

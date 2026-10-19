@@ -1,6 +1,7 @@
 import type { QuantAiProvider, QuantDecryptedAiConfig } from './ai-config'
 import type { QuantAiFactorImpact } from './ai-summary'
 import type { QuantDecisionProjection, QuantRecommendation, QuantReferencePriceRange, QuantResearchFactor, QuantResearchFactorKey } from './decision-recommendation'
+import type { QuantOperationAiContext } from './operation-ledger'
 import type { QuantResearchEvidence, QuantResearchReport, QuantResearchSource } from './research-report'
 import { parseQuantAiFactorImpactSnapshot } from './ai-summary'
 import { resolveQuantAiGenerationTimeout } from './ai-timeout'
@@ -174,6 +175,7 @@ export interface QuantAiDecisionAssistantRequest {
   readonly deterministic: QuantDecisionAssistantDeterministic
   readonly scenario: QuantDecisionAssistantScenario
   readonly market: QuantDecisionAssistantMarket
+  readonly operationLedger?: QuantOperationAiContext | null
   readonly config: QuantDecryptedAiConfig
   readonly timeoutMs?: number
   readonly fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
@@ -780,7 +782,7 @@ export function buildQuantDecisionAssistantAiReview(input: {
   }
 }
 
-function assistantPromptFacts(report: QuantResearchReport, deterministic: QuantDecisionAssistantDeterministic, scenario: QuantDecisionAssistantScenario, market: QuantDecisionAssistantMarket): string {
+function assistantPromptFacts(report: QuantResearchReport, deterministic: QuantDecisionAssistantDeterministic, scenario: QuantDecisionAssistantScenario, market: QuantDecisionAssistantMarket, operationLedger: QuantOperationAiContext | null): string {
   const facts = {
     reportVersion: report.reportVersion,
     tsCode: report.tsCode,
@@ -800,6 +802,7 @@ function assistantPromptFacts(report: QuantResearchReport, deterministic: QuantD
     },
     market,
     scenario,
+    operationLedger,
     factorModel: report.factorModel
       ? {
           modelVersion: report.factorModel.modelVersion,
@@ -836,15 +839,15 @@ function assistantPromptFacts(report: QuantResearchReport, deterministic: QuantD
   return JSON.stringify(facts).slice(0, 15_000)
 }
 
-export function buildQuantAiDecisionAssistantPrompt(input: Pick<QuantAiDecisionAssistantRequest, 'report' | 'deterministic' | 'scenario' | 'market'>): string {
+export function buildQuantAiDecisionAssistantPrompt(input: Pick<QuantAiDecisionAssistantRequest, 'report' | 'deterministic' | 'scenario' | 'market' | 'operationLedger'>): string {
   return [
-    '你是 Quant 的证据交叉核对器。请针对用户场景复核确定性研究结果，只能使用给定 JSON 中的报告、因子、证据和场景数字。',
+    '你是 Quant 的证据交叉核对器。请针对用户场景复核确定性研究结果。研究报告证据只能来自 JSON 的报告、因子和证据；operationLedger 若不为 null，只是该用户自己记下的成交价差，不是证据，不得据此改分数、权重或参考区间。',
     '返回 JSON 对象，字段必须是 recommendation、action、confidence、rationale、risks、invalidationConditions、citedEvidenceKeys、factorReviews。',
     'recommendation 只能是 bullish、bearish、watch；confidence 是 0-100 数字；action 必须与 mode 匹配：buy 可用 consider-buy/wait/avoid/verify-price/review-data，holding 可用 hold/reduce-review/add-review/wait/review-data。',
     'factorReviews 必须逐项复核 factorModel 中每个权重大于 0 的因子，不得遗漏，字段为 factor、stance、confidence、rationale、citedEvidenceKeys；stance 只能是 support、caution、oppose、insufficient。引用只能来自对应因子的 evidenceKeys。',
     '不要输出 accepted，服务端会根据覆盖、引用、置信度和方向冲突重新计算；不要改变原始分数、因子权重、证据状态或参考买卖区间。',
     'currentPrice 由服务端 market 快照提供，必须结合 currentPriceSource、currentPriceStatus 和 currentPriceObservedAt 判断新鲜度；costBasis 是用户场景输入，不是来源证据。不要生成目标价、收益预测或自动下单指令。',
-    `事实包：${assistantPromptFacts(input.report, input.deterministic, input.scenario, input.market)}`,
+    `事实包：${assistantPromptFacts(input.report, input.deterministic, input.scenario, input.market, input.operationLedger ?? null)}`,
   ].join('\n')
 }
 

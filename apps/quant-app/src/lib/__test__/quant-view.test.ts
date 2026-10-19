@@ -5,6 +5,7 @@ describe('quant view navigation', () => {
   it('parses supported hashes and falls back to overview', () => {
     expect(parseQuantView('#candidates')).toBe('candidates')
     expect(parseQuantView('#WATCHLIST')).toBe('watchlist')
+    expect(parseQuantView('#operations')).toBe('operations')
     expect(parseQuantView('')).toBe('overview')
     expect(parseQuantView('#unknown')).toBe('overview')
   })

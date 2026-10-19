@@ -814,6 +814,21 @@ export const QuantAiRunAuditsResponseSchema = v.strictObject({
   data: v.array(QuantAiRunAuditSchema),
 })
 
+export const QuantOperationCreateSchema = v.object({
+  ts_code: QuantTsCodeSchema,
+  name: v.optional(v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(40)))),
+  side: v.picklist(['buy', 'sell', 'dividend', 'pass']),
+  price: v.pipe(v.number(), v.minValue(0.0001), v.maxValue(1000000)),
+  quantity: v.pipe(v.number(), v.minValue(0), v.maxValue(100000000)),
+  fee: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(1000000))),
+  traded_at: v.pipe(v.string(), v.trim(), v.minLength(8), v.maxLength(40)),
+  note: v.optional(v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(200)))),
+})
+
+export const QuantOperationIdParamSchema = v.object({
+  id: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(32)),
+})
+
 export type QuantWatchlistCreate = v.InferOutput<typeof QuantWatchlistCreateSchema>
 export type QuantWatchlistUpdate = v.InferOutput<typeof QuantWatchlistUpdateSchema>
 export type QuantResearchMarkerUpdate = v.InferOutput<typeof QuantResearchMarkerUpdateSchema>

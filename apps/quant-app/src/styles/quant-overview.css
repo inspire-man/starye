@@ -1,4 +1,30 @@
 /* Quant overview styles. Keep feature selectors with their view boundary. */
+.quant-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.quant-overview > .metric-grid { order: 1; margin-top: 0.25rem; }
+.quant-overview > .holdings-section { order: 2; }
+.quant-overview > .focus-section { order: 3; }
+.quant-overview > .price-location-section.overview-changes { order: 4; }
+.quant-overview > .price-location-section { order: 5; }
+.quant-overview > .data-health-section,
+.quant-overview > .environment-section { order: 6; }
+.quant-overview > .research-path-section { order: 7; }
+.holdings-note, .holdings-progress { margin: 0.35rem 0 0; color: hsl(var(--muted-foreground)); font-size: 0.75rem; }
+.holdings-steps { display: grid; gap: 0.55rem; margin: 0.8rem 0 0; padding: 0; list-style: none; }
+.holding-step { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr) auto; gap: 0.7rem; align-items: start; padding: 0.7rem 0.8rem; border: 1px solid hsl(var(--border)); border-radius: var(--ui-radius-sm, 0.35rem); background: hsl(var(--card)); }
+.holding-step-index { font-variant-numeric: tabular-nums; color: hsl(var(--muted-foreground)); }
+.holding-step-body { display: grid; gap: 0.12rem; }
+.holding-step-body small, .holding-step-index { color: hsl(var(--muted-foreground)); }
+.holding-step-actions { display: grid; justify-items: end; gap: 0.25rem; }
+.holding-card { display: grid; gap: 0.15rem; padding: 0.7rem 0.8rem; border: 1px solid hsl(var(--border)); border-radius: var(--ui-radius-sm, 0.35rem); background: hsl(var(--card)); color: inherit; text-align: left; }
+.holding-card-main { display: grid; gap: 0.15rem; padding: 0; border: 0; background: none; color: inherit; text-align: left; }
+.holding-card:disabled { cursor: default; }
+.holding-card small { color: hsl(var(--muted-foreground)); }
+
 
 .metric-grid {
   display: grid;
@@ -17,10 +43,12 @@
 }
 
 .metric-card-heading {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   color: hsl(var(--muted-foreground));
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 650;
 }
 
@@ -55,10 +83,11 @@
 
 .metric-value {
   display: block;
-  margin-top: 0.85rem;
+  margin-top: 0.7rem;
   color: hsl(var(--foreground));
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 750;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
@@ -91,7 +120,7 @@
 }
 
 .data-health-section {
-  margin-top: 1.25rem;
+  margin-top: 0;
   border-top: 1px solid hsl(var(--border));
   border-bottom: 1px solid hsl(var(--border));
   padding: 1.1rem 0;
@@ -410,15 +439,15 @@
 
 .price-location-row {
   display: grid;
-  grid-template-columns: minmax(7rem, 1.1fr) minmax(6rem, 0.8fr) minmax(0, 1.4fr) auto auto;
-  gap: 0.65rem;
+  grid-template-columns: minmax(8.5rem, 0.9fr) minmax(0, 1.7fr) auto auto;
+  gap: 0.75rem;
   align-items: center;
   width: 100%;
   border: 1px solid hsl(var(--border));
   border-left-width: 3px;
   border-radius: var(--ui-radius-sm, 0.35rem);
   background: hsl(var(--card));
-  padding: 0.55rem 0.7rem;
+  padding: 0.65rem 0.75rem;
   text-align: left;
 }
 
@@ -430,13 +459,18 @@
 .price-location-missing-price,
 .price-location-missing-report { border-left-color: hsl(var(--border)); }
 
-.price-location-row strong { color: hsl(var(--foreground)); font-size: 0.8125rem; }
+.price-location-identity { display: grid; gap: 0.1rem; min-width: 0; }
+.price-location-identity strong,
+.price-location-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.price-location-row strong { color: hsl(var(--foreground)); font-size: 0.875rem; }
 .price-location-row small,
-.price-location-row em { color: hsl(var(--muted-foreground)); font-size: 0.6875rem; font-style: normal; }
-.price-location-row span { color: hsl(var(--foreground)); font-size: 0.75rem; }
+.price-location-row em { color: hsl(var(--muted-foreground)); font-size: 0.6875rem; font-style: normal; font-variant-numeric: tabular-nums; }
+.price-location-row > span { color: hsl(var(--foreground)); font-size: 0.8125rem; }
+.price-location-row em:last-of-type { color: hsl(var(--foreground)); font-size: 0.875rem; font-weight: 750; }
 
 @media (max-width: 720px) {
-  .price-location-row { grid-template-columns: 1fr auto; }
+  .price-location-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .price-location-row > span { grid-column: 1 / -1; }
 }
 .focus-section {
   min-width: 0;
@@ -543,8 +577,9 @@
 .focus-score strong {
   color: hsl(var(--primary));
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.875rem;
+  font-size: 1rem;
   font-weight: 750;
+  font-variant-numeric: tabular-nums;
 }
 
 .focus-score-meter {

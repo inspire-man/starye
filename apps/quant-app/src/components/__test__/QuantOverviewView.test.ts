@@ -114,6 +114,29 @@ describe('quant overview view', () => {
     expect(wrapper.emitted('navigate')).toEqual([['candidates']])
   })
 
+  it('shows open holdings and does not treat an unwatched stock as research', async () => {
+    const wrapper = mountView()
+    await wrapper.setProps({
+      holdings: {
+        '000001.SZ': { name: '测试股票', openQuantity: 500, cost: 24.7881, dividendCash: 144, realizedPnl: 0 },
+        '600989.SH': { name: '宝丰能源', openQuantity: 200, cost: 30.7075, dividendCash: 182.42, realizedPnl: 0 },
+      },
+    })
+    const steps = wrapper.findAll('.holding-step')
+    expect(steps[0]?.text()).toContain('宝丰能源')
+    expect(steps[1]?.text()).toContain('测试股票')
+    expect(steps[1]?.text()).toContain('500 股')
+    expect(steps[1]?.text()).toContain('不是收益结论')
+    const watched = wrapper.get('[aria-label="打开 测试股票 的研究"]')
+    expect(wrapper.get('[aria-label="宝丰能源 不在观察池"]').text()).toContain('打不开研究详情')
+    await wrapper.get('[aria-label="把 宝丰能源 加入观察池"]').trigger('click')
+    expect(wrapper.emitted('addHolding')?.[0]).toEqual([{ tsCode: '600989.SH', name: '宝丰能源' }])
+    await wrapper.get('[aria-label="为 宝丰能源 记一笔"]').trigger('click')
+    expect(wrapper.emitted('recordFill')?.[0]).toEqual(['600989.SH'])
+    await watched.trigger('click')
+    expect(wrapper.emitted('selectStock')?.[0]).toEqual([{ tsCode: '000001.SZ', name: '测试股票' }])
+  })
+
   it('keeps the data-health action as an explicit parent event', async () => {
     const wrapper = mountView()
     const action = wrapper.find('.data-health-action')
@@ -156,6 +179,46 @@ describe('quant overview view', () => {
     })
     expect(wrapper.text()).toContain('后台定时研究')
     expect(wrapper.text()).toContain('已逾期')
+    expect(wrapper.text()).not.toContain('买入')
+    expect(wrapper.text()).not.toContain('卖出')
+  })
+
+  it('shows changed daily evidence on the scan list and the focus row', async () => {
+    const wrapper = mountView()
+    await wrapper.setProps({
+      invalidationChecks: [
+        {
+          tsCode: candidate.tsCode,
+          name: candidate.name,
+          triggeredCount: 1,
+          recoveredCount: 0,
+          unchangedCount: 3,
+          unavailableCount: 0,
+          uncheckedCount: 10,
+          label: '1 条日线证据转弱',
+          checks: [
+            { key: 'trend-ma20', label: '收盘价 / MA20', savedStatus: 'pass', currentStatus: 'fail', change: 'triggered' },
+            { key: 'trend-return20', label: '20 日收益', savedStatus: 'pass', currentStatus: 'pass', change: 'unchanged' },
+          ],
+        },
+        {
+          tsCode: '600900.SH',
+          name: '长江电力',
+          triggeredCount: 0,
+          recoveredCount: 0,
+          unchangedCount: 4,
+          unavailableCount: 0,
+          uncheckedCount: 10,
+          label: '可对照的日线证据未转弱',
+          checks: [],
+        },
+      ],
+    })
+
+    expect(wrapper.text()).toContain('收盘价 / MA20转弱')
+    expect(wrapper.text()).toContain('其余 1 只未转弱')
+    expect(wrapper.text()).not.toContain('长江电力')
+    expect(wrapper.get('.focus-stock').text()).toContain('收盘价 / MA20已转弱')
     expect(wrapper.text()).not.toContain('买入')
     expect(wrapper.text()).not.toContain('卖出')
   })

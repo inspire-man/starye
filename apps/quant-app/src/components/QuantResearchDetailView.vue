@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Column, ParsedError } from '@starye/ui'
+import type { QuantInvalidationItem } from '../api/resources/research'
 import type { QuantDataHealthFreshness } from '../lib/data-health'
 import type { DecisionEvidence, DecisionEvidenceStatus } from '../lib/decision-evidence'
 import type { FactorRobustness } from '../lib/factor-robustness'
@@ -135,6 +136,7 @@ export interface QuantResearchDetailProps {
   refreshingEvidenceKey?: string | null
   refreshEvidenceErrorMessage?: string | null
   refreshEvidenceMessage?: string | null
+  invalidation?: QuantInvalidationItem | null
   researchEvidenceGroups: { dimension: string, label: string, items: QuantResearchEvidence[] }[]
   researchEvidenceComparison: ResearchEvidenceHistoryComparison | null
   researchRunTimeline: ResearchRunTimeline
@@ -305,6 +307,7 @@ const {
   refreshingEvidenceKey,
   refreshEvidenceErrorMessage,
   refreshEvidenceMessage,
+  invalidation,
   researchEvidenceGroups,
   researchEvidenceComparison,
   researchRunTimeline,
@@ -481,6 +484,7 @@ defineExpose({ useQuestionPrompt })
       :refreshing-evidence-key="refreshingEvidenceKey"
       :refresh-evidence-error-message="refreshEvidenceErrorMessage"
       :refresh-evidence-message="refreshEvidenceMessage"
+      :invalidation="invalidation"
       :research-evidence-groups="researchEvidenceGroups"
       :research-evidence-comparison="researchEvidenceComparison"
       :research-run-timeline="researchRunTimeline"

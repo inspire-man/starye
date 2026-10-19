@@ -1182,6 +1182,27 @@ export const quantDecisionRecords = sqliteTable('quant_decision_record', {
 export type QuantDecisionRecord = InferSelectModel<typeof quantDecisionRecords>
 export type NewQuantDecisionRecord = InferInsertModel<typeof quantDecisionRecords>
 
+export const quantOperations = sqliteTable('quant_operation', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  tsCode: text('ts_code').notNull(),
+  name: text('name'),
+  side: text('side', { enum: ['buy', 'sell', 'dividend', 'pass'] }).notNull(),
+  price: real('price').notNull(),
+  quantity: real('quantity').notNull(),
+  fee: real('fee').default(0).notNull(),
+  researchContext: text('research_context'),
+  tradedAt: integer('traded_at', { mode: 'timestamp' }).notNull(),
+  note: text('note'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(strftime('%s', 'now'))`).notNull(),
+}, table => [
+  index('idx_quant_operation_user_traded_at').on(table.userId, table.tradedAt),
+])
+
+export type QuantOperation = InferSelectModel<typeof quantOperations>
+export type NewQuantOperation = InferInsertModel<typeof quantOperations>
+
 export const quantDecisionAssessments = sqliteTable('quant_decision_assessment', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
@@ -1353,6 +1374,13 @@ export const quantDecisionRecordsRelations = relations(quantDecisionRecords, ({ 
   }),
 }))
 
+export const quantOperationsRelations = relations(quantOperations, ({ one }) => ({
+  user: one(user, {
+    fields: [quantOperations.userId],
+    references: [user.id],
+  }),
+}))
+
 export const quantDecisionAssessmentsRelations = relations(quantDecisionAssessments, ({ one }) => ({
   user: one(user, {
     fields: [quantDecisionAssessments.userId],
@@ -1393,6 +1421,7 @@ export const userRelations = relations(user, ({ many }) => ({
   quantDecisionRecords: many(quantDecisionRecords),
   quantDecisionAssessments: many(quantDecisionAssessments),
   quantCandidateAiSessions: many(quantCandidateAiSessions),
+  quantOperations: many(quantOperations),
   crawlerTasks: many(crawlerTasks),
 }))
 

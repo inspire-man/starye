@@ -5,8 +5,10 @@ import { requireAuth } from '../../middleware/guard'
 import { quantAiRoutes } from './handlers/ai.handler'
 import { quantCandidateRoutes } from './handlers/candidates.handler'
 import { quantConfigRoutes } from './handlers/config.handler'
+import { quantDailyRoutes } from './handlers/daily.handler'
 import { quantDecisionRoutes } from './handlers/decision.handler'
 import { quantMarketRoutes } from './handlers/market.handler'
+import { quantOperationRoutes } from './handlers/operations.handler'
 import { quantResearchRoutes } from './handlers/research.handler'
 import { quantWorkspaceRoutes } from './handlers/workspace.handler'
 
@@ -33,5 +35,7 @@ quantRoutes.route('/', quantResearchRoutes)
 quantRoutes.route('/', quantDecisionRoutes)
 quantRoutes.route('/', quantAiRoutes)
 quantRoutes.route('/', quantMarketRoutes)
+quantRoutes.route('/', quantOperationRoutes)
+quantRoutes.route('/', quantDailyRoutes)
 
 export default quantRoutes

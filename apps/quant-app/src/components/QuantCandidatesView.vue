@@ -115,6 +115,7 @@ const props = defineProps<{
   researchReviewFor: (tsCode: string) => ResearchReviewMeta
   researchMarkerMap: ReadonlyMap<string, QuantResearchMarker>
   displayStockName: (item: Pick<CandidateItem, 'tsCode' | 'name'>) => string
+  books?: Record<string, { name?: string | null, openQuantity: number, cost: number | null, dividendCash: number, realizedPnl: number }>
 }>()
 
 const emit = defineEmits<{
@@ -568,7 +569,9 @@ function emitResearchPrioritySelect(entry: ResearchPriorityQueueEntry): void {
       >
         <template #cell-tsCode="{ item }">
           <span class="font-mono text-xs font-semibold text-foreground">{{ item.tsCode }}</span>
+          <small v-if="props.books?.[item.tsCode]?.openQuantity" class="candidate-book">账本 {{ props.books?.[item.tsCode]?.openQuantity }} 股</small>
         </template>
+
         <template #cell-score="{ item }">
           <div class="score-cell" :aria-label="`命中 ${formatSignalScore(item.score)} 条规则`">
             <strong class="score-value" :class="item.score === null ? 'quant-table-value-muted' : ''">{{ formatSignalScore(item.score) }}</strong>
@@ -650,3 +653,7 @@ function emitResearchPrioritySelect(entry: ResearchPriorityQueueEntry): void {
     </div>
   </section>
 </template>
+
+<style scoped>
+.candidate-book { display: block; color: hsl(var(--muted-foreground)); font-size: 0.6875rem; }
+</style>
