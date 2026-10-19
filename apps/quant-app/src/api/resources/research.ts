@@ -734,17 +734,16 @@ function parseScheduledResearchTrigger(payload: unknown): QuantScheduledResearch
 }
 
 const PRICE_LOCATION_STATUSES = ['inside', 'below', 'above', 'not-buying', 'missing-range', 'missing-price', 'missing-report'] as const
-type PriceLocationStatus = typeof PRICE_LOCATION_STATUSES[number]
 
-function isPriceLocationStatus(value: string | null): value is PriceLocationStatus {
-  return PRICE_LOCATION_STATUSES.includes(value)
+function isListed<T extends string>(list: readonly T[], value: string | null): value is T {
+  return value !== null && (list as readonly string[]).includes(value)
 }
 
 function parsePriceLocation(value: unknown) {
   if (!isRecord(value))
     throw new QuantApiError('价格位置格式无效', 502, 'QUANT_PRICE_LOCATION_INVALID')
   const status = readString(value, 'status')
-  if (!isPriceLocationStatus(status))
+  if (!isListed(PRICE_LOCATION_STATUSES, status))
     throw new QuantApiError('价格位置状态无效', 502, 'QUANT_PRICE_LOCATION_INVALID')
   const recommendation = readString(value, 'recommendation')
   return {
@@ -794,15 +793,11 @@ export interface QuantAiReviewOutcome {
 
 const AI_REVIEW_OUTCOME_STATUSES = ['aligned', 'opposed', 'flat', 'pending', 'unavailable', 'not-directional'] as const
 
-function isAiReviewOutcomeStatus(value: string | null): value is QuantAiReviewOutcome['status'] {
-  return AI_REVIEW_OUTCOME_STATUSES.includes(value)
-}
-
 function parseAiReviewOutcome(value: unknown): QuantAiReviewOutcome {
   if (!isRecord(value))
     throw new QuantApiError('AI 复核回看格式无效', 502, 'QUANT_AI_REVIEW_OUTCOME_INVALID')
   const status = readString(value, 'status')
-  if (!isAiReviewOutcomeStatus(status))
+  if (!isListed(AI_REVIEW_OUTCOME_STATUSES, status))
     throw new QuantApiError('AI 复核回看状态无效', 502, 'QUANT_AI_REVIEW_OUTCOME_INVALID')
   const recommendation = readString(value, 'recommendation')
   return {
@@ -862,14 +857,6 @@ export interface QuantInvalidationItem {
 const INVALIDATION_CHANGES = ['triggered', 'recovered', 'unchanged', 'unavailable'] as const
 const EVIDENCE_STATUSES = ['pass', 'caution', 'fail', 'missing'] as const
 
-function isInvalidationChange(value: string | null): value is QuantInvalidationCheck['change'] {
-  return INVALIDATION_CHANGES.includes(value)
-}
-
-function isEvidenceStatus(value: string | null): value is QuantInvalidationCheck['savedStatus'] {
-  return EVIDENCE_STATUSES.includes(value)
-}
-
 function parseInvalidationItem(value: unknown): QuantInvalidationItem {
   if (!isRecord(value) || !Array.isArray(value.checks))
     throw new QuantApiError('失效对照格式无效', 502, 'QUANT_INVALIDATION_CHECK_INVALID')
@@ -888,7 +875,7 @@ function parseInvalidationItem(value: unknown): QuantInvalidationItem {
       const savedStatus = readString(check, 'savedStatus', 'saved_status')
       const currentStatus = readString(check, 'currentStatus', 'current_status')
       const change = readString(check, 'change')
-      if (!isEvidenceStatus(savedStatus) || !isEvidenceStatus(currentStatus) || !isInvalidationChange(change))
+      if (!isListed(EVIDENCE_STATUSES, savedStatus) || !isListed(EVIDENCE_STATUSES, currentStatus) || !isListed(INVALIDATION_CHANGES, change))
         throw new QuantApiError('失效对照状态无效', 502, 'QUANT_INVALIDATION_CHECK_INVALID')
       return {
         key: readString(check, 'key') ?? '',
