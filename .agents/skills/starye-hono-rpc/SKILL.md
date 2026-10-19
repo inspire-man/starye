@@ -30,7 +30,7 @@ Use this skill for an API endpoint or API-to-Vue contract that crosses apps/api,
 - Keep route registration, path parameters, validator input types, status codes, error envelope, auth middleware, and response fields aligned.
 - Add a route test with a small Hono<AppEnv> host and app.route(...), plus schema tests for boundary cases. Use API type-check to catch AppType drift.
 - For crawler, repair, availability, persistence, or Quant routes, verify returned identity against D1 authoritative readback and the relevant receipt, projection, revision, user scope, or research run.
-- Cross API/db/frontend endpoint or data-model work starts with the repository OpenSpec flow. Before changing a shared route handler, run GitNexus route/symbol impact analysis and report affected consumers.
+- Cross API/db/frontend endpoint or data-model work starts with the repository OpenSpec flow.
 
 ## Verification commands
 

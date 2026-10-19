@@ -24,6 +24,7 @@ const props = defineProps<{
   latestWatchlistDate: string
   displayedSyncResultMessage: string
   displayedSyncResultTime: string | null
+  books?: Record<string, { openQuantity: number, cost: number | null, dividendCash: number, realizedPnl: number }>
 }>()
 
 const emit = defineEmits<{
@@ -106,6 +107,10 @@ function syncStatusClass(status: SyncResult['status']): string {
               {{ item.tsCode }}
               <ChevronRight :size="14" aria-hidden="true" />
             </button>
+          </template>
+          <template #cell-name="{ item }">
+            <span>{{ item.name || '名称待补齐' }}</span>
+            <small v-if="props.books?.[item.tsCode]" class="watchlist-book">账本 {{ props.books[item.tsCode]?.openQuantity }} 股<template v-if="props.books[item.tsCode]?.cost != null"> · 成本 {{ props.books[item.tsCode]?.cost?.toFixed(2) }}</template> · 分红 {{ props.books[item.tsCode]?.dividendCash.toFixed(2) }}</small>
           </template>
           <template #cell-latestClose="{ item }">
             <span class="quant-table-number quant-table-number-emphasis" :class="item.latestClose === null ? 'quant-table-value-muted' : ''">{{ formatNumber(item.latestClose) }}</span>
@@ -213,3 +218,7 @@ function syncStatusClass(status: SyncResult['status']): string {
     </article>
   </section>
 </template>
+
+<style scoped>
+.watchlist-book { display: block; color: hsl(var(--muted-foreground)); font-size: 0.6875rem; }
+</style>

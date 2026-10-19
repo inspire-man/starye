@@ -1,6 +1,9 @@
 /* Quant detail styles. Keep feature selectors with their view boundary. */
 
 .quant-detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
   min-width: 0;
 }
 
@@ -487,7 +490,7 @@
 }
 
 .research-run-panel {
-  margin-bottom: 1rem;
+  margin-bottom: 0;
   border: 1px solid hsl(var(--primary) / 0.2);
   border-radius: var(--ui-radius-md);
   background: hsl(var(--accent) / 0.16);
@@ -520,7 +523,7 @@
 .research-run-heading small,
 .research-run-summary span,
 .research-run-summary small,
-.research-run-guidance > span,
+.research-run-guidance > summary,
 .research-run-sources,
 .research-run-note {
   color: hsl(var(--muted-foreground));
@@ -647,15 +650,15 @@
   line-height: 1.4;
 }
 
-.research-run-guidance-positive > span {
+.research-run-guidance-positive > summary {
   color: hsl(var(--status-success));
 }
 
-.research-run-guidance-danger > span {
+.research-run-guidance-danger > summary {
   color: hsl(var(--status-danger));
 }
 
-.research-run-guidance-warning > span {
+.research-run-guidance-warning > summary {
   color: hsl(var(--status-warning));
 }
 
@@ -1053,8 +1056,92 @@
   padding-top: 0.6rem;
 }
 
-.research-run-sources > span:not(:first-child) {
+.research-run-source-item {
   color: hsl(var(--foreground));
+}
+
+.quant-report-fold > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.quant-report-fold > summary::-webkit-details-marker,
+.quant-report-fold > summary::marker {
+  content: '';
+  display: none;
+}
+
+.quant-report-fold > summary::after {
+  content: '';
+  flex: 0 0 auto;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: 0.55rem;
+  border-right: 1.5px solid hsl(var(--muted-foreground));
+  border-bottom: 1.5px solid hsl(var(--muted-foreground));
+  transform: rotate(-45deg) translateY(-0.05rem);
+  align-self: center;
+}
+
+.quant-report-fold[open] > summary::after {
+  transform: rotate(45deg) translateY(-0.05rem);
+}
+
+.research-run-fold-summary,
+.quant-report-fold-section > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+  font-weight: 720;
+}
+
+.research-run-fold-summary {
+  margin-top: 0.85rem;
+  padding: 0.15rem 0;
+}
+
+.research-run-fold-summary small,
+.quant-report-fold-section > summary small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+  font-weight: 500;
+}
+
+.research-run-summary-fold,
+.research-run-sources-fold {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.quant-detail-content > .quant-report-fold-section {
+  margin-top: 0;
+}
+
+.quant-report-fold-section {
+  min-width: 0;
+  margin-top: 0.85rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--ui-radius-md, 0.5rem);
+  background: hsl(var(--card) / 0.28);
+}
+
+.quant-report-fold-section > summary {
+  padding: 0.6rem 0.75rem;
+}
+
+.quant-report-fold-body {
+  min-width: 0;
+  padding: 0 0.75rem 0.75rem;
+}
+
+.research-run-guidance > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
 }
 
 .research-evidence-history-panel {

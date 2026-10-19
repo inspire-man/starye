@@ -67,6 +67,73 @@ export const QuantWatchlistDeleteResponseSchema = v.object({
   data: v.object({ tsCode: v.string() }),
 })
 
+export const QuantPriceLocationsResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.array(v.object({
+    tsCode: v.string(),
+    name: v.nullable(v.string()),
+    latestClose: v.nullable(v.number()),
+    latestTradeDate: v.nullable(v.string()),
+    reportGeneratedAt: v.nullable(v.string()),
+    recommendation: v.nullable(v.picklist(['bullish', 'bearish', 'watch'])),
+    recommendationLabel: v.nullable(v.string()),
+    rangeLow: v.nullable(v.number()),
+    rangeHigh: v.nullable(v.number()),
+    status: v.picklist(['inside', 'below', 'above', 'not-buying', 'missing-range', 'missing-price', 'missing-report']),
+    label: v.string(),
+    distancePercent: v.nullable(v.number()),
+    detail: v.string(),
+  })),
+})
+
+export const QuantAiReviewOutcomesResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.object({
+    headline: v.string(),
+    acceptedAgreementRate: v.nullable(v.number()),
+    unacceptedAgreementRate: v.nullable(v.number()),
+    acceptedDirectionalCount: v.number(),
+    unacceptedDirectionalCount: v.number(),
+    pendingCount: v.number(),
+    items: v.array(v.object({
+      tsCode: v.string(),
+      name: v.nullable(v.string()),
+      reviewedAt: v.string(),
+      accepted: v.nullable(v.boolean()),
+      recommendation: v.nullable(v.picklist(['bullish', 'bearish', 'watch'])),
+      baselineClose: v.nullable(v.number()),
+      baselineTradeDate: v.nullable(v.string()),
+      observationClose: v.nullable(v.number()),
+      observationTradeDate: v.nullable(v.string()),
+      changePercent: v.nullable(v.number()),
+      status: v.picklist(['aligned', 'opposed', 'flat', 'pending', 'unavailable', 'not-directional']),
+      label: v.string(),
+      detail: v.string(),
+    })),
+  }),
+})
+
+export const QuantInvalidationChecksResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.array(v.object({
+    tsCode: v.string(),
+    name: v.nullable(v.string()),
+    triggeredCount: v.number(),
+    recoveredCount: v.number(),
+    unchangedCount: v.number(),
+    unavailableCount: v.number(),
+    uncheckedCount: v.number(),
+    label: v.string(),
+    checks: v.array(v.object({
+      key: v.string(),
+      label: v.string(),
+      savedStatus: v.picklist(['pass', 'caution', 'fail', 'missing']),
+      currentStatus: v.picklist(['pass', 'caution', 'fail', 'missing']),
+      change: v.picklist(['triggered', 'recovered', 'unchanged', 'unavailable']),
+    })),
+  })),
+})
+
 export const QuantStockBasicResponseSchema = v.object({
   success: v.literal(true),
   data: v.object({
@@ -432,4 +499,146 @@ export const QuantResearchSummariesResponseSchema = v.object({
   data: v.array(QuantResearchSummarySchema),
 })
 
+const QuantOperationLedgerSchema = v.object({
+  formulaVersion: v.string(),
+  closed: v.array(v.object({
+    tsCode: v.string(),
+    name: v.nullable(v.string()),
+    quantity: v.number(),
+    buyPrice: v.number(),
+    sellPrice: v.number(),
+    pnl: v.number(),
+    fee: v.number(),
+    returnRate: v.number(),
+    sameDay: v.boolean(),
+    openedAt: v.string(),
+    closedAt: v.string(),
+  })),
+  openLots: v.array(v.object({
+    tsCode: v.string(),
+    name: v.nullable(v.string()),
+    quantity: v.number(),
+    cost: v.number(),
+  })),
+  unmatchedSellQuantity: v.number(),
+  closedCount: v.number(),
+  winCount: v.number(),
+  lossCount: v.number(),
+  flatCount: v.number(),
+  realizedPnl: v.number(),
+  dividendCash: v.number(),
+  winRate: v.nullable(v.number()),
+  payoffRatio: v.nullable(v.number()),
+  curve: v.array(v.object({ tradedAt: v.string(), cumulativePnl: v.number() })),
+  byCode: v.array(v.object({
+    tsCode: v.string(),
+    name: v.nullable(v.string()),
+    closedCount: v.number(),
+    winCount: v.number(),
+    lossCount: v.number(),
+    flatCount: v.number(),
+    realizedPnl: v.number(),
+    winRate: v.nullable(v.number()),
+    payoffRatio: v.nullable(v.number()),
+    openQuantity: v.number(),
+    dividendCash: v.number(),
+  })),
+  aiBrief: v.string(),
+})
+
+export const QuantOperationsResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.object({
+    operations: v.array(v.object({
+      id: v.string(),
+      tsCode: v.string(),
+      name: v.nullable(v.string()),
+      side: v.picklist(['buy', 'sell', 'dividend', 'pass']),
+      price: v.number(),
+      quantity: v.number(),
+      fee: v.number(),
+      tradedAt: v.string(),
+      note: v.nullable(v.string()),
+      researchContext: v.nullable(v.object({
+        recommendation: v.nullable(v.picklist(['bullish', 'bearish', 'watch'])),
+        buyLow: v.nullable(v.number()),
+        buyHigh: v.nullable(v.number()),
+        sellLow: v.nullable(v.number()),
+        sellHigh: v.nullable(v.number()),
+        generatedAt: v.nullable(v.string()),
+      })),
+    })),
+    ledger: QuantOperationLedgerSchema,
+  }),
+})
+
+export const QuantOperationResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.object({
+    id: v.string(),
+    tsCode: v.string(),
+    name: v.nullable(v.string()),
+    side: v.picklist(['buy', 'sell', 'dividend', 'pass']),
+    price: v.number(),
+    quantity: v.number(),
+    fee: v.number(),
+    tradedAt: v.string(),
+    note: v.nullable(v.string()),
+    researchContext: v.nullable(v.object({
+      recommendation: v.nullable(v.picklist(['bullish', 'bearish', 'watch'])),
+      buyLow: v.nullable(v.number()),
+      buyHigh: v.nullable(v.number()),
+      sellLow: v.nullable(v.number()),
+      sellHigh: v.nullable(v.number()),
+      generatedAt: v.nullable(v.string()),
+    })),
+  }),
+})
+
+export const QuantOperationDeleteResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.object({ id: v.string() }),
+})
+
+export const QuantDailyBoardResponseSchema = v.object({
+  success: v.literal(true),
+  data: v.object({
+    formulaVersion: v.string(),
+    today: v.string(),
+    items: v.array(v.object({
+      tsCode: v.string(),
+      name: v.nullable(v.string()),
+      action: v.picklist(['buy', 'sell', 'hold', 'blocked']),
+      label: v.picklist(['买', '卖', '不动', '先补数据']),
+      reason: v.string(),
+      blocker: v.nullable(v.picklist(['report', 'price', 'range'])),
+      priceFreshness: v.picklist(['session', 'prior-close', 'missing']),
+      price: v.nullable(v.number()),
+      priceDate: v.nullable(v.string()),
+      priceSource: v.nullable(v.picklist(['eastmoney-realtime', 'local-daily-bars'])),
+      recommendation: v.nullable(v.picklist(['bullish', 'bearish', 'watch'])),
+      rangeLow: v.nullable(v.number()),
+      rangeHigh: v.nullable(v.number()),
+      openQuantity: v.number(),
+      cost: v.nullable(v.number()),
+    })),
+    score: v.object({
+      closedCount: v.number(),
+      winCount: v.number(),
+      lossCount: v.number(),
+      flatCount: v.number(),
+      winRate: v.nullable(v.number()),
+      payoffRatio: v.nullable(v.number()),
+      realizedPnl: v.number(),
+      dividendCash: v.number(),
+      passCount: v.number(),
+      minimumSample: v.number(),
+      swingClosedCount: v.number(),
+      swingRealizedPnl: v.number(),
+      swingPayoffRatio: v.nullable(v.number()),
+      sameDayClosedCount: v.number(),
+      sameDayRealizedPnl: v.number(),
+    }),
+  }),
+})
 export const QuantResearchSummaryStreamEventSchema = v.string()

@@ -3,6 +3,7 @@ import type { QuantView } from '../lib/quant-view'
 import {
   BarChart3,
   BookOpen,
+  ClipboardList,
   ExternalLink,
   Eye,
   ListFilter,
@@ -33,6 +34,7 @@ const navItems: { key: QuantView, label: string, detail: string, icon: typeof Ba
   { key: 'overview', label: '总览', detail: '统计与今日优先关注', icon: BarChart3 },
   { key: 'candidates', label: '候选研究', detail: '筛选、比较与研究动作', icon: ListFilter },
   { key: 'watchlist', label: '观察池', detail: '管理标的与更新数据', icon: Eye },
+  { key: 'operations', label: '操作记录', detail: '记录成交并回看价差', icon: ClipboardList },
   { key: 'knowledge', label: '因子框架', detail: '理解评分依据与数据缺口', icon: BookOpen },
 ]
 

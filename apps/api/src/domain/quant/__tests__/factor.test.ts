@@ -108,4 +108,14 @@ describe('quant momentum factors', () => {
     ])
     expect(candidates.map(candidate => candidate.factors.relativeStrength)).toEqual([1, 0.5, 0])
   })
+
+  it('leaves relative strength missing when the universe has no peer', () => {
+    const candidates = screenMomentum({
+      '000001.SZ': bars('000001.SZ', Array.from({ length: 21 }, (_, index) => index + 1)),
+    })
+
+    expect(candidates[0]?.factors.relativeStrength).toBeNull()
+    expect(candidates[0]?.missingFactors).toContain('relative_strength')
+    expect(candidates[0]?.matchedFactors).not.toContain('relative_strength')
+  })
 })

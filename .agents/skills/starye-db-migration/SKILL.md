@@ -40,5 +40,3 @@ For local investigation, inspect apps/api/.wrangler/state/v3/d1/miniflare-D1Data
 - Run focused migration, repository, and route tests. Add a request through http://localhost:8080 for user-visible behavior.
 - Compare mutation response with the same-content D1 readback. For availability, repair, or research evidence work, also compare receipt, source revision, projection version, user scope, and content-integrity fields.
 - Production migration requires the RUNBOOK backup, destructive-SQL review, remote apply, and recovery gates. Local checks remain separate from production evidence.
-
-Before editing a shared code symbol, use GitNexus upstream impact analysis. Before committing, run GitNexus detect_changes with an explicit staged file allowlist.

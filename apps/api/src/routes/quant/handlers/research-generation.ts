@@ -1,5 +1,6 @@
 import type { Database } from '@starye/db'
 import type { QuantResearchRun as QuantResearchRunRecord } from '@starye/db/schema'
+import type { DailyBar } from '../../../domain/quant/types'
 import type { AppEnv } from '../../../types'
 import { createQuantAkshareBridge } from '../../../domain/quant/akshare-bridge'
 import { QuantError } from '../../../domain/quant/errors'
@@ -11,6 +12,7 @@ import {
   getQuantWatchlistItem,
   listQuantDailyBars,
   listQuantScanSnapshots,
+  listQuantWatchlist,
   normalizeTsCode,
 } from '../../../domain/quant/repository'
 import { buildQuantResearchReport } from '../../../domain/quant/research-report'
@@ -41,14 +43,23 @@ export async function generateQuantResearchRunForUser(input: {
   if (!watchlistItem)
     throw new QuantError('QUANT_NOT_FOUND', 'Watchlist item not found', 404)
 
-  const [dailyBars, snapshots] = await Promise.all([
+  const [dailyBars, snapshots, watchlist] = await Promise.all([
     listQuantDailyBars(input.db, { tsCode }),
     listQuantScanSnapshots(input.db, input.userId, 1),
+    listQuantWatchlist(input.db, input.userId),
   ])
   const sourceSnapshotId = snapshots[0] && snapshotIncludesCode(snapshots[0], tsCode)
     ? snapshots[0].id
     : null
-  const candidate = screenMomentum({ [tsCode]: dailyBars }).find(item => item.tsCode === tsCode) ?? null
+  const peerBars = await Promise.all(watchlist
+    .map(item => item.tsCode)
+    .filter(code => code !== tsCode)
+    .map(async code => [code, await listQuantDailyBars(input.db, { tsCode: code })] as const))
+  const barsByCode: Record<string, readonly DailyBar[]> = {
+    [tsCode]: dailyBars,
+    ...Object.fromEntries(peerBars.filter(([, bars]) => bars.length > 0)),
+  }
+  const candidate = screenMomentum(barsByCode).find(item => item.tsCode === tsCode) ?? null
   const factorConfiguration = await getQuantFactorConfiguration(input.db, input.userId)
   const valuationProvider = createEastmoneyValuationProvider(eastmoneyProviderOptions(input.env))
   const financialSourceProvider = financialProvider(input.env)

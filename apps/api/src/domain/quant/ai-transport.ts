@@ -214,7 +214,7 @@ async function responseStreamContent(
       throw transportError(input, 'invalid_response', 'AI stream event is not valid JSON', 502)
     }
     const chunk = streamChunkContent(payload, input)
-    if (chunk.content) {
+    if (chunk.content.trim()) {
       content += chunk.content
       if (content.length > input.maxResponseLength)
         throw transportError(input, 'invalid_response', 'AI response content exceeds the allowed length', 502)
@@ -266,6 +266,47 @@ async function responseStreamContent(
   input.onFinishReason?.(finishReason)
   return { content: boundedResponseContent(content, input.maxResponseLength, input), finishReason }
 }
+interface QuantAiCompletionAttempt {
+  readonly stream: boolean
+  readonly jsonObject: boolean
+  readonly tokenField: 'max_completion_tokens' | 'max_tokens'
+  readonly reasoning: boolean
+}
+
+function completionAttempts(input: QuantAiCompletionRequest, responseMode: QuantAiResponseMode): readonly QuantAiCompletionAttempt[] {
+  const reasoning = isQuantAiReasoningModel(input.config.model)
+  const primary: QuantAiCompletionAttempt = {
+    stream: responseMode === 'stream',
+    jsonObject: input.responseFormat === 'json_object',
+    tokenField: reasoning ? 'max_completion_tokens' : 'max_tokens',
+    reasoning,
+  }
+  const fallback: QuantAiCompletionAttempt = {
+    stream: false,
+    jsonObject: false,
+    tokenField: 'max_tokens',
+    reasoning: false,
+  }
+  if (primary.stream === fallback.stream && primary.jsonObject === fallback.jsonObject && primary.tokenField === fallback.tokenField && primary.reasoning === fallback.reasoning)
+    return [primary]
+  return [primary, fallback]
+}
+
+function completionBody(input: QuantAiCompletionRequest, attempt: QuantAiCompletionAttempt): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: input.config.model,
+    [attempt.tokenField]: input.maxCompletionTokens,
+    stream: attempt.stream,
+    messages: input.messages,
+  }
+  if (attempt.jsonObject && input.responseFormat)
+    body.response_format = { type: input.responseFormat }
+  if (attempt.reasoning)
+    body.reasoning_effort = 'low'
+  else if (input.temperature !== undefined)
+    body.temperature = input.temperature
+  return body
+}
 
 export async function requestQuantAiCompletion(input: QuantAiCompletionRequest): Promise<QuantAiCompletionResult> {
   const fetchImpl = input.fetchImpl ?? globalThis.fetch.bind(globalThis)
@@ -300,31 +341,31 @@ export async function requestQuantAiCompletion(input: QuantAiCompletionRequest):
     if (input.signal?.aborted)
       throw transportError(input, 'timeout', 'AI request was cancelled', 504)
 
-    const body: Record<string, unknown> = {
-      model: input.config.model,
-      max_completion_tokens: input.maxCompletionTokens,
-      stream: responseMode === 'stream',
-      messages: input.messages,
-    }
-    if (input.responseFormat)
-      body.response_format = { type: input.responseFormat }
-    if (isQuantAiReasoningModel(input.config.model))
-      body.reasoning_effort = 'low'
-    else if (input.temperature !== undefined)
-      body.temperature = input.temperature
-
-    const response = await fetchImpl(endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    })
-    if (response.status === 408 || response.status === 504 || response.status === 524)
-      throw transportError(input, 'timeout', `AI request timed out upstream (HTTP ${response.status})`, 504)
-    if (!response.ok)
+    const attempts = completionAttempts(input, responseMode)
+    let response: Response | null = null
+    let attempt = attempts[0]!
+    for (let index = 0; index < attempts.length; index++) {
+      attempt = attempts[index]!
+      if (input.signal?.aborted)
+        throw transportError(input, 'timeout', 'AI request was cancelled', 504)
+      response = await fetchImpl(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(completionBody(input, attempt)),
+        signal: controller.signal,
+      })
+      if (response.status === 408 || response.status === 504 || response.status === 524)
+        throw transportError(input, 'timeout', `AI request timed out upstream (HTTP ${response.status})`, 504)
+      if (response.ok)
+        break
+      if (index < attempts.length - 1 && (response.status === 400 || response.status === 422 || response.status === 502))
+        continue
       throw transportError(input, 'upstream', `AI endpoint returned HTTP ${response.status}`, 502)
+    }
+    if (!response?.ok)
+      throw transportError(input, 'upstream', 'AI request failed', 502)
 
-    if (responseMode === 'stream') {
+    if (attempt.stream) {
       if (!response.body)
         throw transportError(input, 'invalid_response', 'AI stream response has no body', 502)
       return await responseStreamContent(response.body, input)

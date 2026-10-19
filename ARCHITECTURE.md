@@ -50,4 +50,4 @@ Starye 是一个基于 pnpm/Turborepo 的 TypeScript monorepo，部署在 Cloudf
 - 设计与规格索引：docs/DESIGN.md、docs/PLANS.md
 - 当前阶段状态：.planning/STATE.md
 - API、数据模型和前端契约：openspec/README.md 与 openspec/
-- GitNexus 生成的详细快照：.planning/codebase/ARCHITECTURE.md
+- 详细架构快照：.planning/codebase/ARCHITECTURE.md

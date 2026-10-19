@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { QuantDecisionAssistant, QuantDecisionAssistantMode, QuantResearchRun } from '../../lib/quant-view-models'
+import type { QuantRecordedPosition } from '../../lib/recorded-position'
 import { CircleHelp, RefreshCw } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
@@ -10,6 +11,7 @@ const props = defineProps<{
   assessment: QuantDecisionAssistant | null
   loading: boolean
   generating: boolean
+  recordedPosition?: QuantRecordedPosition | null
 }>()
 
 const emit = defineEmits<{
@@ -44,6 +46,21 @@ const validationMessage = computed(() => {
   return null
 })
 const canSubmit = computed(() => Boolean(props.run && !props.generating && !props.loading && !validationMessage.value))
+
+function applyRecordedBook(): void {
+  const book = props.recordedPosition
+  if (!book)
+    return
+  if (!costBasisInput.value && book.averageCost !== null)
+    costBasisInput.value = book.averageCost.toFixed(2)
+  if (!quantityInput.value && book.openQuantity > 0)
+    quantityInput.value = String(book.openQuantity)
+}
+
+watch(mode, (value) => {
+  if (value === 'holding')
+    applyRecordedBook()
+})
 
 function parsePositive(value: string): number | null {
   const parsed = Number(value)
@@ -98,6 +115,8 @@ function formatDate(value: string | null): string {
         <span>持仓成本</span>
         <input v-model="costBasisInput" type="number" min="0.0001" step="0.01" inputmode="decimal" placeholder="例如 33.40" aria-label="持仓成本" @keydown.enter="submit">
         <small>用于计算浮亏和回本所需涨幅</small>
+        <small v-if="recordedPosition?.averageCost != null">账本成本 {{ recordedPosition.averageCost.toFixed(2) }}，未平 {{ recordedPosition.openQuantity }} 股。填入后仍只是本次场景，不改研究报告。</small>
+        <button v-if="recordedPosition?.averageCost != null" class="text-button" type="button" @click="applyRecordedBook">填入账本成本</button>
       </label>
       <label class="quant-decision-assistant-field">
         <span>持仓数量 <em>可选</em></span>

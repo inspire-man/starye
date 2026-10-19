@@ -9,7 +9,7 @@ last_updated: "2026-09-27"
 
 ## 当前
 
-v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。Quant 历史验证、候选对照与可信度校准已合入 `main`，下一轮开发从合并后的 `main` 开始。
+v1.5 已完成、归档、部署。Quant 每日入口已改为追踪列表：当日价格给出买、卖、不动或先补数据，成交和未执行记在同一屏。旧总览、候选、观察池、操作记录和因子框架不再挂载。
 
 ## 最近验证
 
@@ -49,7 +49,7 @@ v1.5 已完成、归档、部署；当前没有 active phase 或 pending plan。
 
 ## 下一步
 
-1. 观察池时序外核对已在 `2026-09-26-quant-timing-walkforward-pool` 实现：方向判断改为该状态更早上涨比例是否稳定偏离 50%，公式 `timing-history-walkforward-v2`；样本内共识与时序外计数分开，阈值仍冻结。定向测试、API/Quant type-check 已通过。匿名 Gateway `/quant/` 为 302，相关 API 为 401。认证态页面尚未复验。
+1. Quant 每日动线已替换入口。下一步只修这一屏的真实使用问题，不把研究面板加回导航。
 2. 在跨标的时序外样本稳定前，不调整状态阈值，也不把时序外结论写入决策就绪度或候选排序。
 3. 小 bug：定位 → 最小修复 → 定向测试 → Gateway 验证。
 4. crawler/D1：补 Gateway、D1 readback、content integrity 和实际消费层证据。

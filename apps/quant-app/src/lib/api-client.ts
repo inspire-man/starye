@@ -1,7 +1,9 @@
 import { quantCandidateApi } from '../api/resources/candidate'
 import { quantConfigApi } from '../api/resources/config'
+import { quantDailyApi } from '../api/resources/daily'
 import { quantDecisionApi } from '../api/resources/decision'
 import { quantMarketApi } from '../api/resources/market'
+import { quantOperationApi } from '../api/resources/operations'
 import { quantResearchApi } from '../api/resources/research'
 import { quantWorkspaceApi } from '../api/resources/workspace'
 
@@ -17,4 +19,6 @@ export const quantApi = {
   ...quantDecisionApi,
   ...quantCandidateApi,
   ...quantMarketApi,
+  ...quantOperationApi,
+  ...quantDailyApi,
 }

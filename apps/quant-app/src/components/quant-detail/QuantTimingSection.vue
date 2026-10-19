@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { FactorRobustness } from '../../lib/factor-robustness'
 import type { WatchlistItem } from '../../lib/quant-view-models'
 import type { TimingHistory, TimingHistoryBucket, TimingHistoryEdgeAssessment } from '../../lib/timing-history'
 import type { TimingWindow, TimingWindowMetricStatus, TimingWindowState } from '../../lib/timing-window'
@@ -11,6 +12,7 @@ export interface QuantTimingSectionProps {
   timingWindow: TimingWindow
   timingHistory: TimingHistory
   timingHistoryCurrentBucket: TimingHistoryBucket | null
+  factorRobustness: FactorRobustness
   formatTradeDate: (value: string | null) => string
   timingWindowClass: (window: TimingWindow) => string
   timingWindowMetricClass: (status: TimingWindowMetricStatus) => string
@@ -27,6 +29,7 @@ const {
   timingWindow,
   timingHistory,
   timingHistoryCurrentBucket,
+  factorRobustness,
   formatTradeDate,
   timingWindowClass,
   timingWindowMetricClass,
@@ -101,6 +104,7 @@ function timingHistoryWalkForwardLabel(value: TimingHistoryEdgeAssessment): stri
       <span>全体上涨比例 <strong>{{ formatTimingHistoryRate(timingHistory.baseline.positiveRate) }}</strong></span>
       <span v-if="timingHistory.dataStartDate && timingHistory.dataEndDate">数据范围 {{ formatTradeDate(timingHistory.dataStartDate) }} → {{ formatTradeDate(timingHistory.dataEndDate) }}</span>
       <span>时序外 <strong>{{ timingHistoryWalkForwardLabel(currentWalkForward.edgeAssessment) }}</strong> · 方向样本 {{ currentWalkForward.directionalSampleSize }} · 一致 {{ currentWalkForward.agreementCount }}</span>
+      <span>因子健壮性 <strong>{{ factorRobustness.label }}</strong> · {{ factorRobustness.currentLabel }} · {{ factorRobustness.detail }}</span>
     </div>
     <div v-if="timingHistoryCurrentBucket?.sampleSize" class="timing-history-current-grid">
       <div>

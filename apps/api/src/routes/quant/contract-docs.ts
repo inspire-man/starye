@@ -50,6 +50,13 @@ const responseSchemas: Record<string, Parameters<typeof resolver>[0]> = {
   QuantWatchlistDeleteResponseSchema: quantSchemas.QuantWatchlistDeleteResponseSchema,
   QuantWatchlistItemResponseSchema: quantSchemas.QuantWatchlistItemResponseSchema,
   QuantWatchlistResponseSchema: quantSchemas.QuantWatchlistResponseSchema,
+  QuantPriceLocationsResponseSchema: quantSchemas.QuantPriceLocationsResponseSchema,
+  QuantAiReviewOutcomesResponseSchema: quantSchemas.QuantAiReviewOutcomesResponseSchema,
+  QuantInvalidationChecksResponseSchema: quantSchemas.QuantInvalidationChecksResponseSchema,
+  QuantOperationsResponseSchema: quantSchemas.QuantOperationsResponseSchema,
+  QuantDailyBoardResponseSchema: quantSchemas.QuantDailyBoardResponseSchema,
+  QuantOperationResponseSchema: quantSchemas.QuantOperationResponseSchema,
+  QuantOperationDeleteResponseSchema: quantSchemas.QuantOperationDeleteResponseSchema,
 }
 
 const contractById = new Map<QuantEndpointId, QuantEndpointContract>(quantEndpointContracts.map(contract => [contract.id, contract]))

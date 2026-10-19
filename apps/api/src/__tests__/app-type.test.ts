@@ -27,6 +27,7 @@ describe('appType Export', () => {
     for (const path of [
       '/api/quant/decision-assistant',
       '/api/quant/research/runs/run-1/summary',
+      '/api/quant/research/runs/run-1/summary/stream',
       '/api/quant/research/runs/run-1/question',
       '/api/quant/research/runs/run-1/change-explanation',
       '/api/quant/research/comparison',

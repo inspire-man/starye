@@ -554,10 +554,14 @@ function parseQuantAiSummaryStreamEvent(value: unknown): QuantAiSummaryStreamEve
   }
   if (type === 'delta') {
     const text = readString(value, 'text')
+    if (!text)
+      return { type, text: '', receivedLength: 0 }
     const receivedLength = readNumber(value, 'receivedLength', 'received_length')
-    if (!text || receivedLength === null || !Number.isInteger(receivedLength) || receivedLength < text.length)
-      return null
-    return { type, text, receivedLength }
+    return {
+      type,
+      text,
+      receivedLength: receivedLength !== null && Number.isInteger(receivedLength) ? receivedLength : text.length,
+    }
   }
   if (type === 'completed')
     return { type, data: value.data }
@@ -621,7 +625,8 @@ async function readQuantAiSummaryStream(
     if (!started)
       throw new QuantApiError('AI 流式响应缺少开始事件', 502, 'QUANT_AI_SUMMARY_INVALID_RESPONSE')
     if (event.type === 'delta') {
-      onProgress?.(event)
+      if (event.text)
+        onProgress?.(event)
       return
     }
     if (event.type === 'error')
@@ -728,7 +733,193 @@ function parseScheduledResearchTrigger(payload: unknown): QuantScheduledResearch
   }
 }
 
+const PRICE_LOCATION_STATUSES = ['inside', 'below', 'above', 'not-buying', 'missing-range', 'missing-price', 'missing-report'] as const
+type PriceLocationStatus = typeof PRICE_LOCATION_STATUSES[number]
+
+function isPriceLocationStatus(value: string | null): value is PriceLocationStatus {
+  return PRICE_LOCATION_STATUSES.includes(value)
+}
+
+function parsePriceLocation(value: unknown) {
+  if (!isRecord(value))
+    throw new QuantApiError('价格位置格式无效', 502, 'QUANT_PRICE_LOCATION_INVALID')
+  const status = readString(value, 'status')
+  if (!isPriceLocationStatus(status))
+    throw new QuantApiError('价格位置状态无效', 502, 'QUANT_PRICE_LOCATION_INVALID')
+  const recommendation = readString(value, 'recommendation')
+  return {
+    tsCode: readString(value, 'tsCode', 'ts_code') ?? '',
+    name: readString(value, 'name'),
+    latestClose: readNumber(value, 'latestClose', 'latest_close'),
+    latestTradeDate: readString(value, 'latestTradeDate', 'latest_trade_date'),
+    reportGeneratedAt: readString(value, 'reportGeneratedAt', 'report_generated_at'),
+    recommendation: recommendation === 'bullish' || recommendation === 'bearish' || recommendation === 'watch' ? recommendation : null,
+    recommendationLabel: readString(value, 'recommendationLabel', 'recommendation_label'),
+    rangeLow: readNumber(value, 'rangeLow', 'range_low'),
+    rangeHigh: readNumber(value, 'rangeHigh', 'range_high'),
+    status,
+    label: readString(value, 'label') ?? '',
+    distancePercent: readNumber(value, 'distancePercent', 'distance_percent'),
+    detail: readString(value, 'detail') ?? '',
+  }
+}
+
+export type QuantPriceLocation = ReturnType<typeof parsePriceLocation>
+
+export interface QuantAiReviewOutcomeBoard {
+  headline: string
+  acceptedAgreementRate: number | null
+  unacceptedAgreementRate: number | null
+  acceptedDirectionalCount: number
+  unacceptedDirectionalCount: number
+  pendingCount: number
+  items: QuantAiReviewOutcome[]
+}
+
+export interface QuantAiReviewOutcome {
+  tsCode: string
+  name: string | null
+  reviewedAt: string
+  accepted: boolean | null
+  recommendation: 'bullish' | 'bearish' | 'watch' | null
+  baselineClose: number | null
+  baselineTradeDate: string | null
+  observationClose: number | null
+  observationTradeDate: string | null
+  changePercent: number | null
+  status: 'aligned' | 'opposed' | 'flat' | 'pending' | 'unavailable' | 'not-directional'
+  label: string
+  detail: string
+}
+
+const AI_REVIEW_OUTCOME_STATUSES = ['aligned', 'opposed', 'flat', 'pending', 'unavailable', 'not-directional'] as const
+
+function isAiReviewOutcomeStatus(value: string | null): value is QuantAiReviewOutcome['status'] {
+  return AI_REVIEW_OUTCOME_STATUSES.includes(value)
+}
+
+function parseAiReviewOutcome(value: unknown): QuantAiReviewOutcome {
+  if (!isRecord(value))
+    throw new QuantApiError('AI 复核回看格式无效', 502, 'QUANT_AI_REVIEW_OUTCOME_INVALID')
+  const status = readString(value, 'status')
+  if (!isAiReviewOutcomeStatus(status))
+    throw new QuantApiError('AI 复核回看状态无效', 502, 'QUANT_AI_REVIEW_OUTCOME_INVALID')
+  const recommendation = readString(value, 'recommendation')
+  return {
+    tsCode: readString(value, 'tsCode', 'ts_code') ?? '',
+    name: readString(value, 'name'),
+    reviewedAt: readString(value, 'reviewedAt', 'reviewed_at') ?? '',
+    accepted: readBoolean(value, 'accepted'),
+    recommendation: recommendation === 'bullish' || recommendation === 'bearish' || recommendation === 'watch' ? recommendation : null,
+    baselineClose: readNumber(value, 'baselineClose', 'baseline_close'),
+    baselineTradeDate: readString(value, 'baselineTradeDate', 'baseline_trade_date'),
+    observationClose: readNumber(value, 'observationClose', 'observation_close'),
+    observationTradeDate: readString(value, 'observationTradeDate', 'observation_trade_date'),
+    changePercent: readNumber(value, 'changePercent', 'change_percent'),
+    status,
+    label: readString(value, 'label') ?? '',
+    detail: readString(value, 'detail') ?? '',
+  }
+}
+
+function parseAiReviewOutcomeBoard(value: unknown): QuantAiReviewOutcomeBoard {
+  if (!isRecord(value))
+    throw new QuantApiError('AI 复核回看格式无效', 502, 'QUANT_AI_REVIEW_OUTCOME_INVALID')
+  const items = value.items
+  if (!Array.isArray(items))
+    throw new QuantApiError('AI 复核回看格式无效', 502, 'QUANT_AI_REVIEW_OUTCOME_INVALID')
+  return {
+    headline: readString(value, 'headline') ?? '',
+    acceptedAgreementRate: readNumber(value, 'acceptedAgreementRate', 'accepted_agreement_rate'),
+    unacceptedAgreementRate: readNumber(value, 'unacceptedAgreementRate', 'unaccepted_agreement_rate'),
+    acceptedDirectionalCount: readNumber(value, 'acceptedDirectionalCount', 'accepted_directional_count') ?? 0,
+    unacceptedDirectionalCount: readNumber(value, 'unacceptedDirectionalCount', 'unaccepted_directional_count') ?? 0,
+    pendingCount: readNumber(value, 'pendingCount', 'pending_count') ?? 0,
+    items: items.map(parseAiReviewOutcome),
+  }
+}
+
+export interface QuantInvalidationCheck {
+  key: string
+  label: string
+  savedStatus: 'pass' | 'caution' | 'fail' | 'missing'
+  currentStatus: 'pass' | 'caution' | 'fail' | 'missing'
+  change: 'triggered' | 'recovered' | 'unchanged' | 'unavailable'
+}
+
+export interface QuantInvalidationItem {
+  tsCode: string
+  name: string | null
+  triggeredCount: number
+  recoveredCount: number
+  unchangedCount: number
+  unavailableCount: number
+  uncheckedCount: number
+  label: string
+  checks: QuantInvalidationCheck[]
+}
+
+const INVALIDATION_CHANGES = ['triggered', 'recovered', 'unchanged', 'unavailable'] as const
+const EVIDENCE_STATUSES = ['pass', 'caution', 'fail', 'missing'] as const
+
+function isInvalidationChange(value: string | null): value is QuantInvalidationCheck['change'] {
+  return INVALIDATION_CHANGES.includes(value)
+}
+
+function isEvidenceStatus(value: string | null): value is QuantInvalidationCheck['savedStatus'] {
+  return EVIDENCE_STATUSES.includes(value)
+}
+
+function parseInvalidationItem(value: unknown): QuantInvalidationItem {
+  if (!isRecord(value) || !Array.isArray(value.checks))
+    throw new QuantApiError('失效对照格式无效', 502, 'QUANT_INVALIDATION_CHECK_INVALID')
+  return {
+    tsCode: readString(value, 'tsCode', 'ts_code') ?? '',
+    name: readString(value, 'name'),
+    triggeredCount: readNumber(value, 'triggeredCount', 'triggered_count') ?? 0,
+    recoveredCount: readNumber(value, 'recoveredCount', 'recovered_count') ?? 0,
+    unchangedCount: readNumber(value, 'unchangedCount', 'unchanged_count') ?? 0,
+    unavailableCount: readNumber(value, 'unavailableCount', 'unavailable_count') ?? 0,
+    uncheckedCount: readNumber(value, 'uncheckedCount', 'unchecked_count') ?? 0,
+    label: readString(value, 'label') ?? '',
+    checks: value.checks.map((check) => {
+      if (!isRecord(check))
+        throw new QuantApiError('失效对照格式无效', 502, 'QUANT_INVALIDATION_CHECK_INVALID')
+      const savedStatus = readString(check, 'savedStatus', 'saved_status')
+      const currentStatus = readString(check, 'currentStatus', 'current_status')
+      const change = readString(check, 'change')
+      if (!isEvidenceStatus(savedStatus) || !isEvidenceStatus(currentStatus) || !isInvalidationChange(change))
+        throw new QuantApiError('失效对照状态无效', 502, 'QUANT_INVALIDATION_CHECK_INVALID')
+      return {
+        key: readString(check, 'key') ?? '',
+        label: readString(check, 'label') ?? '',
+        savedStatus,
+        currentStatus,
+        change,
+      }
+    }),
+  }
+}
+
 export const quantResearchApi = {
+  async getPriceLocations(options: QuantRequestOptions = {}): Promise<QuantPriceLocation[]> {
+    const data = unwrapData(await requestJson('/research/price-locations', options.signal ? { signal: options.signal } : undefined))
+    if (!Array.isArray(data))
+      throw new QuantApiError('价格位置格式无效', 502, 'QUANT_PRICE_LOCATION_INVALID')
+    return data.map(parsePriceLocation)
+  },
+
+  async getAiReviewOutcomes(options: QuantRequestOptions = {}): Promise<QuantAiReviewOutcomeBoard> {
+    return parseAiReviewOutcomeBoard(unwrapData(await requestJson('/research/ai-review-outcomes', options.signal ? { signal: options.signal } : undefined)))
+  },
+
+  async getInvalidationChecks(options: QuantRequestOptions = {}): Promise<QuantInvalidationItem[]> {
+    const data = unwrapData(await requestJson('/research/invalidation-checks', options.signal ? { signal: options.signal } : undefined))
+    if (!Array.isArray(data))
+      throw new QuantApiError('失效对照格式无效', 502, 'QUANT_INVALIDATION_CHECK_INVALID')
+    return data.map(parseInvalidationItem)
+  },
+
   async getResearchMarkers(options: QuantRequestOptions = {}): Promise<QuantResearchMarker[]> {
     return parseResearchMarkers(await requestJson('/research', options.signal ? { signal: options.signal } : undefined))
   },

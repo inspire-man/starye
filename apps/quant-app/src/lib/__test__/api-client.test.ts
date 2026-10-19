@@ -1356,6 +1356,41 @@ describe('quantApi', () => {
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST', credentials: 'include' })
   })
 
+  it('ignores blank stream deltas instead of failing the review', async () => {
+    const summary = {
+      id: 'summary-stream-2',
+      research_run_id: 'run-stream-2',
+      summary_version: 'research-summary-v1',
+      report_version: 'research-report-v2',
+      provider: 'openai_compatible',
+      model: 'grok-4',
+      generated_at: '2026-09-01T00:00:00.000Z',
+      created_at: '2026-09-01T00:00:00.000Z',
+      cited_evidence_keys: ['quality-roe'],
+      summary: {
+        summary_version: 'research-summary-v1',
+        overview: '空白增量不会中断复核。',
+        supports: ['ROE 证据可用'],
+        concerns: ['仍需关注报告期'],
+        next_checks: ['复核下一期财报'],
+        cited_evidence_keys: ['quality-roe'],
+      },
+    }
+    const events = [
+      { type: 'started', researchRunId: 'run-stream-2', responseMode: 'stream', generationTimeoutMs: 300000 },
+      { type: 'delta', text: ' ', receivedLength: 1 },
+      { type: 'delta', text: '{"overview":', receivedLength: 12 },
+      { type: 'completed', data: summary },
+    ]
+    const payload = events.map(event => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join('')
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(streamResponse([payload])))
+
+    await expect(quantApi.generateResearchSummaryStream('run-stream-2')).resolves.toMatchObject({
+      id: 'summary-stream-2',
+      summary: { overview: '空白增量不会中断复核。' },
+    })
+  })
+
   it('normalizes the server-computed factor impact audit without requiring it on legacy summaries', async () => {
     const summary = {
       id: 'summary-impact-1',

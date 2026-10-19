@@ -1,7 +1,7 @@
 import type { QuantDecisionAssistantMarketInput } from '../decision-assistant'
 import type { QuantResearchEvidence, QuantResearchReport } from '../research-report'
 import { describe, expect, it, vi } from 'vitest'
-import { buildQuantDecisionAssistant, buildQuantDecisionAssistantAiReview, generateQuantAiDecisionAssistant, parseQuantAiDecisionAssistant, parseQuantDecisionAssistantSnapshot } from '../decision-assistant'
+import { buildQuantAiDecisionAssistantPrompt, buildQuantDecisionAssistant, buildQuantDecisionAssistantAiReview, generateQuantAiDecisionAssistant, parseQuantAiDecisionAssistant, parseQuantDecisionAssistantSnapshot } from '../decision-assistant'
 
 const factorKeys = ['trend', 'valuation', 'quality', 'shareholder-return', 'risk'] as const
 
@@ -339,5 +339,40 @@ describe('quant decision assistant', () => {
       method: 'POST',
       body: expect.stringContaining('"response_format":{"type":"json_object"}'),
     }))
+  })
+
+  it('gives the AI the user ledger without treating it as report evidence', () => {
+    const base = buildQuantDecisionAssistant({
+      report: report(),
+      researchRunId: 'run-1',
+      tsCode: '601899.SH',
+      name: '紫金矿业',
+      scenario: { mode: 'buy', costBasis: null, quantity: null },
+      market: marketInput(33.4),
+      latestDailyBar: { close: 33.2, tradeDate: '20260829' },
+      assessedAt: new Date('2026-08-30T01:00:00.000Z'),
+    })
+    const content = buildQuantAiDecisionAssistantPrompt({
+      report: report(),
+      deterministic: base.deterministic,
+      scenario: base.scenario,
+      market: base.market,
+      operationLedger: {
+        formulaVersion: 'operation-ledger-v1',
+        tsCode: '601899.SH',
+        closedCount: 1,
+        winCount: 1,
+        lossCount: 0,
+        flatCount: 0,
+        realizedPnl: 100,
+        winRate: null,
+        payoffRatio: null,
+        openQuantity: 0,
+        note: '用户自己记下的成交价差，不是研究报告证据，不得据此改分数、权重或参考区间。',
+      },
+    })
+    expect(content).toContain('不是研究报告证据')
+    expect(content).toContain('"realizedPnl":100')
+    expect(content).toContain('不得据此改分数')
   })
 })
